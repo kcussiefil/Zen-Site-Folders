@@ -91,7 +91,12 @@ async function main() {
       created++;
       return makeTab('New tab');
     },
-    moveTabToExistingGroup: (tab, group) => { tab.group = group; },
+    moveTabToExistingGroup: (tab, group) => { tab.group = group; group.tabs.push(tab); },
+    moveTabBefore: (tab, before) => {
+      const i = group.tabs.indexOf(tab);
+      if (i >= 0) group.tabs.splice(i, 1);
+      group.tabs.splice(group.tabs.indexOf(before), 0, tab);
+    },
   };
   const window = {
     gBrowser: browser, innerWidth: 1440, innerHeight: 900, events: {},
@@ -104,8 +109,8 @@ async function main() {
     createElementNS: (_ns, type) => new FakeNode(type),
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
-  const api = window.__zsfGroupHoverV028;
-  assert.equal(api.version, '0.2.8');
+  const api = window.__zsfGroupHoverV029;
+  assert.equal(api.version, '0.2.9');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
@@ -137,6 +142,7 @@ async function main() {
   assert.equal(created, 1, 'new tab only after an explicit click');
   assert.equal(browser.selectedTab.group, group);
   assert.equal(browser.selectedTab.pinned, false);
+  assert.equal(group.tabs[0], browser.selectedTab, 'new tab must be inserted at top');
 
   api.destroy();
   assert.equal(popup.isConnected, false, 'unload must remove the popup');
