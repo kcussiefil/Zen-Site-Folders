@@ -880,7 +880,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV020 = { organize, undo, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV022 = { organize, undo, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
