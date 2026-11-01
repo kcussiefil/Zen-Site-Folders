@@ -19,6 +19,8 @@ with socket.socket() as sock:
 with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
     prefs = {
         'marionette.enabled': True, 'marionette.port': port,
+        'zia.welcome.seen': '2.102.0', 'zia.welcome.show': False,
+        'zia.welcome.again': False, 'zia.welcome.whats-new-again': False,
         'zen.welcome-screen.seen': True, 'browser.shell.checkDefaultBrowser': False,
         'browser.startup.page': 0, 'browser.startup.homepage': 'about:blank',
         'datareporting.policy.dataSubmissionPolicyBypassNotification': True,
@@ -71,8 +73,17 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                   ss.loadAndRegisterSheet(s.io.newURI(arguments[0]), ss.USER_SHEET);''', [style.as_uri()])
             for script in scripts:
                 client.js(script.read_text())
+            if client.js("return !!document.getElementById('zia-welcome')?.matches(':popover-open');")['value']:
+                raise RuntimeError('Zia first-install overlay covers native input targets')
             result = client.async_js(pathlib.Path(__file__).with_name('regressions.js').read_text(), [args.case])['value']
             report.update(result)
+            if any(item['status'] != 'PASS' for item in result.get('results', [])):
+                import base64
+                try:
+                    shot = client.call('WebDriver:TakeScreenshot', {'full': False, 'scroll': False})['value']
+                    (args.output / 'failure.png').write_bytes(base64.b64decode(shot))
+                except Exception as error:
+                    report['screenshotError'] = str(error)
         except Exception as error:
             report['runnerError'] = str(error)
         finally:

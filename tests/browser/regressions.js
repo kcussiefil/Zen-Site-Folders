@@ -260,7 +260,7 @@ const finish = arguments[arguments.length - 1];
       const top=Math.max(box.top,sidebar.top,0), bottom=Math.min(box.bottom,sidebar.bottom,innerHeight);
       assert(right-left>4 && bottom-top>4, 'header must be visible inside sidebar: '+JSON.stringify({box:box.toJSON(),sidebar:sidebar.toJSON()}));
       const hit=deepest(left+Math.min(24,(right-left)/2),(top+bottom)/2);
-      assert(header.contains(hit), 'click point for '+group.id+' must hit its own header, got '+hit?.localName+' in '+hit?.closest?.('tab-group')?.id);
+      assert(header.contains(hit), 'click point for '+group.id+' must hit its own header, got '+hit?.localName+'#'+hit?.id+' class='+hit?.getAttribute?.('class')+' src='+hit?.getAttribute?.('src')+' in '+hit?.closest?.('tab-group')?.id+' target='+JSON.stringify({box:box.toJSON(),sidebar:sidebar.toJSON(),point:[left+Math.min(24,(right-left)/2),(top+bottom)/2],hitBox:hit?.getBoundingClientRect?.().toJSON()}));
     }
   });
   await test('manual ungroup of collapsed selected group restores every row visibly', async h => {
