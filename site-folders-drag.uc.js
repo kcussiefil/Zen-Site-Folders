@@ -135,7 +135,14 @@
     const port = active.scrollPort;
     const before = port.scrollTop;
     const max = Math.max(0, port.scrollHeight - port.clientHeight);
-    port.scrollTop = Math.min(max, Math.max(0, before + speed));
+    const next = Math.min(max, Math.max(0, before + speed));
+    try {
+      // Zen can enable smooth scrolling on the arrowscrollbox. Override it
+      // for the animation frame so repeated drag-scroll ticks don't queue up.
+      if (typeof port.scrollTo === 'function')
+        port.scrollTo({ top: next, behavior: 'instant' });
+      else port.scrollTop = next;
+    } catch (_) { port.scrollTop = next; }
     if (Math.abs(port.scrollTop - before) <= .1) return;
     // Recompute against actual scrollTop; never move any tab in this loop.
     update({ clientX: x, clientY: y }, false);
@@ -162,6 +169,10 @@
       node.setAttribute('data-zsf-drag-avoid', 'true');
       node.style?.setProperty?.('--zsf-drag-avoid-y', '0px');
     }
+    // Establish 0px as the computed base before changing it to the first
+    // target; otherwise style coalescing would snap the FIRST avoidance.
+    subject.avoidRows.find(node => node !== subject.item)
+      ?.getBoundingClientRect?.();
   }
   function updateAvoidance(subject, slot) {
     if (subject?.kind !== 'group' || !subject.avoidRows) return;
@@ -486,7 +497,7 @@
     if (!active?.item?.isConnected || !event.dataTransfer?.setDragImage)
       return;
     const fromEvent = sourceFromEvent(event);
-    if (fromEvent && fromEvent.item !== active.item) return;
+    if (fromEvent?.item !== active.item) return;
     try {
       if (!nativeBlank) {
         nativeBlank = create('div', 'zsf-native-blank-drag');
