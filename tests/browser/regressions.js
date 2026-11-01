@@ -150,92 +150,6 @@ const finish = arguments[arguments.length - 1];
       assert(moves.length >= 3, 'test must execute native move events');
     } finally { gBrowser.tabContainer.removeEventListener('TabMove', listener); }
   });
-  await test('Zia shared folder adapter probe', async h => {
-    const g = h.group;
-    const before = Object.getOwnPropertyDescriptor(g, 'isZenFolder');
-    const head = g.querySelector(':scope > .tab-group-label-container');
-    const from = head.getBoundingClientRect();
-    try {
-      assert(!g.isZenFolder, 'an ordinary website group must not be a native folder');
-      const event = new DragEvent('dragstart', {
-        bubbles: true, composed: true, clientX: from.left + 24,
-        clientY: from.top + 12, dataTransfer: new DataTransfer()
-      });
-      // Sine runs this in a separate headless browser with synthetic
-      // events. Real-user mousedown alone primes the Zia adapter; invoke
-      // the same preparation explicitly for this isolated regression.
-      const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
-        drag.prepareZiaGroupDrag(g);
-      assert(prepared, 'Zia compatibility adapter must prime the owned group: ' +
-        JSON.stringify({ zia: window.__ziaLoaded, isZenFolder:g.isZenFolder,
-          match:g.matches('tab-group[data-zsf-site]:not([split-view-group])'),
-          connected:g.isConnected, pinned:g.pinned, owns:g.hasAttribute('data-zsf-site'),
-          groupDescriptor:String(Object.getOwnPropertyDescriptor(g,'isZenFolder')?.configurable),
-          canDropExtensible:Object.isExtensible(gZenFolders),
-          canDropType:typeof gZenFolders?.canDropElement }));
-      assert(g.isZenFolder === true,
-        'adapter must transiently expose native folder identity');
-      head.dispatchEvent(event);
-      assert(document.documentElement.hasAttribute('zia-dragging-tab'),
-        'Zia must take over the actual native group drag');
-      assert(!document.querySelector('.zsf-drag-ghost'),
-        'Site Folders must not run a second preview if Zia accepted the folder');
-      window.dispatchEvent(new DragEvent('dragend', { bubbles: true }));
-      await delay(150);
-      assert(!document.documentElement.hasAttribute('zia-dragging-tab'),
-        'Zia must clean its own temporary drag state');
-      assert(!g.isZenFolder,
-        'the original group must NOT retain the Zen folder identity');
-      assert(g.parentElement === root() && same(order(g), h.tabs),
-        'single-controller drag cancellation must retain same-level group and members');
-    } finally {
-      if (before) Object.defineProperty(g, 'isZenFolder', before);
-      else delete g.isZenFolder;
-    }
-  });
-  await test('Zia single-controller group drop lands at the displayed slot', async h => {
-    const g = h.group, prefix = h.prefix;
-    gBrowser.moveTabAfter(g, prefix);
-    g.collapsed = true;
-    await idle(g);
-    prefix.scrollIntoView({block:'nearest'});
-    const head = g.querySelector(':scope > .tab-group-label-container');
-    const from = head.getBoundingClientRect(), to = prefix.getBoundingClientRect();
-    assert(from.height>5 && to.height>5, 'native group and prefix must be visible');
-    const x=to.left+Math.min(25,to.width/2), y=to.top+2;
-    const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
-      drag.prepareZiaGroupDrag(g);
-    assert(prepared, 'native adapter should be active before OS dragstart: ' +
-      JSON.stringify({zia:window.__ziaLoaded, isZenFolder:g.isZenFolder,
-        connected:g.isConnected, matches:g.matches('tab-group[data-zsf-site]:not([split-view-group])'),
-        canDropType:typeof gZenFolders?.canDropElement}));
-    const transfer=new DataTransfer();
-    head.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
-      dataTransfer:transfer,clientX:from.left+25,clientY:from.top+10}));
-    assert(document.documentElement.hasAttribute('zia-dragging-tab'),
-      'Zia should be the only controller of an active group drag');
-    prefix.dispatchEvent(new DragEvent('dragover',{bubbles:true,composed:true,
-      dataTransfer:transfer,clientX:x,clientY:y}));
-    await delay(60);
-    assert(!document.querySelector('.zsf-drag-ghost'),
-      'Site Folders must not paint a competing landing position');
-    // Zia's actual sibling row shifts BEFORE the group is dropped.
-    const ziaShifted = prefix.hasAttribute('zia-shift') ||
-      /translateY\([^)]*[1-9]/.test(prefix.style.getPropertyValue('transform'));
-    assert(ziaShifted, 'Zia must visibly displace the target BEFORE release');
-    prefix.dispatchEvent(new DragEvent('drop',{bubbles:true,composed:true,
-      dataTransfer:transfer,clientX:x,clientY:y}));
-    window.dispatchEvent(new DragEvent('dragend',{bubbles:true,composed:true,
-      dataTransfer:transfer,clientX:x,clientY:y}));
-    await delay(350);
-    const topLevel=[...root().children].filter(n =>
-      n.localName==='tab-group'||gBrowser.isTab(n));
-    assert(topLevel.indexOf(g)===topLevel.indexOf(prefix)-1,
-      'group must land exactly before target, not jump to a delayed second slot');
-    assert(g.parentElement===root() && !g.isZenFolder,
-      'group remains top-level and ordinary after Zia drop');
-    assert(same(order(g),h.tabs),'Zia drop must not change member order or identity');
-  });
   await test('whole group drag animates neighbour avoidance and clears on Escape', async h => {
     const first=h.prefix;
     // Enforce a known pre-drag order rather than depending on Zen's restored
@@ -595,6 +509,99 @@ const finish = arguments[arguments.length - 1];
     assert(h.tabs.every(tab => !tab.group), 'undo returns original standalone tabs');
     assert(same([...root().querySelectorAll('tab')].filter(tab => h.tabs.includes(tab)), h.tabs), 'undo must restore captured A B C D');
     assert(!core.readSnapshots()[stored.workspaceId], 'successful verified undo may clear its snapshot');
+  });
+  await test('Zia shared folder adapter probe', async h => {
+    const g = h.group;
+    const before = Object.getOwnPropertyDescriptor(g, 'isZenFolder');
+    const head = g.querySelector(':scope > .tab-group-label-container');
+    const from = head.getBoundingClientRect();
+    try {
+      assert(!g.isZenFolder, 'an ordinary website group must not be a native folder');
+      const event = new DragEvent('dragstart', {
+        bubbles: true, composed: true, clientX: from.left + 24,
+        clientY: from.top + 12, dataTransfer: new DataTransfer()
+      });
+      // Sine runs this in a separate headless browser with synthetic
+      // events. Real-user mousedown alone primes the Zia adapter; invoke
+      // the same preparation explicitly for this isolated regression.
+      const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
+        drag.prepareZiaGroupDrag(g);
+      assert(prepared, 'Zia compatibility adapter must prime the owned group: ' +
+        JSON.stringify({ zia: window.__ziaLoaded, isZenFolder:g.isZenFolder,
+          match:g.matches('tab-group[data-zsf-site]:not([split-view-group])'),
+          connected:g.isConnected, pinned:g.pinned, owns:g.hasAttribute('data-zsf-site'),
+          groupDescriptor:String(Object.getOwnPropertyDescriptor(g,'isZenFolder')?.configurable),
+          canDropExtensible:Object.isExtensible(gZenFolders),
+          canDropType:typeof gZenFolders?.canDropElement }));
+      assert(g.isZenFolder === true,
+        'adapter must transiently expose native folder identity');
+      head.dispatchEvent(event);
+      assert(document.documentElement.hasAttribute('zia-dragging-tab'),
+        'Zia must take over the actual native group drag');
+      assert(!document.querySelector('.zsf-drag-ghost'),
+        'Site Folders must not run a second preview if Zia accepted the folder');
+      window.dispatchEvent(new DragEvent('dragend', { bubbles: true }));
+      await delay(150);
+      assert(!document.documentElement.hasAttribute('zia-dragging-tab'),
+        'Zia must clean its own temporary drag state');
+      assert(!g.isZenFolder,
+        'the original group must NOT retain the Zen folder identity');
+      assert(g.parentElement === root() && same(order(g), h.tabs),
+        'single-controller drag cancellation must retain same-level group and members');
+    } finally {
+      if (before) Object.defineProperty(g, 'isZenFolder', before);
+      else delete g.isZenFolder;
+    }
+  });
+  await test('Zia single-controller group drop lands at the displayed slot', async h => {
+    const g = h.group, prefix = h.prefix;
+    gBrowser.moveTabAfter(g, prefix);
+    g.collapsed = true;
+    await idle(g);
+    prefix.scrollIntoView({block:'nearest'});
+    const head = g.querySelector(':scope > .tab-group-label-container');
+    const from = head.getBoundingClientRect(), to = prefix.getBoundingClientRect();
+    assert(from.height>5 && to.height>5, 'native group and prefix must be visible');
+    const x=to.left+Math.min(25,to.width/2), y=to.top+2;
+    const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
+      drag.prepareZiaGroupDrag(g);
+    assert(prepared, 'native adapter should be active before OS dragstart: ' +
+      JSON.stringify({zia:window.__ziaLoaded, isZenFolder:g.isZenFolder,
+        connected:g.isConnected, matches:g.matches('tab-group[data-zsf-site]:not([split-view-group])'),
+        canDropType:typeof gZenFolders?.canDropElement}));
+    const transfer=new DataTransfer();
+    head.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:from.left+25,clientY:from.top+10}));
+    assert(document.documentElement.hasAttribute('zia-dragging-tab'),
+      'Zia should be the only controller of an active group drag');
+    prefix.dispatchEvent(new DragEvent('dragover',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y}));
+    await delay(60);
+    assert(!document.querySelector('.zsf-drag-ghost'),
+      'Site Folders must not paint a competing landing position');
+    // Zia's actual sibling row shifts BEFORE the group is dropped.
+    const ziaShifted = prefix.hasAttribute('zia-shift') ||
+      /translateY\([^)]*[1-9]/.test(prefix.style.getPropertyValue('transform'));
+    assert(ziaShifted, 'Zia must visibly displace the target BEFORE release');
+    prefix.dispatchEvent(new DragEvent('drop',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y}));
+    window.dispatchEvent(new DragEvent('dragend',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y}));
+    await delay(350);
+    const topLevel=[...root().children].filter(n =>
+      n.localName==='tab-group'||gBrowser.isTab(n));
+    assert(topLevel.indexOf(g)===topLevel.indexOf(prefix)-1,
+      'group must land exactly before target, not jump to a delayed second slot: ' +
+      JSON.stringify({topLevel:topLevel.map(n=>({id:n.id,kind:n.localName,
+        label:n.getAttribute('label'),site:n.getAttribute('data-zsf-site')})),
+        gIndex:topLevel.indexOf(g),prefixIndex:topLevel.indexOf(prefix),
+        groupParent:g.parentElement?.localName,folder:g.isZenFolder,
+        rootZia:document.documentElement.hasAttribute('zia-dragging-tab'),
+        prefixShift:prefix.style.getPropertyValue('transform'),
+        sourceTransform:g.style.getPropertyValue('transform')}));
+    assert(g.parentElement===root() && !g.isZenFolder,
+      'group remains top-level and ordinary after Zia drop');
+    assert(same(order(g),h.tabs),'Zia drop must not change member order or identity');
   });
   return { results, eventMode: 'synthetic chrome input plus real native APIs/events/animations; no physical input claim' };
 })().then(finish, error => finish({ results: [{ name: 'suite', status: 'FAIL', error: String(error.message || error) + '\n' + (error.stack || '') }] }));
