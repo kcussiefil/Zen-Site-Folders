@@ -166,7 +166,7 @@ async function main(){
     composedPath:()=>[target,container,source]
   });
   const subject={kind:'tab',item:B,parent:source,container};
-  const slot=api.chooseSlot(subject,100,170);
+  const slot=api.chooseSlot(subject,100,180);
   assert(slot&&slot.target===A&&slot.before,
     'dragging B above first member must resolve before A');
   assert(api.commit(slot,subject),'native reorder should succeed');
