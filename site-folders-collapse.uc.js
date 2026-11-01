@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders — fluid native/fallback collapse
-// @version      0.3.3
+// @version      0.3.4
 // @description  Prefer Zia's native spring, otherwise animate actual group height.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfCollapseV033) return;
+  if (window.__zsfCollapseV034) return;
 
   const SELECTOR = 'tab-group[data-zsf-site]:not([split-view-group])';
   const SETTLED = 'data-zsf-collapse-settled';
@@ -40,13 +40,19 @@
     const tab = selectedMember(group);
     if (!tab) return 0;
     const box = containerOf(group);
-    let pad = 0;
+    let spacing = 0;
     try {
-      const style = window.getComputedStyle?.(box);
-      pad = (parseFloat(style?.paddingTop) || 0) +
-        (parseFloat(style?.paddingBottom) || 0);
+      const containerStyle = window.getComputedStyle?.(box);
+      const tabStyle = window.getComputedStyle?.(tab);
+      // CSS box height excludes the tab's outside margins. The v0.3.3
+      // fallback animated to a shorter target, then snapped to the real
+      // natural selected-row height when the animation finished.
+      spacing = (parseFloat(containerStyle?.paddingTop) || 0) +
+        (parseFloat(containerStyle?.paddingBottom) || 0) +
+        (parseFloat(tabStyle?.marginTop) || 0) +
+        (parseFloat(tabStyle?.marginBottom) || 0);
     } catch (_) {}
-    return heightOf(tab) + pad;
+    return heightOf(tab) + spacing;
   }
 
   function finish(group, token) {
@@ -249,12 +255,12 @@
       group.removeAttribute(ANIMATING);
       group.removeAttribute(SETTLED);
     }
-    if (window.__zsfCollapseV033 === api) delete window.__zsfCollapseV033;
+    if (window.__zsfCollapseV034 === api) delete window.__zsfCollapseV034;
   }
 
   const api = { start, destroy, prepare, onToggle, nativeGeometryAnimations,
-    version: '0.3.3' };
-  window.__zsfCollapseV033 = api;
+    version: '0.3.4' };
+  window.__zsfCollapseV034 = api;
   if (document.readyState === 'complete') start();
   else window.addEventListener('load', start, { once: true });
   window.addEventListener('unload', destroy, { once: true });
