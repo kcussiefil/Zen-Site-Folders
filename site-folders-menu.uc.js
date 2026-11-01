@@ -108,8 +108,12 @@
   }
 
   function alertUser(message) {
-    try { Services.prompt?.alert?.(window, 'Zen Site Folders', message); return; }
-    catch (_) {}
+    try {
+      if (typeof Services.prompt?.alert === 'function') {
+        Services.prompt.alert(window, 'Zen Site Folders', message);
+        return;
+      }
+    } catch (_) {}
     try { window.alert?.(message); } catch (_) {}
   }
 
