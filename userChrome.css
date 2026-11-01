@@ -1,0 +1,117 @@
+/* Zen Site Folders v0.1.3 — Zia-safe, only our own site groups. */
+#zsf-sort-button,
+#zsf-undo-button {
+  list-style-image: url('chrome://browser/skin/zen-icons/folder.svg') !important;
+  -moz-context-properties: fill, fill-opacity !important;
+  fill: currentColor !important;
+  width: 22px !important;
+  min-width: 22px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  padding: 3px !important;
+  margin-inline: 2px 3px !important;
+  flex: 0 0 22px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: .75;
+}
+#zsf-undo-button {
+  list-style-image: url('chrome://global/skin/icons/undo.svg') !important;
+  margin-inline: 3px 14px !important;
+}
+#zsf-undo-button[hidden] { display: none !important; }
+#zsf-sort-button[disabled], #zsf-undo-button[disabled] {
+  pointer-events: none !important;
+  opacity: .35 !important;
+}
+#zsf-sort-button:hover,
+#zsf-undo-button:hover {
+  opacity: 1 !important;
+  background: color-mix(in srgb, currentColor 8%, transparent) !important;
+}
+/* Wave runs over the native divider only. It never intercepts clicks,
+   and never moves the Clear Tabs button or changes its action. */
+.pinned-tabs-container-separator:has(#zsf-sort-button) { position: relative !important; }
+.pinned-tabs-container-separator .zsf-wave {
+  position: absolute !important;
+  left: 84px !important;
+  right: 28px !important;
+  top: calc(50% - 6px) !important;
+  width: calc(100% - 112px) !important;
+  height: 12px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: visible !important;
+  z-index: 1 !important;
+  color: currentColor !important;
+}
+.pinned-tabs-container-separator .zsf-wave-path {
+  stroke: currentColor !important;
+  fill: none !important;
+  stroke-width: .7px !important;
+  vector-effect: non-scaling-stroke;
+}
+.pinned-tabs-container-separator.zsf-is-sorting .zsf-wave { opacity: .8 !important; }
+.pinned-tabs-container-separator.zsf-is-sorting > toolbarseparator { opacity: 0 !important; }
+/* Native/Advanced Tab Groups colour, scoped to our own site groups only. */
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) {
+  --tab-group-color: transparent !important;
+  --tab-group-stroke: currentColor !important;
+  --tab-group-background-color: transparent !important;
+  --zia-group-swatch: transparent !important;
+  --zia-folder-swatch: transparent !important;
+  --zia-folder-wash: 0% !important;
+  --zia-folder-tint: 0% !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+/* Zia draws group frames using pseudo-elements, NOT CSS borders. Hide them
+   except during drag-over so the user keeps a visible drop target. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group], [zia-drop-slot])::before,
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group], [zia-drop-slot])::after {
+  content: none !important;
+  display: none !important;
+  opacity: 0 !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+/* Suppress tinted group rails, but keep Zia's empty/drop placeholders. */
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container::after {
+  background-color: transparent !important;
+}
+/* For these groups only, replace Zia/ATG decoration with the cached site icon.
+   Do not touch icons on user-created folders, Spaces or Essentials. */
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-folder-icon,
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-icon-container {
+  display: none !important;
+}
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .zsf-favicon {
+  width: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
+  max-height: 16px !important;
+  margin-inline: 10px 5px !important;
+  padding: 0 !important;
+  flex-shrink: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  opacity: 1 !important;
+}
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label {
+  margin-inline-start: 0 !important;
+  padding-inline-start: 0 !important;
+}
