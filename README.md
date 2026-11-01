@@ -1,4 +1,4 @@
-# Zen Site Folders 0.4.0 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.4.1 — 一般分頁區域群組（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內依記錄的開啟時間由新到舊排序（沒有開啟時間的歷史分頁依原位置估算），圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,15 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.4.1 展開時捲動位置與影片播放效能改善
+
+- **避免展開資料夾時，垂直分頁清單自動下移**：只對含本工具網站群組的 Zen 工作區設定 `overflow-anchor: none`，停用 Firefox 在動畫高度改變時的捲動錨定補償，不停用使用者的觸控板／滑鼠滾動。
+- **保留原生微彈跳**：仍交給 Zen/Zia 的 `animateExpand/animateCollapse`，不使用第二套逐格高度動畫或每幀 `scrollTop` 重設。
+- **降低開合與捲動重繪**：已展開且含目前分頁的資料夾保持 `overflow: visible` 讓光暈完整呈現，但取消整個資料夾的額外 `clip-path`；收合時的點擊區隔離與光暈裁切仍保留。
+- **降低 JavaScript 額外負擔**：單一群組 `collapsed` 變更只更新該群組；`TabSelect` 只檢查前後選取分頁所屬的群組；跨群組結構變動在下一動畫影格合併更新，避免逐次掃描全部分頁。
+- **音訊播放情境**：Zia 的波形屬於 SVG 自身動畫，原生彈跳使用另一套路徑。新增含 `soundplaying` 的真實 Zen DOM 回歸測試，驗證捲動位置、開合與原生彈跳動畫時間；此測試不等同實機影片解碼負載測試。
+- 其他功能及快照格式不變。**須在 macOS Zen + Zia 實機測試垂直分頁位置與影片播放時的流暢度**，不以 CI 代替實機觀察。
 
 ## v0.4.0 開啟資料夾光暈修復
 

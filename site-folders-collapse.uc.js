@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.4.0
+// @version      0.4.1
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -11,6 +11,8 @@
   const states = new Map();
   const listeners = [];
   let observer, dead = false;
+  let queuedScan = false;
+  let lastSelected = null;
   const ours = group => group?.isConnected && group.matches?.(SELECTOR) &&
     !group.isZenFolder && !group.pinned;
   function bind(node, type, fn, options) {
@@ -70,22 +72,76 @@
     }).catch(error => console.warn('[ZenSiteFoldersMotion]', error));
   }
   function scan() {
+    if (dead) return;
+    const tabs = window.gBrowser?.tabContainer;
+    if (!tabs) return;
     clearLegacyFlags();
-    for (const group of window.gBrowser?.tabContainer?.querySelectorAll(SELECTOR) || []) sync(group);
+    const groups = [...tabs.querySelectorAll(SELECTOR)];
+    const spaces = new Set();
+    for (const group of groups) {
+      const space = group.closest?.('zen-workspace');
+      if (space) spaces.add(space);
+      sync(group);
+    }
+    // Do not affect native folders or Spaces without any ZSF-owned groups.
+    for (const space of tabs.querySelectorAll('zen-workspace')) {
+      const enabled = spaces.has(space);
+      if (space.hasAttribute('data-zsf-scroll-stable') !== enabled)
+        space.toggleAttribute('data-zsf-scroll-stable', enabled);
+    }
     for (const group of states.keys()) if (!ours(group)) states.delete(group);
+  }
+  function scheduleScan() {
+    if (queuedScan || dead) return;
+    queuedScan = true;
+    // Structural changes must settle before the next native paint and
+    // before a restore/ungroup operation verifies tab visibility. Using
+    // requestAnimationFrame delayed this under headless/background windows.
+    queueMicrotask(() => {
+      queuedScan = false;
+      if (!dead) scan();
+    });
+  }
+  function onMutations(records) {
+    let structural = false;
+    for (const record of records) {
+      if (record.type === 'attributes' &&
+          record.attributeName === 'collapsed' && ours(record.target)) {
+        // Never scan every tab in the whole sidebar for a single folder.
+        sync(record.target);
+      } else if (record.type === 'attributes' &&
+                 record.attributeName === 'data-zsf-site' &&
+                 ours(record.target)) {
+        // Set the scroll guard immediately, not one animation frame late.
+        record.target.closest?.('zen-workspace')?.setAttribute(
+          'data-zsf-scroll-stable', 'true');
+        structural = true;
+      } else {
+        structural = true;
+      }
+    }
+    if (structural) scheduleScan();
+  }
+  function onTabSelect(event) {
+    lastSelected = event?.target?.localName === 'tab' ?
+      event.target : window.gBrowser?.selectedTab || null;
+    // The native selected state can move between groups asynchronously.
+    // Querying just the previous/current group missed some real Zen restore
+    // paths. Iterate already-known groups in memory, not the whole DOM.
+    for (const group of states.keys()) {
+      if (ours(group) && group.collapsed) sync(group);
+    }
   }
   function start() {
     const tabs = window.gBrowser?.tabContainer;
     if (!tabs || dead || observer) return;
-    // Retire older live controllers before removing their state attributes.
     for (const version of ['031', '032', '033', '034', '035', '036'])
       window['__zsfCollapseV' + version]?.destroy?.();
+    lastSelected = window.gBrowser?.selectedTab || null;
     bind(window, 'TabGroupCollapse', event => sync(event.target), true);
     bind(window, 'TabGroupExpand', event => sync(event.target), true);
-    bind(window, 'TabSelect', () => {
-      for (const group of tabs.querySelectorAll(SELECTOR)) if (group.collapsed) sync(group);
-    }, true);
-    observer = new MutationObserver(scan);
+    bind(window, 'TabSelect', onTabSelect, true);
+    observer = new MutationObserver(onMutations);
     observer.observe(tabs, { subtree: true, childList: true,
       attributes: true, attributeFilter: ['data-zsf-site', 'collapsed'] });
     scan();
@@ -115,11 +171,13 @@
   function destroy() {
     dead = true;
     observer?.disconnect();
+    for (const space of window.gBrowser?.tabContainer?.querySelectorAll('zen-workspace') || [])
+      space.removeAttribute('data-zsf-scroll-stable');
     for (const [node, type, fn, options] of listeners) node.removeEventListener(type, fn, options);
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.0', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.1', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });
