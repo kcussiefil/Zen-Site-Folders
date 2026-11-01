@@ -73,8 +73,13 @@ jobs:
             curl --fail --location --retry 2 https://github.com/zen-browser/desktop/releases/download/1.24b/zen.macos-universal.dmg -o .runtime/zen.dmg
             echo '22915ea7e4f0c97a817b85b6ceba9b878317b8e1059390fcfe70dabaac8db86b  .runtime/zen.dmg' | shasum -a 256 --check
             hdiutil attach .runtime/zen.dmg -mountpoint "$RUNNER_TEMP/zen-volume" -nobrowse -readonly
-            cp -R "$RUNNER_TEMP/zen-volume/Zen Browser.app" .runtime/browser/Zen.app
+            trap 'hdiutil detach "$RUNNER_TEMP/zen-volume" >/dev/null || true' EXIT
+            zen_apps=( "$RUNNER_TEMP/zen-volume/"*.app )
+            [[ ${#zen_apps[@]} == 1 && -d "${zen_apps[0]}" ]]
+            ditto "${zen_apps[0]}" .runtime/browser/Zen.app
+            test -x .runtime/browser/Zen.app/Contents/MacOS/zen
             hdiutil detach "$RUNNER_TEMP/zen-volume"
+            trap - EXIT
             echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/Zen.app/Contents/MacOS/zen" >> "$GITHUB_ENV"
           fi
       - name: Prove regressions fail on v0.3.7
