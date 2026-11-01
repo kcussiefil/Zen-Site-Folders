@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
 // @version      0.3.7
-// @description  Native-API fallback for in-folder ordering and group-to-first drag.
+// @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
@@ -10,11 +10,12 @@
   const GROUP = 'tab-group[data-zsf-site]:not([split-view-group])';
   const NS = 'http://www.w3.org/1999/xhtml';
   const THRESHOLD = 6;
-  const POST_NATIVE_MS = 38; // Zen and Zia finish their synchronous/zero-delay drop first.
   let pending = null, active = null, ghost = null, guide = null;
   let started = false, destroyed = false;
   const listeners = [];
   const tasks = new Set();
+  let generation = 0;
+  let lastWorkspace = window.gZenWorkspaces?.activeWorkspace;
 
   function bind(node, name, fn, opts) {
     node?.addEventListener?.(name, fn, opts);
@@ -28,7 +29,8 @@
     return !!node?.isConnected &&
       (node.localName === 'tab' || node.classList?.contains?.('tabbrowser-tab')) &&
       !node.pinned && !node.hasAttribute?.('zen-essential') &&
-      !node.hasAttribute?.('zen-empty-tab');
+      !node.hasAttribute?.('zen-empty-tab') && !node.splitview &&
+      !node.group?.hasAttribute?.('split-view-group');
   }
   function groupLabel(group) {
     return group?.querySelector?.(':scope > .tab-group-label-container');
@@ -41,7 +43,7 @@
       if (groupLabel(group) === label && ownGroup(group))
         return { kind: 'group', item: group, parent: group.parentElement };
       const tab = isPlainTab(node) ? node : node?.closest?.('.tabbrowser-tab');
-      if (isPlainTab(tab) && ownGroup(tab.group) &&
+      if (isPlainTab(tab) && !tab.multiselected && ownGroup(tab.group) &&
           !tab.group.hasAttribute('collapsed') && !tab.group.collapsed) {
         return { kind: 'tab', item: tab, parent: tab.group,
           container: tab.parentElement };
@@ -53,7 +55,8 @@
     const target = element?.localName === 'tab-group' ?
       groupLabel(element) : element;
     const box = target?.getBoundingClientRect?.();
-    return box?.width > 5 && box?.height > 5 ? box : null;
+    return box?.width > 5 && box?.height > 5 ? { left: box.left, top: box.top,
+      right: box.right, bottom: box.bottom, width: box.width, height: box.height } : null;
   }
   function itemName(item) {
     const label = item?.querySelector?.(
@@ -81,11 +84,11 @@
     return !!box && x >= box.left && x <= box.right &&
       y >= box.top && y <= box.bottom;
   }
-  function slotForGroup(source, x, y) {
+  function slotForGroup(source, x, y, layout) {
     if (!ownGroup(source) || !withinSidebar(x, y)) return null;
     const candidates = topLevelSiblings(source);
     if (!candidates.length) return null;
-    const entries = candidates.map(item => ({ item, box: rectOf(item) }))
+    const entries = (layout || candidates.map(item => ({ item, box: rectOf(item) })))
       .filter(entry => entry.box && entry.item.parentElement === source.parentElement)
       .sort((a, b) => a.box.top - b.box.top);
     if (!entries.length) return null;
@@ -110,13 +113,14 @@
       markerY: before ? chosen.box.top : chosen.box.bottom,
       box: chosen.box };
   }
-  function slotForMember(source, group, x, y) {
-    if (!isPlainTab(source) || source.group !== group || !ownGroup(group) ||
-        group.hasAttribute('collapsed') || group.collapsed ||
+  function slotForMember(source, group, x, y, layout) {
+    if (!isPlainTab(source) || (source.group !== group && (!layout || source.group)) || !ownGroup(group) ||
+        (!layout && (group.hasAttribute('collapsed') || group.collapsed)) ||
         !withinSidebar(x, y)) return null;
     const members = groupMembers(group).filter(tab => tab !== source);
     if (!members.length) return null;
-    const entries = members.map(item => ({ item, box: rectOf(item) }))
+    const entries = (layout || members.map(item => ({ item, box: rectOf(item) })))
+      .filter(entry => entry.item !== source)
       .filter(entry => entry.box).sort((a, b) => a.box.top - b.box.top);
     if (!entries.length) return null;
     const first = entries[0], last = entries[entries.length - 1];
@@ -135,9 +139,48 @@
   }
   function chooseSlot(subject, x, y) {
     if (!subject) return null;
-    if (subject.kind === 'group') return slotForGroup(subject.item, x, y);
-    if (subject.kind === 'tab') return slotForMember(subject.item, subject.parent, x, y);
+    const dy = (subject.scrolls || []).reduce((sum, item) => sum + item.node.scrollTop - item.top, 0);
+    const layout = subject.layout?.map(entry => ({ item: entry.item, box: {
+      ...entry.box, top: entry.box.top - dy, bottom: entry.box.bottom - dy
+    } }));
+    if (subject.kind === 'group') return slotForGroup(subject.item, x, y, layout);
+    if (subject.kind === 'tab') return slotForMember(subject.item, subject.parent, x, y, layout);
     return null;
+  }
+  function captureLayout(subject) {
+    const items = subject.kind === 'group' ? topLevelSiblings(subject.item) : groupMembers(subject.parent);
+    return items.map(item => ({ item, box: rectOf(item) })).filter(entry => entry.box);
+  }
+  // Wait for observable native completion, not a guessed number of ms.
+  // A busy/hidden window times out without applying a stale move.
+  async function nativeIdle(group, valid = () => !destroyed) {
+    await window.__zsfCollapseV037?.whenIdle?.(group);
+    const start = Date.now();
+    let quiet = 0;
+    while (valid() && Date.now() - start < 4000) {
+      await new Promise(resolve => setTimeout(resolve, 16));
+      const strip = window.gBrowser?.tabContainer;
+      const moving = strip?.hasAttribute?.('movingtab') || strip?.hasAttribute?.('movingtabgroup') ||
+        strip?.hasAttribute?.('zia-settling') ||
+        [...(strip?.getAnimations?.({ subtree: true }) || [])].some(animation => {
+          if (animation.playState !== 'running' && animation.playState !== 'pending') return false;
+          if (animation.effect?.getComputedTiming?.().iterations === Infinity) return false;
+          return animation.effect?.getKeyframes?.().some(frame =>
+            ['transform', 'translate', 'height', 'marginTop', 'marginBottom'].some(key => key in frame));
+        });
+      if (moving) quiet = 0;
+      else if (++quiet === 2) return valid();
+    }
+    return false;
+  }
+  async function beforeMutation(group) {
+    // The caller has not captured its display order yet. Complete an accepted
+    // drop first, so ungroup cannot race Zia's queued placing or our correction.
+    await Promise.all([...tasks].map(task => task.done));
+    if (!await nativeIdle(group)) return false;
+    generation++;
+    reset();
+    return true;
   }
   function create(tag, cssClass) {
     const el = document.createElementNS(NS, tag);
@@ -227,13 +270,21 @@
       if (!ownGroup(slot.source) || slot.source.parentElement !== context.parent ||
           slot.target.parentElement !== context.parent ||
           slot.source.pinned) return false;
-    } else if (!ownGroup(context.parent) || slot.source.group !== context.parent ||
-               slot.target.group !== context.parent ||
-               context.parent.hasAttribute('collapsed')) {
-      // Native Zen may have moved the tab out of the folder intentionally.
-      // Never pull it back into a group as a side effect.
+    } else if (!ownGroup(context.parent) || slot.target.group !== context.parent ||
+               slot.source.pinned || (slot.source.group && slot.source.group !== context.parent) ||
+               (context.root && context.parent.parentElement !== context.root)) {
       return false;
     }
+    // Only an accepted same-folder drop may restore membership if native
+    // placing briefly ungrouped this exact original tab. Cross-folder drops,
+    // multi-selection, split views and later user gestures never enter here.
+    if (slot.kind === 'tab' && !slot.source.group) {
+      if (typeof browser.moveTabToExistingGroup !== 'function') return false;
+      browser.moveTabToExistingGroup(slot.source, context.parent);
+      if (slot.source.group !== context.parent || slot.source.pinned) return false;
+    }
+    if (slot.kind === 'tab' && context.collapsed === false && context.parent.collapsed)
+      context.parent.collapsed = false;
     if (orderMatches(slot)) return true; // Zen/Zia already did the requested move.
     try {
       if (slot.before) {
@@ -269,19 +320,24 @@
     const context = active;
     reset();
     if (!slot) return;
-    // Let Zen and Zia finish their native 'drop' handlers, including Zia's
-    // zero-delay folder placement, before checking whether any correction
-    // is necessary. Never cancel the native event.
-    const timer = setTimeout(() => {
-      tasks.delete(timer);
-      commit(slot, context);
-    }, POST_NATIVE_MS);
-    tasks.add(timer);
+    const token = generation;
+    const task = { done: null };
+    task.done = (async () => {
+      const valid = () => !destroyed && generation === token;
+      if (await nativeIdle(context.parent, valid)) commit(slot, context);
+    })().finally(() => tasks.delete(task));
+    tasks.add(task);
   }
+
   function onDown(event) {
     if (event.button !== 0) return;
     const source = sourceFromEvent(event);
-    pending = source ? { ...source, x: event.clientX, y: event.clientY } : null;
+    generation++;
+    pending = source ? { ...source, x: event.clientX, y: event.clientY,
+      scrolls: (event.composedPath?.() || []).filter(node => node?.scrollHeight > node?.clientHeight && typeof node.scrollTop === 'number')
+        .map(node => ({ node, top: node.scrollTop })),
+      layout: captureLayout(source), root: source.parent.parentElement,
+      collapsed: source.parent.collapsed } : null;
   }
   function onMove(event) {
     if (!active) {
@@ -292,15 +348,18 @@
     } else if (event.buttons & 1) update(event);
   }
   function onStart(event) {
-    const source = sourceFromEvent(event) ||
-      (pending?.item?.isConnected ? pending : null);
-    if (source) activate(source, event);
+    const source = pending?.item?.isConnected ? pending : sourceFromEvent(event);
+    if (source && !source.layout) source.layout = captureLayout(source);
+    if (source) {
+      activate(source, event);
+      if (active) active.native = true;
+    }
   }
   function onOver(event) {
     if (active) update(event);
   }
   function onKey(event) {
-    if (event.key === 'Escape') reset();
+    if (event.key === 'Escape') { generation++; reset(); }
   }
   function start() {
     if (started || destroyed) return;
@@ -312,24 +371,31 @@
     bind(window, 'dragstart', onStart, true);
     bind(window, 'dragover', onOver, true);
     bind(window, 'drop', finish, true);
-    bind(window, 'mouseup', finish, true);
+    bind(window, 'mouseup', () => { if (!active?.native) reset(); }, true);
     bind(window, 'dragend', reset, true);
-    bind(window, 'blur', reset, true);
+    // Tab switching focuses the content browser and emits a window blur too.
+    // Only OS-window deactivation cancels the gesture; descendant/content
+    // focus changes must not erase the source captured on mousedown.
+    bind(window, 'deactivate', () => { generation++; reset(); }, true);
     bind(window, 'keydown', onKey, true);
-    bind(window, 'ZenWorkspacesUIUpdate', reset);
+    bind(window, 'ZenWorkspacesUIUpdate', () => {
+      const workspace = window.gZenWorkspaces?.activeWorkspace;
+      if (workspace !== lastWorkspace) { generation++; reset(); }
+      lastWorkspace = workspace;
+    });
+    bind(window, 'mousedown', () => { generation++; }, true);
   }
   function destroy() {
     if (destroyed) return;
     destroyed = true;
     reset();
-    for (const timer of tasks) clearTimeout(timer);
-    tasks.clear();
+    generation++;
     for (const [node, name, fn, opts] of listeners)
       try { node.removeEventListener(name, fn, opts); } catch (_) {}
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.3.7', chooseSlot, commit };
+  const api = { start, destroy, version: '0.3.7', chooseSlot, commit, beforeMutation, nativeIdle };
   window.__zsfDragV037 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });

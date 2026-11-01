@@ -8,8 +8,8 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8'
 new vm.Script(src);
 assert(!/\bpreventDefault\(|\bstopPropagation\(|\bsetDragImage\(|dropEffect\s*=/.test(src),
   'must never interrupt native Zen/Zia events');
-assert(!/\.(?:pinTab|unpinTab|removeTab|moveTabToExistingGroup)\s*\(/.test(src),
-  'drag must not pin, close or alter tab group membership');
+assert(!/\.(?:pinTab|unpinTab|removeTab)\s*\(/.test(src),
+  'drag must not pin or close tabs');
 assert(!core.includes("window.addEventListener('TabGrouped'"),
   'user manual drag must not get silently undone by newest-first on TabGrouped');
 assert(css.includes('.zsf-drag-ghost') && css.includes('.zsf-drop-guide'));

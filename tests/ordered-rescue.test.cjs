@@ -137,7 +137,7 @@ function harness({ owned = true, withFollowing = true, selected = false } = {}) 
 async function main() {
   {
     const h = harness();
-    const result = h.ungroupInDisplayOrder(h.group, h.memberTabs);
+    const result = await h.ungroupInDisplayOrder(h.group, h.memberTabs);
     assert.equal(result.moved, 3);
     assert.equal(result.errors, 0);
     assert.equal(result.ordered, true);
@@ -148,7 +148,7 @@ async function main() {
   }
   {
     const h = harness({ withFollowing: false });
-    const result = h.ungroupInDisplayOrder(h.group, h.memberTabs);
+    const result = await h.ungroupInDisplayOrder(h.group, h.memberTabs);
     assert.equal(result.errors, 0, 'last group with no next anchor must also preserve order');
     assert.deepEqual(h.strip.slice(1, 4), h.memberTabs);
   }

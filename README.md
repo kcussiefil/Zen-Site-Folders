@@ -238,3 +238,10 @@
 ## 測試範圍
 
 完成靜態衝突檢查、JavaScript 語法檢查、模擬整理／反覆整理／還原舊群組／不關閉新分頁／備份寫入失敗就停止的測試，以及與 Zia 2.114.1 CSS/JS 的選擇器及事件設計比對。**未在你的 Zen + Zia + Advanced Tab Groups 實際安裝環境做端到端測試，無法保證視覺或分組行為 100% 無衝突。**
+### Work-mode regression candidate
+
+The `fix/native-folder-order-regressions` branch is an unmerged test candidate
+based on v0.3.7. It adds native Zen browser tests rather than treating model or
+string checks as physical acceptance. See [source and timing audit](docs/regression-audit.md)
+and [macOS Zen + Zia acceptance steps](docs/macOS-acceptance.md).
+Do not publish this candidate before those acceptance steps pass.
