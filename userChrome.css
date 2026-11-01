@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.2.3 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.2.4 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -166,4 +166,25 @@
 }
 #tabbrowser-tabs zen-folder[data-zsf-site] > .tab-group-label-container > .zsf-favicon {
   pointer-events: none !important;
+}
+
+/* Fallback for Zen's vertical sidebar when Advanced Tab Groups is disabled.
+   Scope strictly to website groups created by this mod; never change Zia,
+   user-owned groups, pinned groups, split-view groups or their content. */
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group]) > .tab-group-container tab:not([selected]),
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group]) > .tab-group-container > tab-group:not(:has(tab[selected])) {
+  max-height: 0 !important;
+  min-height: 0 !important;
+  opacity: 0 !important;
+  margin-block: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group]) tab[aria-hidden="true"]:not([selected]) {
+  max-height: 0 !important;
+  min-height: 0 !important;
+  opacity: 0 !important;
+  margin-block: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
 }
