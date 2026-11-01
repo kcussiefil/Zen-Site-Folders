@@ -320,6 +320,28 @@ async function main(){
     'without a mocked Zia drop, our delegated path must not mutate the DOM');
   root.removeAttribute('zia-dragging-tab');
 
+  // The gap math must also work when moving DOWN, where Zia shifts
+  // intervening rows upward. The preview must already occupy the exact
+  // final landing position; mouseup/drop cannot invent a different slot.
+  assert.deepEqual(strip.children,[source,first,last],
+    'group fixture begins above its sibling folders');
+  emit(strip,'mousedown',gEvent(160,160,sourceLabel));
+  emit(window,'mousemove',gEvent(160,219,sourceLabel));
+  const downGhost=root.querySelector('.zsf-drag-ghost');
+  assert(downGhost?.hasAttribute('data-zsf-docked'),
+    'moving a folder downward must also display a docked final row');
+  assert.equal(downGhost.style.top,'185px',
+    'the gap after last is last.bottom minus one displaced pitch');
+  assert.equal(last.style.getPropertyValue('--zsf-drag-avoid-y'),'-35px',
+    'downward drag must move the intervening target row upward');
+  assert.deepEqual(strip.children,[source,first,last],
+    'even a live docked preview must not change DOM before release');
+  emit(window,'drop',gEvent(160,219,sourceLabel));
+  await Promise.resolve();
+  assert.deepEqual(strip.children,[first,last,source],
+    'dropping at the visible end slot must immediately confirm the same order');
+  await new Promise(resolve=>setTimeout(resolve,90));
+
   api.destroy();
   assert.equal((events.get('window:mousemove')||[]).length,0,'no leaked listeners');
   console.log('PASS: native grey picture suppression, group sibling avoidance, edge autoscroll, original drag safety and cleanup');
