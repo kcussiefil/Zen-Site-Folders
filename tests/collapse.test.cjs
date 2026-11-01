@@ -127,8 +127,8 @@ async function main() {
     setTimeout() { throw new Error('fixed timer must not be used'); },
     clearTimeout() {},
   });
-  const api = window.__zsfCollapseV035;
-  assert.equal(api.version, '0.3.5');
+  const api = window.__zsfCollapseV036;
+  assert.equal(api.version, '0.3.6');
   assert(existing.hasAttribute('data-zsf-collapse-settled'),
     'restored collapsed group must be settled immediately');
 
