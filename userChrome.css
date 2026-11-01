@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.2.8 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.2.9 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -382,3 +382,46 @@
 @media (prefers-reduced-motion: reduce) {
   #zsf-folder-hover-card[data-open] { animation: none !important; }
 }
+
+
+/* v0.2.9: visual alignment. Zia's baseline padding currently leaves the
+   website name 2px higher than its favicon; move ONLY the name and its
+   chevron, never the icon or the row's hit target. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site]:not([split-view-group])
+> .tab-group-label-container > .tab-group-label {
+  translate: 0 2px !important;
+  line-height: normal !important;
+}
+
+/* The color submenu never paints a folder background. A chosen accent is
+   restricted to the little chevron; default color remains neutral. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site] > .tab-group-label-container > .tab-group-label::after {
+  stroke: var(--zsf-custom-accent, currentColor) !important;
+}
+
+/* Custom icons selected through Zen's native icon picker can replace the
+   favicon without adding another folder icon or changing other groups. */
+#tabbrowser-tabs tab-group[data-zsf-site] > .tab-group-label-container
+> .zsf-favicon[hidden] {
+  display: none !important;
+}
+#tabbrowser-tabs tab-group[data-zsf-site] > .tab-group-label-container
+> .zsf-menu-emoji {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  padding: 0 !important;
+  margin: 0 8px 0 10px !important;
+  font-size: 15px !important;
+  line-height: 16px !important;
+  flex: 0 0 16px !important;
+  background: transparent !important;
+}
+
+/* No extra visible toolbar buttons; the native XUL context menu is attached
+   to our group's existing label only. */
