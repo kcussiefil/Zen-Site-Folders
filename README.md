@@ -1,4 +1,4 @@
-# Zen Site Folders 0.1.7 — Sine / Zia 相容版（測試）
+# Zen Site Folders 0.1.8 — Sine / Zia 相容版（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內盡可能依新到舊排序，圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,12 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.1.8 修正（2026-11-01）
+- **SessionStore 分頁識別碼修正：** 優先使用 Zen 視窗的 `window.SessionStore`（與 Zia 相同入口）；如不可用，改用已匯入的 SessionStore 模組。必須成功寫入並讀回識別碼才允許整理，沒有不可靠的記憶體 ID 備援。
+- **特殊分頁：** 跳過 Zen 佔位空白分頁、釘選、Essential、Glance 等不會參與整理的分頁，不再因為這些分頁無法保存識別碼而取消整個整理。
+- **通知動畫：** 盡量沿用 Zen 的 spring 彈出和淡出縮小效果，動畫完成後停留約 2 秒；失敗和成功採相同停留時間（原本分別 6.5 秒、4.2 秒）。
+- 重新驗證 SessionStore 視窗與模組備援、寫入／讀回，以及保存失敗時拒絕整理。仍須在 Zen + Zia 實機確認跨重啟還原是否完整。
 
 ## v0.1.7 修正（2026-11-01）
 - 中文整理訊息改用 Zen 原生 `.zen-toast` 視覺規則，移除自訂深色背景、黃色錯誤外框、固定高度及字級覆蓋，讓通知隨 Zen 佈景主題改變。
