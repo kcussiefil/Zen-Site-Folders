@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.3.1
+// @version      0.3.2
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV031) return;
-  window.__zenSiteFoldersV031 = true;
+  if (window.__zenSiteFoldersV032) return;
+  window.__zenSiteFoldersV032 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -1102,32 +1102,51 @@
     }
   }
 
-  // Trackpad two-finger secondary click on macOS is either a right-button
-  // mousedown followed by contextmenu, or a contextmenu-only event. Handle
-  // both in capture phase before Zen/Zia's toolbar contextmenu handlers.
-  // This applies ONLY to our undo button; ordinary menus remain untouched.
+  // A macOS secondary click produces a mousedown followed by contextmenu.
+  // Start rescue ONLY after the contextmenu has been consumed. Starting a
+  // native confirm dialog inside mousedown lets the later contextmenu escape
+  // to the underlying webpage after the dialog is dismissed.
   let lastSecondaryUndo = 0;
+  let pendingUndoSecondary = 0;
+  let scheduledUndoRescue = null;
   function onUndoSecondaryClick(event) {
-    if (event.type === 'mousedown' && event.button !== 2) return;
+    if (event.type === 'mousedown') {
+      if (event.button !== 2) return;
+      const path = typeof event.composedPath === 'function' ?
+        event.composedPath() : [event.target];
+      const undoButton = path.find(node => node?.classList?.contains?.('zsf-undo-button'));
+      pendingUndoSecondary = undoButton && !undoButton.hidden &&
+        !undoButton.disabled && undoButton.isConnected ? Date.now() : 0;
+      return;
+    }
+    if (event.type !== 'contextmenu') return;
     const path = typeof event.composedPath === 'function' ?
       event.composedPath() : [event.target];
     const button = path.find(node => node?.classList?.contains?.('zsf-undo-button'));
-    if (!button || button.hidden || button.disabled || !button.isConnected) return;
-    const current = workspace();
-    const snapshot = current && readSnapshots()[current.id];
-    if (!snapshot) return;
-
+    const fromUndo = button && !button.hidden && !button.disabled && button.isConnected;
+    const fromRecentUndo = pendingUndoSecondary > 0 &&
+      Date.now() - pendingUndoSecondary < 650;
+    if (!fromUndo && !fromRecentUndo) return;
+    pendingUndoSecondary = 0;
+    // Suppress the native/right-click page menu BEFORE opening a modal.
     event.preventDefault();
     event.stopImmediatePropagation();
     event.stopPropagation();
     const now = Date.now();
-    // macOS sends both mousedown and contextmenu for the same gesture.
     if (now - lastSecondaryUndo < 650) return;
+    const current = workspace();
+    const snapshot = current && readSnapshots()[current.id];
+    if (!snapshot) return;
     lastSecondaryUndo = now;
-    rescueSiteGroups().catch(error => {
-      console.error(TAG, 'Secondary-click rescue failed:', error);
-      toast('安全拆分操作失敗，快照保留', true);
-    });
+    if (scheduledUndoRescue != null) clearTimeout(scheduledUndoRescue);
+    // Run after this contextmenu dispatch, never from mousedown.
+    scheduledUndoRescue = setTimeout(() => {
+      scheduledUndoRescue = null;
+      rescueSiteGroups().catch(error => {
+        console.error(TAG, 'Secondary-click rescue failed:', error);
+        toast('安全拆分操作失敗，快照保留', true);
+      });
+    }, 0);
   }
 
   function addButton() {
@@ -1220,7 +1239,7 @@
           sortOwnedGroupNewestFirst(group);
       }, 80);
     });
-    window.__zenSiteFoldersV031 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV032 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
@@ -1229,6 +1248,7 @@
     window.removeEventListener('mousedown', onUndoSecondaryClick, true);
     window.removeEventListener('contextmenu', onUndoSecondaryClick, true);
     clearTimeout(initTimer);
+    if (scheduledUndoRescue != null) clearTimeout(scheduledUndoRescue);
     if (waveFrame != null) cancelAnimationFrame(waveFrame);
     if (noticeTimer) clearTimeout(noticeTimer);
     noticeSerial++;

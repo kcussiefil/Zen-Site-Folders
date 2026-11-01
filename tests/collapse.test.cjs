@@ -51,8 +51,8 @@ async function main() {
   }
   vm.runInNewContext(src, { window, document, MutationObserver, console,
     setTimeout, clearTimeout });
-  const api = window.__zsfCollapseV031;
-  assert.equal(api.version, '0.3.1');
+  const api = window.__zsfCollapseV032;
+  assert.equal(api.version, '0.3.2');
   assert(existing.hasAttribute('data-zsf-collapse-settled'),
     'restored collapsed groups must settle immediately');
   assert(!dynamic.hasAttribute('data-zsf-collapse-settled'));

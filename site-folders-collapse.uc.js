@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders — safe collapse settle
-// @version      0.3.1
+// @version      0.3.2
 // @description  Finalize own ordinary groups after Zen/Zia's native collapse spring.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfCollapseV031) return;
+  if (window.__zsfCollapseV032) return;
 
   const SELECTOR = 'tab-group[data-zsf-site]:not([split-view-group])';
   const SETTLED = 'data-zsf-collapse-settled';
@@ -94,11 +94,11 @@
     for (const group of pending.keys()) cancel(group);
     for (const group of window.gBrowser?.tabContainer?.querySelectorAll?.(SELECTOR) || [])
       group.removeAttribute(SETTLED);
-    if (window.__zsfCollapseV031 === api) delete window.__zsfCollapseV031;
+    if (window.__zsfCollapseV032 === api) delete window.__zsfCollapseV032;
   }
 
-  const api = { start, destroy, sync, version: '0.3.1' };
-  window.__zsfCollapseV031 = api;
+  const api = { start, destroy, sync, version: '0.3.2' };
+  window.__zsfCollapseV032 = api;
   if (document.readyState === 'complete') start();
   else window.addEventListener('load', start, { once: true });
   window.addEventListener('unload', destroy, { once: true });

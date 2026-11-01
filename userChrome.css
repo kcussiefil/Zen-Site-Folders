@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.1 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.3.2 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -323,8 +323,24 @@ tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([split-view-g
   pointer-events: auto !important;
 }
 #zsf-folder-hover-card[hidden] { display: none !important; }
-#zsf-folder-hover-card[data-open] {
+#zsf-folder-hover-card {
+  /* CSS cap remains even if popup opens at the bottom of the viewport.
+     Layout height includes the final "New Tab" entry; inner list scrolls. */
+  max-height: calc(100vh - 16px) !important;
+}
+#zsf-folder-hover-card[data-open]:not([data-snap]) {
   animation: zsf-folder-hover-in .26s cubic-bezier(.2,.9,.3,1.2) both;
+}
+#zsf-folder-hover-card[data-snap] {
+  animation: none !important;
+}
+#zsf-folder-hover-card[data-closing] {
+  animation: zsf-folder-hover-out .12s ease-in forwards;
+  pointer-events: none !important;
+}
+@keyframes zsf-folder-hover-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(.85); }
 }
 @keyframes zsf-folder-hover-in {
   from { opacity: 0; transform: scale(.7); }
@@ -340,9 +356,28 @@ tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([split-view-g
 /* The Zia list CSS (07-hover-cards.css) supplies spacing, selected row shine,
    10-row max-height, hidden scrollbar, icon and text styles. */
 #zsf-folder-hover-card > .zsf-hover-list {
+  /* Zia's ten-row limit, additionally clipped to the live window height.
+     Both overflow and the last row are reachable via trackpad scrolling. */
+  max-height: min(
+    calc(10 * var(--zia-tab-height, 34px) + 11 * var(--zia-folder-card-gap, 4px) + 2 * (var(--zia-folder-card-inset, 9.5px) - var(--zia-folder-card-gap, 4px))),
+    calc(100vh - 16px)
+  ) !important;
   overflow-y: auto !important;
   scrollbar-width: none !important;
   overscroll-behavior: contain !important;
+}
+/* Use Zia's actual row spacing, not a second additive gap. Group-owned
+   audio indicators share the exact original icon size and padding. */
+#zsf-folder-hover-card .zia-folder-card-row {
+  gap: 8px !important;
+  padding-inline: 9px 6px !important;
+}
+#zsf-folder-hover-card .zsf-hover-action[zia-act="mute"] {
+  width: 16px !important;
+  height: 16px !important;
+  margin-inline: 2px 6px !important;
+  flex: 0 0 16px !important;
+  padding: 0 !important;
 }
 #zsf-folder-hover-card .zsf-hover-row {
   outline-offset: -2px;
@@ -355,7 +390,7 @@ tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([split-view-g
   box-shadow: 0 8px 28px rgba(0,0,0,.14) !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  #zsf-folder-hover-card[data-open] { animation: none !important; }
+  #zsf-folder-hover-card[data-open], #zsf-folder-hover-card[data-closing] { animation: none !important; }
 }
 
 /* v0.2.9: visual alignment. Zia's baseline padding currently leaves the
