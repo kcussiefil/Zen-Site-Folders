@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.3.2
+// @version      0.3.3
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfGroupHoverV032) return;
-  window.__zsfGroupHoverV032 = true;
+  if (window.__zsfGroupHoverV033) return;
+  window.__zsfGroupHoverV033 = true;
 
   const TAG = '[ZenSiteFoldersHover]';
   const XHTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -96,6 +96,27 @@
     return card;
   }
 
+  // Zia's 08-music-and-sound-bars.js already writes an animated four-bar SVG
+  // as --zia-sound-wave to the original tab. Reuse that exact resource instead
+  // of the static speaker asset from Zia's native hover card.
+  function ziaAudioImage(tab, muted) {
+    const name = muted ? '--zia-sound-muted' : '--zia-sound-wave';
+    let value = '';
+    try { value = tab?.style?.getPropertyValue?.(name)?.trim() || ''; }
+    catch (_) {}
+    if (!value) {
+      try { value = window.getComputedStyle?.(tab)?.getPropertyValue?.(name)?.trim() || ''; }
+      catch (_) {}
+    }
+    if (!/^url\((?:["']?data:image\/svg\+xml|["']?chrome:\/\/sine\/content\/zia\/icons\/sound-)/i.test(value)) {
+      // Static Zia fallback for tabs whose wave was not painted yet. The next
+      // TabAttrModified event will refresh the card after Zia draws its bars.
+      value = 'url("chrome://sine/content/zia/icons/' +
+        (muted ? 'sound-muted.svg' : 'sound-wave.svg') + '")';
+    }
+    return value;
+  }
+
   function makeRow(tab) {
     const row = el('div', 'zia-folder-card-row zsf-hover-row');
     row.setAttribute('role', 'button');
@@ -116,11 +137,13 @@
     row.append(icon);
     if (tab.hasAttribute('soundplaying') || tab.hasAttribute('muted')) {
       const muted = tab.hasAttribute('muted');
-      const mute = el('img', 'zia-folder-card-sound zia-folder-card-act zsf-hover-action');
-      mute.src = 'chrome://sine/content/zia/icons/ui/' + (muted ? 'volume-off' : 'volume') + '.svg';
-      mute.setAttribute('zia-act', 'mute');
-      mute.setAttribute('title', muted ? '取消靜音' : '靜音');
-      row.appendChild(mute);
+      const bars = el('span', 'zsf-hover-sound zsf-hover-action');
+      bars.style.setProperty('--zsf-audio-image', ziaAudioImage(tab, muted));
+      bars.setAttribute('role', 'button');
+      bars.setAttribute('zia-act', 'mute');
+      bars.setAttribute('title', muted ? '取消靜音' : '靜音');
+      bars.setAttribute('aria-label', muted ? '取消靜音' : '靜音');
+      row.appendChild(bars);
     }
     row.appendChild(title);
     const close = el('img', 'zia-folder-card-act zsf-hover-action');
@@ -369,6 +392,19 @@
         else closeNow();
       }
     });
+    bind(tabContainer, 'TabAttrModified', event => {
+      if (!activeGroup?.isConnected || !card || card.hidden) return;
+      const tab = event.target;
+      if (!tab?.isConnected || tab.group !== activeGroup) return;
+      const changed = event.detail?.changed || [];
+      if (!changed.includes('soundplaying') && !changed.includes('muted')) return;
+      // Zia paints the four SVG bars from the same tab state. Refresh after
+      // its listener has had a chance to update --zia-sound-wave.
+      requestAnimationFrame(() => {
+        if (card && !card.hidden && activeGroup?.isConnected &&
+            render(activeGroup)) position(activeLabel);
+      });
+    });
     bind(tabContainer, 'TabClose', () => {
       if (activeGroup?.isConnected && activeLabel?.isConnected) {
         if (render(activeGroup)) position(activeLabel);
@@ -391,10 +427,10 @@
     handlers.length = 0;
     card?.remove();
     card = null;
-    if (window.__zsfGroupHoverV032 === api) delete window.__zsfGroupHoverV032;
+    if (window.__zsfGroupHoverV033 === api) delete window.__zsfGroupHoverV033;
   }
-  const api = { start, destroy, closeNow, position, version: '0.3.2' };
-  window.__zsfGroupHoverV032 = api;
+  const api = { start, destroy, closeNow, position, version: '0.3.3' };
+  window.__zsfGroupHoverV033 = api;
   if (document.readyState === 'complete') {
     if (!start()) window.addEventListener('load', start, { once: true });
   } else {

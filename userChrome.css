@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.2 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.3.3 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -168,39 +168,54 @@
   pointer-events: none !important;
 }
 
-/* Preserve the live selected tab in a collapsed ordinary group. Zia already
-   animates both zen-folder and tab-group (its spring selector includes both).
-   Never force display:none/max-height:0 on the entire child container: that
-   cancelled Zia's 420ms opening/closing spring and hid the active tab.
-   Do not add a second competing height animation here. */
+/* v0.3.3: Native Zia/Zen spring is the first choice. We never force
+   height:auto or max-height:none on a collapsing group: those properties
+   overrode the height animation and caused the 470ms-then-snap behaviour.
+   data-zsf-animating is set before the native toggle and removed when its
+   actual animation finishes (or a WAAPI height fallback finishes). */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):not([split-view-group])
+tab-group[data-zsf-site][data-zsf-animating]:not([split-view-group])
 > .tab-group-container {
   display: flex !important;
   flex-direction: column !important;
-  height: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
+  overflow: clip !important;
+  min-height: 0 !important;
   visibility: visible !important;
-  opacity: 1 !important;
 }
-/* Delay hiding sibling tabs until the native Zia spring has finished.
-   v0.3.0 hid some elements immediately and left other groups uncollapsed.
-   The settle controller adds data-zsf-collapse-settled after 470ms. */
+
+/* Always settle from animation completion, never after an arbitrary delay.
+   Keep only the genuinely selected member visible inside a collapsed group.
+   No tabs are cloned, moved or pinned. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):not([split-view-group])
+tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([data-zsf-animating]):not(:has(> .tab-group-container > tab[selected])):not([split-view-group])
+> .tab-group-container {
+  display: none !important;
+}
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([data-zsf-animating]):has(> .tab-group-container > tab[selected]):not([split-view-group])
+> .tab-group-container {
+  display: flex !important;
+  flex-direction: column !important;
+  height: auto;
+  overflow: visible;
+}
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([data-zsf-animating]):has(> .tab-group-container > tab[selected]):not([split-view-group])
+> .tab-group-container > tab:not([selected]) {
+  display: none !important;
+}
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([data-zsf-animating]):has(> .tab-group-container > tab[selected]):not([split-view-group])
 > .tab-group-container > tab[selected] {
   display: flex !important;
-  opacity: 1 !important;
   visibility: visible !important;
   min-height: var(--zia-tab-height, 34px) !important;
-  max-height: none !important;
   pointer-events: auto !important;
 }
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):not([split-view-group])
+tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([data-zsf-animating]):has(> .tab-group-container > tab[selected]):not([split-view-group])
 > .tab-group-container > tab[selected] > .tab-stack > .tab-background {
-  background-color: var(--zia-active-tab-bg-folder, rgba(0, 0, 0, .36)) !important;
+  background-color: var(--zia-active-tab-bg-folder, rgba(0,0,0,.36)) !important;
   box-shadow: var(--zia-glass-edge-lit, 0 1px 4px rgba(0,0,0,.2)) !important;
   border-radius: var(--zia-tab-radius, 11px) !important;
 }
@@ -274,34 +289,17 @@ tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):
   max-width: calc(100% - 14px) !important;
 }
 
-/* Native Zen/Zia controls collapsed height and Zia's spring. The selected
-   member override above wins over [hidden] only when a live tab is selected. */
+/* Ordinary unpinned group spacing only; the animation controller owns
+   visibility while toggling, and final-state rules above own closed state. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container[hidden] {
-  display: none !important;
+tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container:not([hidden]) {
+  flex-direction: column !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
-/* Clip children while Zia animates the height of a collapsed group with no
-   active tab; otherwise our ordinary-group overflow:visible leaks the rows. */
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed]:not(:has(> .tab-group-container > tab[selected])):not([split-view-group])
-> .tab-group-container:not([hidden]) {
-  overflow: clip !important;
-}
-
-/* Reliable final collapse state, applied only AFTER Zen/Zia finishes its
-   420ms native spring. Never act on user-created groups or zen-folder.
-   No separate animation, no DOM reparenting, and no tab persistence changes. */
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([split-view-group]):not(:has(> .tab-group-container > tab[selected]))
-> .tab-group-container {
-  display: none !important;
-}
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([split-view-group]):has(> .tab-group-container > tab[selected])
-> .tab-group-container > tab:not([selected]) {
-  display: none !important;
-}
-
 /* Share Zia's actual list classes / variables. Our popup remains an
    independent read-only DOM: do not overwrite Zia's #zia-folder-card. */
 #zsf-folder-hover-card {
@@ -372,13 +370,29 @@ tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([split-view-g
   gap: 8px !important;
   padding-inline: 9px 6px !important;
 }
-#zsf-folder-hover-card .zsf-hover-action[zia-act="mute"] {
-  width: 16px !important;
-  height: 16px !important;
-  margin-inline: 2px 6px !important;
-  flex: 0 0 16px !important;
+/* Four-bar sound-wave resource comes from the original tab's Zia CSS
+   variable. Our card only displays it; we do not synthesize a different
+   speaker icon. Base gap is 8px so -3px margins leave 5px on both sides,
+   matching the compact sound bars in Zia's sidebar without double spacing. */
+#zsf-folder-hover-card .zsf-hover-sound {
+  box-sizing: border-box !important;
+  display: inline-block !important;
+  flex: 0 0 18px !important;
+  width: 18px !important;
+  height: 18px !important;
   padding: 0 !important;
+  margin-inline: -3px -3px !important;
+  border-radius: 5px !important;
+  background-image: var(--zsf-audio-image, url("chrome://sine/content/zia/icons/sound-wave.svg")) !important;
+  background-position: center !important;
+  background-size: 16px 16px !important;
+  background-repeat: no-repeat !important;
+  cursor: pointer !important;
 }
+#zsf-folder-hover-card .zsf-hover-sound:hover {
+  background-color: rgba(255,255,255,.12) !important;
+}
+#zsf-folder-hover-card .zsf-hover-sound:active { scale: .9; }
 #zsf-folder-hover-card .zsf-hover-row {
   outline-offset: -2px;
 }
