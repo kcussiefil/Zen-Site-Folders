@@ -468,7 +468,7 @@
             if (created > 0) break;
           }
         } catch (_) {}
-        if (!created || created > snapshot.capturedAt + 1000) continue;
+        if (!created || created > snapshot.capturedAt) continue;
         map.set(item.id, tab);
         used.add(tab);
         urlMatches++;
