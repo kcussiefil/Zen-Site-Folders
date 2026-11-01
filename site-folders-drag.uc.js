@@ -1,84 +1,159 @@
 // ==UserScript==
-// @name         Zen Site Folders — 拖曳位置提示
-// @version      0.3.6
-// @description  Visual-only drag preview and same-level insertion guide; Zen/Zia owns drops.
+// @name         Zen Site Folders — 實際拖放與位置提示
+// @version      0.3.7
+// @description  Native-API fallback for in-folder ordering and group-to-first drag.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfDragV036) return;
-
+  if (window.__zsfDragV037) return;
   const GROUP = 'tab-group[data-zsf-site]:not([split-view-group])';
   const NS = 'http://www.w3.org/1999/xhtml';
-  const MOVE_THRESHOLD = 6;
-  let pending = null;
-  let active = null;
-  let ghost = null;
-  let guide = null;
-  let started = false;
-  let destroyed = false;
+  const THRESHOLD = 6;
+  const POST_NATIVE_MS = 38; // Zen and Zia finish their synchronous/zero-delay drop first.
+  let pending = null, active = null, ghost = null, guide = null;
+  let started = false, destroyed = false;
   const listeners = [];
+  const tasks = new Set();
 
-  function bind(node, name, callback, options) {
-    node?.addEventListener?.(name, callback, options);
-    listeners.push([node, name, callback, options]);
+  function bind(node, name, fn, opts) {
+    node?.addEventListener?.(name, fn, opts);
+    listeners.push([node, name, fn, opts]);
   }
   function ownGroup(node) {
-    return node?.isConnected && node.matches?.(GROUP) &&
+    return !!node?.isConnected && node.matches?.(GROUP) &&
       !node.pinned && !node.isZenFolder;
   }
-  function labelGroup(event) {
+  function isPlainTab(node) {
+    return !!node?.isConnected &&
+      (node.localName === 'tab' || node.classList?.contains?.('tabbrowser-tab')) &&
+      !node.pinned && !node.hasAttribute?.('zen-essential') &&
+      !node.hasAttribute?.('zen-empty-tab');
+  }
+  function groupLabel(group) {
+    return group?.querySelector?.(':scope > .tab-group-label-container');
+  }
+  function sourceFromEvent(event) {
     const path = event.composedPath?.() || [event.target];
     for (const node of path) {
       const label = node?.closest?.('.tab-group-label-container');
-      if (label && ownGroup(label.parentElement) &&
-          label.parentElement.querySelector?.(':scope > .tab-group-label-container') === label) {
-        return label.parentElement;
+      const group = label?.parentElement;
+      if (groupLabel(group) === label && ownGroup(group))
+        return { kind: 'group', item: group, parent: group.parentElement };
+      const tab = isPlainTab(node) ? node : node?.closest?.('.tabbrowser-tab');
+      if (isPlainTab(tab) && ownGroup(tab.group) &&
+          !tab.group.hasAttribute('collapsed') && !tab.group.collapsed) {
+        return { kind: 'tab', item: tab, parent: tab.group,
+          container: tab.parentElement };
       }
     }
     return null;
   }
-  function rowRect(row) {
-    const header = row.matches?.(GROUP) ?
-      row.querySelector(':scope > .tab-group-label-container') : row;
-    const rect = header?.getBoundingClientRect?.();
-    if (!rect || rect.width < 5 || rect.height < 5) return null;
-    return rect;
+  function rectOf(element) {
+    const target = element?.localName === 'tab-group' ?
+      groupLabel(element) : element;
+    const box = target?.getBoundingClientRect?.();
+    return box?.width > 5 && box?.height > 5 ? box : null;
   }
-  function rowName(row) {
-    const label = row.querySelector?.(':scope > .tab-group-label-container > .tab-group-label') ||
-      row.querySelector?.('.tab-label') || row;
-    return String(label.textContent || row.getAttribute?.('label') || '分頁')
-      .trim().slice(0, 46);
+  function itemName(item) {
+    const label = item?.querySelector?.(
+      ':scope > .tab-group-label-container > .tab-group-label') ||
+      item?.querySelector?.('.tab-label') || item;
+    return String(label?.textContent || item?.getAttribute?.('label') || '分頁')
+      .trim().slice(0, 40);
   }
-  function rowsAtSameLevel(source) {
-    const parent = source?.parentElement;
-    if (!parent?.children) return [];
-    const all = Array.from(parent.children);
-    return all.filter(node => {
-      if (node === source || !node.isConnected) return false;
-      if (node.matches?.('tab-group:not([split-view-group])')) return !!rowRect(node);
-      if (node.matches?.('.tabbrowser-tab:not([pinned]), tab:not([pinned])') &&
-          !node.group && !node.hasAttribute?.('zen-essential'))
-        return !!rowRect(node);
-      return false;
-    });
+  function topLevelSiblings(item) {
+    return Array.from(item?.parentElement?.children || []).filter(node =>
+      node !== item && node.isConnected &&
+      ((node.localName === 'tab-group' && !node.hasAttribute?.('split-view-group')) ||
+        (isPlainTab(node) && !node.group)) && rectOf(node));
   }
-  function create(name, className) {
-    const node = document.createElementNS(NS, name);
-    node.className = className;
-    node.setAttribute('aria-hidden', 'true');
-    return node;
+  function groupMembers(group) {
+    return [...(group?.querySelectorAll?.('tab') || group?.tabs || [])]
+      .filter(tab => tab?.isConnected && tab.group === group &&
+        !tab.pinned && !tab.hasAttribute?.('zen-essential'));
+  }
+  function point(event) {
+    return { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
+  }
+  function withinSidebar(x, y) {
+    const box = document.getElementById('navigator-toolbox')?.getBoundingClientRect?.();
+    return !!box && x >= box.left && x <= box.right &&
+      y >= box.top && y <= box.bottom;
+  }
+  function slotForGroup(source, x, y) {
+    if (!ownGroup(source) || !withinSidebar(x, y)) return null;
+    const candidates = topLevelSiblings(source);
+    if (!candidates.length) return null;
+    const entries = candidates.map(item => ({ item, box: rectOf(item) }))
+      .filter(entry => entry.box && entry.item.parentElement === source.parentElement)
+      .sort((a, b) => a.box.top - b.box.top);
+    if (!entries.length) return null;
+    const first = entries[0], last = entries[entries.length - 1];
+    // Include the thin gap ABOVE the first ordinary group. Older versions
+    // rejected this region, making a group impossible to drag to the top.
+    const space = source.closest?.('zen-workspace');
+    const sep = space?.querySelector?.('.pinned-tabs-container-separator')
+      ?.getBoundingClientRect?.();
+    const normalTop = Math.max((sep?.bottom || 0) + 2,
+      first.box.top - Math.max(55, first.box.height * 1.5));
+    if (y < normalTop || y > last.box.bottom + 48 ||
+        x < first.box.left - 24 || x > first.box.right + 24) return null;
+    let chosen = first;
+    if (y >= first.box.top) {
+      chosen = entries.reduce((best, item) =>
+        Math.abs(y - (item.box.top + item.box.height / 2)) <
+          Math.abs(y - (best.box.top + best.box.height / 2)) ? item : best, first);
+    }
+    const before = y < chosen.box.top + chosen.box.height / 2;
+    return { kind: 'group', source, target: chosen.item, before,
+      markerY: before ? chosen.box.top : chosen.box.bottom,
+      box: chosen.box };
+  }
+  function slotForMember(source, group, x, y) {
+    if (!isPlainTab(source) || source.group !== group || !ownGroup(group) ||
+        group.hasAttribute('collapsed') || group.collapsed ||
+        !withinSidebar(x, y)) return null;
+    const members = groupMembers(group).filter(tab => tab !== source);
+    if (!members.length) return null;
+    const entries = members.map(item => ({ item, box: rectOf(item) }))
+      .filter(entry => entry.box).sort((a, b) => a.box.top - b.box.top);
+    if (!entries.length) return null;
+    const first = entries[0], last = entries[entries.length - 1];
+    const header = rectOf(group);
+    const minY = Math.max((header?.bottom || 0) - 5, first.box.top - 24);
+    if (y < minY || y > last.box.bottom + 38 ||
+        x < first.box.left - 24 || x > first.box.right + 24) return null;
+    const chosen = y < first.box.top ? first :
+      entries.reduce((best, item) =>
+        Math.abs(y - (item.box.top + item.box.height / 2)) <
+          Math.abs(y - (best.box.top + best.box.height / 2)) ? item : best, first);
+    const before = y < chosen.box.top + chosen.box.height / 2;
+    return { kind: 'tab', source, group, target: chosen.item, before,
+      markerY: before ? chosen.box.top : chosen.box.bottom,
+      box: chosen.box };
+  }
+  function chooseSlot(subject, x, y) {
+    if (!subject) return null;
+    if (subject.kind === 'group') return slotForGroup(subject.item, x, y);
+    if (subject.kind === 'tab') return slotForMember(subject.item, subject.parent, x, y);
+    return null;
+  }
+  function create(tag, cssClass) {
+    const el = document.createElementNS(NS, tag);
+    el.className = cssClass;
+    el.setAttribute('aria-hidden', 'true');
+    return el;
   }
   function ensureOverlays() {
     if (!ghost?.isConnected) {
       ghost = create('div', 'zsf-drag-ghost');
       const icon = create('img', 'zsf-drag-icon');
-      const texts = create('div', 'zsf-drag-texts');
+      const content = create('div', 'zsf-drag-texts');
       const title = create('span', 'zsf-drag-title');
       const hint = create('span', 'zsf-drag-hint');
-      texts.append(title, hint);
-      ghost.append(icon, texts);
+      content.append(title, hint);
+      ghost.append(icon, content);
       document.documentElement.appendChild(ghost);
     }
     if (!guide?.isConnected) {
@@ -87,116 +162,144 @@
       document.documentElement.appendChild(guide);
     }
   }
-  function point(event) {
-    return { x: Number(event.clientX) || 0, y: Number(event.clientY) || 0 };
-  }
-  function withinSidebar(x, y) {
-    const root = document.getElementById('navigator-toolbox');
-    const box = root?.getBoundingClientRect?.();
-    return !!box && x >= box.left && x <= box.right &&
-      y >= box.top && y <= box.bottom;
-  }
-  function activate(group, event) {
-    if (active || !ownGroup(group)) return;
+  function activate(subject, event) {
+    if (active || !subject?.item?.isConnected) return;
     pending = null;
-    active = { group, parent: group.parentElement };
+    active = subject;
     ensureOverlays();
-    const icon = group.querySelector(':scope > .tab-group-label-container .zsf-favicon');
-    const image = ghost.querySelector('.zsf-drag-icon');
-    if (image) image.src = icon?.getAttribute?.('src') || '';
-    ghost.querySelector('.zsf-drag-title').textContent = rowName(group);
+    if (subject.kind === 'group') {
+      const icon = groupLabel(subject.item)?.querySelector?.('.zsf-favicon');
+      ghost.querySelector('.zsf-drag-icon').src = icon?.getAttribute?.('src') || '';
+      ghost.querySelector('.zsf-drag-title').textContent = itemName(subject.item);
+      subject.item.setAttribute('data-zsf-drag-source', 'true');
+    } else {
+      const icon = subject.item.querySelector?.('.tab-icon-image');
+      ghost.querySelector('.zsf-drag-icon').src = icon?.getAttribute?.('src') || '';
+      ghost.querySelector('.zsf-drag-title').textContent = itemName(subject.item);
+      subject.item.setAttribute('data-zsf-drag-member', 'true');
+    }
     ghost.querySelector('.zsf-drag-hint').textContent = '拖曳以調整順序';
     ghost.removeAttribute('data-invalid');
     ghost.hidden = false;
-    group.setAttribute('data-zsf-drag-source', 'true');
     update(event);
   }
-  function hideGuide() {
-    if (guide) guide.hidden = true;
-    if (active?.group) ghost?.setAttribute?.('data-invalid', 'true');
-    const hint = ghost?.querySelector?.('.zsf-drag-hint');
-    if (hint) hint.textContent = '此處無法調整順序';
-  }
-  function chooseSlot(group, x, y) {
-    if (!withinSidebar(x, y)) return null;
-    const parent = group.parentElement;
-    if (!parent || parent !== active?.parent) return null;
-    const rows = rowsAtSameLevel(group);
-    if (!rows.length) return null;
-    let closest = null;
-    for (const row of rows) {
-      if (row.parentElement !== parent) continue;
-      const rect = rowRect(row);
-      if (!rect) continue;
-      const center = rect.top + rect.height / 2;
-      const gap = Math.abs(center - y);
-      if (!closest || gap < closest.gap) closest = { row, rect, center, gap };
-    }
-    if (!closest) return null;
-    const { row, rect, center } = closest;
-    // Don't imply that a group can be dropped onto a nested tab or another
-    // workspace. We only draw same-level before/after insertion markers.
-    const before = y < center;
-    const insertionY = before ? rect.top : rect.bottom;
-    const parentBox = parent.getBoundingClientRect?.();
-    if (!parentBox || x < Math.max(0, rect.left - 12) ||
-        x > Math.min(window.innerWidth, rect.right + 12) ||
-        y < Math.min(...rows.map(r => rowRect(r).top)) - 34 ||
-        y > Math.max(...rows.map(r => rowRect(r).bottom)) + 34) return null;
-    return { row, before, y: insertionY, rect };
-  }
   function update(event) {
-    const state = active;
-    if (!state?.group?.isConnected || !ghost) return;
+    if (!active?.item?.isConnected || !ghost) return;
     const { x, y } = point(event);
-    const width = ghost.offsetWidth || 170;
-    const height = ghost.offsetHeight || 36;
+    const width = ghost.offsetWidth || 178;
+    const height = ghost.offsetHeight || 42;
     ghost.style.left = Math.round(Math.max(6,
       Math.min(x + 15, (window.innerWidth || 1280) - width - 6))) + 'px';
     ghost.style.top = Math.round(Math.max(6,
       Math.min(y + 12, (window.innerHeight || 800) - height - 6))) + 'px';
-    const slot = chooseSlot(state.group, x, y);
-    if (!slot) { hideGuide(); return; }
+    const slot = chooseSlot(active, x, y);
+    if (!slot) {
+      guide.hidden = true;
+      ghost.setAttribute('data-invalid', 'true');
+      ghost.querySelector('.zsf-drag-hint').textContent = '此處無法調整順序';
+      return;
+    }
     ghost.removeAttribute('data-invalid');
-    const hint = ghost.querySelector('.zsf-drag-hint');
-    hint.textContent = '移到「' + rowName(slot.row) + '」' + (slot.before ? '上方' : '下方');
+    ghost.querySelector('.zsf-drag-hint').textContent =
+      '移到「' + itemName(slot.target) + '」' + (slot.before ? '上方' : '下方');
     guide.hidden = false;
-    guide.style.left = Math.round(slot.rect.left + 7) + 'px';
-    guide.style.width = Math.round(Math.max(16, slot.rect.width - 14)) + 'px';
-    guide.style.top = Math.round(slot.y - 1) + 'px';
+    guide.style.left = Math.round(slot.box.left + 7) + 'px';
+    guide.style.width = Math.round(Math.max(16, slot.box.width - 14)) + 'px';
+    guide.style.top = Math.round(slot.markerY - 1) + 'px';
     guide.setAttribute('data-position', slot.before ? 'before' : 'after');
   }
+  function orderMatches(slot) {
+    const { source, target, before } = slot;
+    const parent = source?.parentElement;
+    const items = slot.kind === 'group' ?
+      [...(parent?.children || [])].filter(n => n.localName === 'tab-group' ||
+        (isPlainTab(n) && !n.group)) :
+      groupMembers(slot.group);
+    const a = items.indexOf(source), b = items.indexOf(target);
+    return a >= 0 && b >= 0 && (before ? a + 1 === b : b + 1 === a);
+  }
+  function commit(slot, context) {
+    if (destroyed || !slot || !slot.source?.isConnected ||
+        !slot.target?.isConnected || slot.source === slot.target) return false;
+    const browser = window.gBrowser;
+    if (!browser) return false;
+    if (slot.kind === 'group') {
+      if (!ownGroup(slot.source) || slot.source.parentElement !== context.parent ||
+          slot.target.parentElement !== context.parent ||
+          slot.source.pinned) return false;
+    } else if (!ownGroup(context.parent) || slot.source.group !== context.parent ||
+               slot.target.group !== context.parent ||
+               context.parent.hasAttribute('collapsed')) {
+      // Native Zen may have moved the tab out of the folder intentionally.
+      // Never pull it back into a group as a side effect.
+      return false;
+    }
+    if (orderMatches(slot)) return true; // Zen/Zia already did the requested move.
+    try {
+      if (slot.before) {
+        if (typeof browser.moveTabBefore !== 'function') return false;
+        browser.moveTabBefore(slot.source, slot.target);
+      } else {
+        if (typeof browser.moveTabAfter !== 'function') return false;
+        browser.moveTabAfter(slot.source, slot.target);
+      }
+    } catch (error) {
+      console.warn('[ZenSiteFoldersDrag] Native drop fallback failed:', error);
+      return false;
+    }
+    if (!orderMatches(slot)) {
+      console.warn('[ZenSiteFoldersDrag] Native drop order did not settle');
+      return false;
+    }
+    return true;
+  }
   function reset() {
-    if (active?.group?.isConnected) active.group.removeAttribute('data-zsf-drag-source');
-    pending = null;
-    active = null;
+    if (active?.kind === 'group')
+      active.item?.removeAttribute?.('data-zsf-drag-source');
+    if (active?.kind === 'tab')
+      active.item?.removeAttribute?.('data-zsf-drag-member');
+    active = pending = null;
     ghost?.remove();
     guide?.remove();
-    ghost = null;
-    guide = null;
+    ghost = guide = null;
+  }
+  function finish(event) {
+    if (!active) { pending = null; return; }
+    const slot = chooseSlot(active, point(event).x, point(event).y);
+    const context = active;
+    reset();
+    if (!slot) return;
+    // Let Zen and Zia finish their native 'drop' handlers, including Zia's
+    // zero-delay folder placement, before checking whether any correction
+    // is necessary. Never cancel the native event.
+    const timer = setTimeout(() => {
+      tasks.delete(timer);
+      commit(slot, context);
+    }, POST_NATIVE_MS);
+    tasks.add(timer);
   }
   function onDown(event) {
     if (event.button !== 0) return;
-    const group = labelGroup(event);
-    pending = group ? { group, x: event.clientX, y: event.clientY } : null;
+    const source = sourceFromEvent(event);
+    pending = source ? { ...source, x: event.clientX, y: event.clientY } : null;
   }
-  function onMouseMove(event) {
+  function onMove(event) {
     if (!active) {
       if (!pending) return;
       if (!(event.buttons & 1)) { pending = null; return; }
-      if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) >= MOVE_THRESHOLD)
-        activate(pending.group, event);
+      if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) >= THRESHOLD)
+        activate(pending, event);
     } else if (event.buttons & 1) update(event);
   }
-  function onDragStart(event) {
-    const group = labelGroup(event) ||
-      (pending?.group?.isConnected ? pending.group : null);
-    if (group) activate(group, event);
+  function onStart(event) {
+    const source = sourceFromEvent(event) ||
+      (pending?.item?.isConnected ? pending : null);
+    if (source) activate(source, event);
   }
-  function onDragOver(event) {
+  function onOver(event) {
     if (active) update(event);
   }
-  function onKeyDown(event) {
+  function onKey(event) {
     if (event.key === 'Escape') reset();
   }
   function start() {
@@ -204,30 +307,30 @@
     const tabs = document.getElementById('tabbrowser-tabs');
     if (!tabs) return;
     started = true;
-    // Observe native Zen/Zia drag-and-drop without preventDefault,
-    // stopPropagation, setDragImage, dropEffect or moving any tab/group.
     bind(tabs, 'mousedown', onDown, true);
-    bind(window, 'mousemove', onMouseMove, true);
-    bind(window, 'dragstart', onDragStart, true);
-    bind(window, 'dragover', onDragOver, true);
-    bind(window, 'mouseup', reset, true);
+    bind(window, 'mousemove', onMove, true);
+    bind(window, 'dragstart', onStart, true);
+    bind(window, 'dragover', onOver, true);
+    bind(window, 'drop', finish, true);
+    bind(window, 'mouseup', finish, true);
     bind(window, 'dragend', reset, true);
-    bind(window, 'drop', reset, true);
     bind(window, 'blur', reset, true);
-    bind(window, 'keydown', onKeyDown, true);
+    bind(window, 'keydown', onKey, true);
     bind(window, 'ZenWorkspacesUIUpdate', reset);
   }
   function destroy() {
     if (destroyed) return;
     destroyed = true;
     reset();
-    for (const [node, name, handler, options] of listeners)
-      try { node.removeEventListener(name, handler, options); } catch (_) {}
+    for (const timer of tasks) clearTimeout(timer);
+    tasks.clear();
+    for (const [node, name, fn, opts] of listeners)
+      try { node.removeEventListener(name, fn, opts); } catch (_) {}
     listeners.length = 0;
-    if (window.__zsfDragV036 === api) delete window.__zsfDragV036;
+    if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.3.6', chooseSlot };
-  window.__zsfDragV036 = api;
+  const api = { start, destroy, version: '0.3.7', chooseSlot, commit };
+  window.__zsfDragV037 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });

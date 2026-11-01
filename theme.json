@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Unpinned site groups with order-preserving ungroup and safe rescue of restored IDs, stable Zia preview close and drag guides.",
+  "description": "Native Zen/Zia group spring, responsive in-folder tab drag order and group-to-top movement, direct safe ungroup with snapshot protection.",
   "author": "kcussiefil",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T12:43:15.436Z"
+  "updatedAt": "2026-11-01T13:41:02.085Z"
 }

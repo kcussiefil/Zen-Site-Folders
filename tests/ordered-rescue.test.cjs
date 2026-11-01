@@ -7,6 +7,7 @@ const script = fs.readFileSync(path.join(__dirname, '..', 'site-folders.uc.js'),
 new vm.Script(script);
 assert(script.includes('function ungroupInDisplayOrder('));
 assert(script.includes('function rescueGroupInventory('));
+assert(!script.includes('confirmRescue('), 'safe ungroup and archive cleanup must not open confirmation modals');
 assert(script.includes('if (inventory.ordinary.length)'),
   'unknown groups must block snapshot reset');
 assert(!script.includes('reason: \'orphaned-created-groups\''),
@@ -120,7 +121,8 @@ function harness({ owned = true, withFollowing = true, selected = false } = {}) 
     alert(message) { notices.push(message); },
     addEventListener() {}, removeEventListener() {},
   };
-  const Services = { prompt: { confirm() { return true; } } };
+  let promptCount = 0;
+  const Services = { prompt: { confirm() { promptCount++; return true; } } };
   vm.runInNewContext(source, {
     window, document: { readyState: 'loading', ...root },
     Services, ChromeUtils: { importESModule: () => ({ SessionStore: session }) },
@@ -128,7 +130,8 @@ function harness({ owned = true, withFollowing = true, selected = false } = {}) 
   });
   assert(window.__testZSF, 'test API must load');
   return { ...window.__testZSF, group, memberTabs, strip, browser, snapshot,
-    slots, moves, notices, container, suffix, prefix };
+    slots, moves, notices, container, suffix, prefix,
+    promptCount: () => promptCount };
 }
 
 async function main() {
@@ -169,6 +172,7 @@ async function main() {
       'only a second confirmed action after no groups remain may clear the snapshot');
     const backup = JSON.parse(h.slots['zsf-archived-snapshots-v1']);
     assert.equal(backup.space1.length, 1, 'archive must be durably saved before reset');
+    assert.equal(h.promptCount(), 0, 'both safe split and second-click cleanup operate directly with no modal');
   }
   {
     const h = harness({ owned: false });

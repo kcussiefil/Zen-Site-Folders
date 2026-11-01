@@ -2,172 +2,200 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-
 const src = fs.readFileSync(path.join(__dirname, '..', 'site-folders-drag.uc.js'), 'utf8');
+const core = fs.readFileSync(path.join(__dirname, '..', 'site-folders.uc.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 new vm.Script(src);
-assert(!/\.(?:moveTabBefore|moveTabToExistingGroup|zenHandleTabMove|pinTab|unpinTab|removeTab)\s*\(/.test(src),
-  'drag feedback must not move/pin/remove tabs');
-assert(!/preventDefault\(|stopPropagation\(|setDragImage\(|dropEffect\s*=/.test(src),
-  'native Zen/Zia must retain complete control of drag and drop');
+assert(!/\bpreventDefault\(|\bstopPropagation\(|\bsetDragImage\(|dropEffect\s*=/.test(src),
+  'must never interrupt native Zen/Zia events');
+assert(!/\.(?:pinTab|unpinTab|removeTab|moveTabToExistingGroup)\s*\(/.test(src),
+  'drag must not pin, close or alter tab group membership');
+assert(!core.includes("window.addEventListener('TabGrouped'"),
+  'user manual drag must not get silently undone by newest-first on TabGrouped');
 assert(css.includes('.zsf-drag-ghost') && css.includes('.zsf-drop-guide'));
-assert(css.includes('pointer-events: none !important'), 'overlays must not intercept drops');
+assert(css.includes('pointer-events: none !important'));
 
-const events = new Map();
 class Node {
-  constructor(type = 'div', classes = '') {
-    this.type = type;
-    this.localName = type;
-    this.className = classes;
-    this.children = [];
-    this.parentElement = null;
-    this.isConnected = true;
-    this.attrs = new Map();
-    this.style = {};
-    this.hidden = false;
-    this.textContent = '';
-    this.box = { left: 20, top: 20, right: 470, bottom: 52, width: 450, height: 32 };
+  constructor(tag='div',className='') {
+    this.localName=tag;this.className=className;this.children=[];this.parentElement=null;
+    this.isConnected=true;this.attrs=new Map();this.style={};this.hidden=false;this.textContent='';
+    this.box={left:20,top:100,right:470,bottom:135,width:450,height:35};
   }
-  append(...nodes) { for (const n of nodes) { n.parentElement = this; this.children.push(n); } }
-  appendChild(n) { this.append(n); }
-  setAttribute(k, v) { this.attrs.set(k, v); }
-  getAttribute(k) { return this.attrs.get(k) || null; }
-  removeAttribute(k) { this.attrs.delete(k); }
-  hasAttribute(k) { return this.attrs.has(k); }
-  getBoundingClientRect() { return this.box; }
-  get offsetWidth() { return 178; }
-  get offsetHeight() { return 42; }
-  remove() {
-    this.isConnected = false;
-    if (this.parentElement)
-      this.parentElement.children = this.parentElement.children.filter(x => x !== this);
+  append(...nodes){for(const n of nodes){this.children.push(n);n.parentElement=this;}}
+  appendChild(n){this.append(n);}
+  remove(){this.isConnected=false;if(this.parentElement)this.parentElement.children=this.parentElement.children.filter(n=>n!==this);}
+  setAttribute(k,v){this.attrs.set(k,String(v));}
+  removeAttribute(k){this.attrs.delete(k);}
+  hasAttribute(k){return this.attrs.has(k);}
+  getAttribute(k){return this.attrs.get(k)||null;}
+  getBoundingClientRect(){return this.box;}
+  get offsetWidth(){return 178;}
+  get offsetHeight(){return 42;}
+  matches(sel){
+    if(sel==='tab-group[data-zsf-site]:not([split-view-group])')
+      return this.localName==='tab-group'&&this.hasAttribute('data-zsf-site');
+    if(sel==='tab-group:not([split-view-group])')return this.localName==='tab-group';
+    return false;
   }
-  querySelector(selector) {
-    if (selector === ':scope > .tab-group-label-container')
-      return this.children.find(x => x.className === 'tab-group-label-container') || null;
-    const className = selector.match(/\.([a-z][\w-]*)$/i)?.[1];
-    if (className) {
-      const find = node => node.children.find(c => c.className?.split(' ').includes(className)) ||
-        node.children.map(find).find(Boolean);
-      return find(this) || null;
+  closest(selector){
+    if(selector==='.tab-group-label-container'&&this.className==='tab-group-label-container')return this;
+    if(selector==='.tabbrowser-tab'&&this.localName==='tab')return this;
+    if(selector==='zen-workspace'&&this.localName==='zen-workspace')return this;
+    return this.parentElement?.closest(selector)||null;
+  }
+  querySelector(sel) {
+    if(sel===':scope > .tab-group-label-container')
+      return this.children.find(n=>n.className==='tab-group-label-container')||null;
+    const name=sel.match(/\.([a-z][\w-]*)$/i)?.[1];
+    if(name){
+      const dive=node=>node.children.find(n=>n.className?.split(' ').includes(name))||node.children.map(dive).find(Boolean);
+      return dive(this)||null;
     }
     return null;
   }
-  matches(selector) {
-    if (selector === 'tab-group[data-zsf-site]:not([split-view-group])')
-      return this.type === 'tab-group' && this.hasAttribute('data-zsf-site');
-    if (selector === 'tab-group:not([split-view-group])')
-      return this.type === 'tab-group';
-    if (selector.startsWith('.tabbrowser-tab:not([pinned])'))
-      return this.type === 'tab' && !this.hasAttribute('pinned');
-    return false;
-  }
-  closest(selector) {
-    if (selector === '.tab-group-label-container' && this.className === 'tab-group-label-container')
-      return this;
-    return this.parentElement?.closest(selector) || null;
+  querySelectorAll(selector) {
+    if(selector==='tab') {
+      const out=[];
+      const visit=node=>{for(const child of node.children){if(child.localName==='tab')out.push(child);visit(child);}};
+      visit(this);return out;
+    }
+    return [];
   }
 }
-const root = new Node('root');
-const tabs = new Node('vbox');
-const sidebar = new Node('sidebar');
-sidebar.box = {left:0,top:0,right:508,bottom:970,width:508,height:970};
-const parent = new Node('workspace');
-root.append(sidebar, tabs);
-const source = new Node('tab-group');
-source.setAttribute('data-zsf-site', 'reddit.com');
-const first = new Node('tab-group');
-first.setAttribute('data-zsf-site','about');
-const second = new Node('tab-group');
-second.setAttribute('data-zsf-site','github.com');
-const otherSpace = new Node('workspace');
-const outsideGroup = new Node('tab-group');
-outsideGroup.setAttribute('data-zsf-site','youtube.com');
-root.append(parent, otherSpace);
-parent.append(first, source, second);
-otherSpace.append(outsideGroup);
-function labelFor(group, name, top) {
-  group.box = {left:10,top,right:480,bottom:top+35,width:470,height:35};
-  const label = new Node('hbox', 'tab-group-label-container');
-  label.box = {...group.box};
-  const title = new Node('label','tab-group-label');
-  title.textContent = name;
-  label.append(title);
-  group.append(label);
-  return label;
+const events=new Map();const callbacks={};
+function on(target,name,fn){const key=target.localName+':'+name;(events.get(key)||events.set(key,[]).get(key)).push(fn);}
+function off(target,name,fn){const key=target.localName+':'+name;events.set(key,(events.get(key)||[]).filter(x=>x!==fn));}
+function emit(target,name,data) {for(const fn of events.get(target.localName+':'+name)||[])fn(data);}
+const root=new Node('root');
+const strip=new Node('strip');
+const sidebar=new Node('sidebar');
+sidebar.box={left:0,top:0,right:508,bottom:800,width:508,height:800};
+const space=new Node('zen-workspace');
+const separator=new Node('separator');
+separator.box={left:0,top:65,right:500,bottom:90,width:500,height:25};
+space.querySelector=selector=>selector.includes('pinned-tabs-container-separator')?separator:null;
+root.append(sidebar,strip,space);
+space.append(strip);
+const first=new Node('tab-group'),source=new Node('tab-group'),last=new Node('tab-group');
+for(const g of [first,source,last])g.setAttribute('data-zsf-site','true');
+strip.append(first,source,last);
+function header(group,name,top){
+  const label=new Node('hbox','tab-group-label-container');
+  label.box={left:10,top,right:480,bottom:top+35,width:470,height:35};
+  group.box={...label.box};
+  const title=new Node('label','tab-group-label');title.textContent=name;
+  label.append(title);group.append(label);return label;
 }
-labelFor(first,'About',105);
-const sourceLabel=labelFor(source,'Reddit',145);
-labelFor(second,'GitHub',185);
-labelFor(outsideGroup,'Other',350);
-sourceLabel.querySelector = sel => {
-  if (sel.includes('zsf-favicon')) return null;
-  return Node.prototype.querySelector.call(sourceLabel,sel);
-};
-function emit(name, event, target = tabs) {
-  for (const fn of events.get(target + ':' + name) || []) fn(event);
+header(first,'About',105);
+const sourceLabel=header(source,'GitHub',145);
+header(last,'YouTube',185);
+const moveLog=[];
+function move(sourceNode,targetNode,before){
+  assert(sourceNode.isConnected&&targetNode.isConnected);
+  assert.equal(sourceNode.parentElement,targetNode.parentElement,'move only same container');
+  const array=sourceNode.parentElement.children;
+  array.splice(array.indexOf(sourceNode),1);
+  array.splice(array.indexOf(targetNode)+(before?0:1),0,sourceNode);
+  // Native Zen relayouts the actual tab rows after moving them. Simulate
+  // refreshed row geometry or the next pointer target would hit stale rows.
+  if (sourceNode.localName === 'tab') {
+    array.filter(n => n.localName === 'tab').forEach((tab, i) => {
+      tab.box = { ...tab.box, top: 165 + i * 35, bottom: 199 + i * 35 };
+    });
+  }
+  moveLog.push({sourceNode,targetNode,before});
 }
-function addListener(name, fn, options) {
-  const key=this+':'+name;
-  events.set(key, [...(events.get(key) || []), fn]);
-}
-function removeListener(name, fn) {
-  const key=this+':'+name;
-  events.set(key, (events.get(key) || []).filter(x => x !== fn));
-}
-tabs.addEventListener=addListener.bind(tabs);
-tabs.removeEventListener=removeListener.bind(tabs);
-const window = {
-  innerWidth: 1024,innerHeight:800,
-  addEventListener:addListener, removeEventListener:removeListener
-};
-const doc={
-  readyState:'complete',documentElement:root,
-  getElementById:id=>id==='tabbrowser-tabs'?tabs:id==='navigator-toolbox'?sidebar:null,
-  createElementNS:(ns,name)=>new Node(name)
-};
-vm.runInNewContext(src,{window,document:doc,console});
-const api=window.__zsfDragV036;
-assert.equal(api.version,'0.3.6');
-const gesture={
-  button:0,buttons:1,clientX:160,clientY:160,
-  target:sourceLabel,composedPath:()=>[sourceLabel,source]
-};
-emit('mousedown',gesture,tabs);
-assert(!root.querySelector('.zsf-drag-ghost'), 'click alone never creates fake drag UI');
-emit('mousemove',{...gesture,clientX:161,clientY:161},window);
-assert(!root.querySelector('.zsf-drag-ghost'), 'a tiny mouse movement is not dragging');
-emit('mousemove',{...gesture,clientX:162,clientY:126},window);
-const ghost=root.querySelector('.zsf-drag-ghost');
-const guide=root.querySelector('.zsf-drop-guide');
-assert(ghost && guide, 'drag feedback should appear after deliberate movement');
-assert.equal(ghost.querySelector('.zsf-drag-title').textContent,'Reddit');
-assert.equal(ghost.getAttribute('aria-hidden'),'true');
-assert.equal(guide.hidden,false,'valid adjacent group offers a visible insertion guide');
-assert.equal(guide.getAttribute('data-position'),'after');
-assert(ghost.querySelector('.zsf-drag-hint').textContent.includes('About'));
-assert(source.hasAttribute('data-zsf-drag-source'));
-assert.deepEqual(parent.children,[first,source,second],
-  'visual preview must never reorder native browser elements');
+const window={localName:'window',innerWidth:1024,innerHeight:800,
+  addEventListener(name,fn){on(this,name,fn);},
+  removeEventListener(name,fn){off(this,name,fn);},
+  gBrowser:{
+    moveTabBefore(a,b){move(a,b,true);},
+    moveTabAfter(a,b){move(a,b,false);},
+  }};
+strip.addEventListener=(name,fn)=>on(strip,name,fn);
+strip.removeEventListener=(name,fn)=>off(strip,name,fn);
+const doc={readyState:'complete',documentElement:root,
+  getElementById:id=>id==='tabbrowser-tabs'?strip:id==='navigator-toolbox'?sidebar:null,
+  createElementNS:(ns,name)=>new Node(name)};
+vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
+const api=window.__zsfDragV037;
+assert(api&&api.version==='0.3.7');
+const gEvent=(x,y,target=sourceLabel)=>({
+  button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
+});
+async function waitNative(){await new Promise(resolve=>setTimeout(resolve,80));}
+async function main(){
+  const initial=strip.children.slice();
+  emit(strip,'mousedown',gEvent(160,160));
+  emit(window,'mousemove',gEvent(161,162));
+  assert.equal(root.querySelector('.zsf-drag-ghost'),null,'tiny movement should not start drag');
+  emit(window,'mousemove',gEvent(160,95));
+  const ghost=root.querySelector('.zsf-drag-ghost');
+  const guide=root.querySelector('.zsf-drop-guide');
+  assert(ghost&&guide&&!guide.hidden,'moving to gap above first group must show valid slot');
+  assert.equal(guide.getAttribute('data-position'),'before');
+  assert.equal(ghost.getAttribute('aria-hidden'),'true');
+  assert.deepEqual(strip.children,initial,'visual drag must not reorder until drop');
 
-// The selected row changes at the midpoint and marker follows without
-// touching the actual normal group placement.
-emit('dragover',{...gesture,clientX:160,clientY:188},window);
-assert.equal(guide.hidden,false);
-assert(ghost.querySelector('.zsf-drag-hint').textContent.includes('GitHub'));
-emit('dragover',{...gesture,clientX:900,clientY:500},window);
-assert.equal(guide.hidden,true,'outside the ordinary sidebar is never shown as a valid drop');
-assert(ghost.hasAttribute('data-invalid'));
-emit('mouseup',{...gesture},window);
-assert(!source.hasAttribute('data-zsf-drag-source'));
-assert(!ghost.isConnected && !guide.isConnected);
-assert.deepEqual(parent.children,[first,source,second]);
+  // Actual fix, not just an insertion-line illustration.
+  emit(window,'drop',gEvent(160,95));
+  await waitNative();
+  assert.deepEqual(strip.children,[source,first,last],
+    'GitHub group must reach top of ordinary tab list');
+  assert.equal(moveLog.length,1,'use native browser moveTabBefore exactly once');
+  assert(!ghost.isConnected&&!guide.isConnected,'drop cleans overlays');
+  // An already-correct native result must not get moved twice.
+  assert.equal(api.commit({kind:'group',source,target:first,before:true},
+    {kind:'group',parent:strip}),true);
+  assert.equal(moveLog.length,1,'skip duplicate correction if Zen/Zia already moved');
 
-// Native HTML dragstart must also enter the same feedback state.
-emit('dragstart',gesture,window);
-assert(root.querySelector('.zsf-drag-ghost'));
-emit('dragend',gesture,window);
-assert(!root.querySelector('.zsf-drag-ghost'));
-api.destroy();
-assert.equal((events.get(window+':mousemove')||[]).length,0);
-console.log('PASS: visual ghost, adjacent before/after markers, invalid region, no data moves, cleanup and native DnD events');
+  // Explicit out-of-sidebar drop must never move/pin a group.
+  emit(strip,'mousedown',gEvent(160,111));
+  emit(window,'mousemove',gEvent(160,135));
+  emit(window,'drop',gEvent(800,300));
+  await waitNative();
+  assert.deepEqual(strip.children,[source,first,last]);
+
+  // Member order: native TabGrouped had been re-sorting the dragged tab after
+  // 80ms. Now user-directed A,B,C -> B,A,C must remain stable.
+  const container=new Node('vbox','tab-group-container');
+  source.append(container);
+  const members=['A','B','C'].map((name,i)=>{
+    const tab=new Node('tab','tabbrowser-tab');
+    tab.group=source;tab.textContent=name;
+    tab.box={left:48,top:165+i*35,right:460,bottom:199+i*35,width:412,height:34};
+    return tab;
+  });
+  container.append(...members);
+  const [A,B,C]=members;
+  const tabEvent=(x,y,target=B)=>({
+    button:0,buttons:1,clientX:x,clientY:y,target,
+    composedPath:()=>[target,container,source]
+  });
+  const subject={kind:'tab',item:B,parent:source,container};
+  const slot=api.chooseSlot(subject,100,180);
+  assert(slot&&slot.target===A&&slot.before,
+    'dragging B above first member must resolve before A');
+  assert(api.commit(slot,subject),'native reorder should succeed');
+  assert.deepEqual(container.children,[B,A,C],
+    'member order must follow manual drag even if native drag handler missed it');
+  assert(A.group===source&&B.group===source&&C.group===source,
+    'member reordering must never ungroup or close a page');
+  assert.equal(api.chooseSlot(subject,900,170),null,'invalid x must refuse reorder');
+
+  // Real pointer gesture for a member, without pin or group changes.
+  emit(strip,'mousedown',tabEvent(100,175,C));
+  emit(window,'mousemove',tabEvent(100,202,C));
+  const memberGhost=root.querySelector('.zsf-drag-ghost');
+  assert(memberGhost,'member drag should also have a visible preview');
+  emit(window,'drop',tabEvent(100,180,C));
+  await waitNative();
+  assert.deepEqual(container.children,[C,B,A],
+    'native fallback must support member moving to group start');
+  assert(!memberGhost.isConnected,'member ghost removed on drop');
+  assert(!src.includes("window.addEventListener('TabGrouped'"));
+  api.destroy();
+  assert.equal((events.get('window:mousemove')||[]).length,0,'no leaked listeners');
+  console.log('PASS: group-to-first actual move, member reorder and persistence, native-only API, invalid drop, visual cleanup');
+}
+main().catch(err=>{console.error(err);process.exitCode=1});
