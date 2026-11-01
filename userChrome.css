@@ -455,7 +455,7 @@ tab-group[data-zsf-site][data-zsf-drag-source]
   pointer-events: none !important;
   opacity: .98 !important;
 }
-.zsf-drag-ghost[hidden], .zsf-drop-guide[hidden] {
+.zsf-drag-ghost[hidden] {
   display: none !important;
 }
 .zsf-drag-ghost[data-invalid] {
@@ -493,28 +493,8 @@ tab-group[data-zsf-site][data-zsf-drag-source]
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
-.zsf-drop-guide {
-  position: fixed !important;
-  z-index: 2147483646 !important;
-  height: 2px !important;
-  border-radius: 2px !important;
-  background: var(--zen-primary-color, var(--toolbar-color, #f2f2f2)) !important;
-  box-shadow: 0 0 0 1px rgba(0,0,0,.19), 0 0 9px rgba(255,255,255,.23) !important;
-  pointer-events: none !important;
-}
-.zsf-drop-guide::before {
-  content: "" !important;
-  position: absolute !important;
-  width: 6px !important;
-  height: 6px !important;
-  border-radius: 50% !important;
-  background: inherit !important;
-  top: -2px !important;
-  left: -3px !important;
-}
 @media (prefers-reduced-motion: no-preference) {
   .zsf-drag-ghost { transition: opacity 90ms ease-out !important; }
-  .zsf-drop-guide { transition: top 85ms ease-out, left 85ms ease-out !important; }
 }
 
 
