@@ -82,6 +82,8 @@ jobs:
             trap - EXIT
             echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/Zen.app/Contents/MacOS/zen" >> "$GITHUB_ENV"
           fi
+      - name: Verify isolated Zia group landing first
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "Zia single-controller group drop" --output native-results/zia-landing
       - name: Prove regressions fail on v0.3.8
         shell: bash
         run: |
