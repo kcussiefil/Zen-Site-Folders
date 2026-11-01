@@ -611,6 +611,22 @@
           } catch (error) {
             console.warn('[ZenSiteFoldersDrag] Zia ordinary-slot guard:', error);
           }
+          // The ordinary tab-group is not a real zen-folder, so Zen's
+          // moveTabBefore can leave it in the pinned DOM container even
+          // when its tab.pinned flags remain false. Zia itself directly
+          // inserts folder elements when the native API fails to place
+          // them; use the SAME existing-element fallback, only if the
+          // group is still in an invalid section after the native call.
+          if (group.parentElement !== context.parent ||
+              !orderMatches(expected)) {
+            try {
+              const sibling = expected.before ? expected.target :
+                expected.target.nextElementSibling;
+              context.parent.insertBefore(group, sibling || null);
+            } catch (error) {
+              console.warn('[ZenSiteFoldersDrag] Zia DOM placement guard:', error);
+            }
+          }
           if (group.parentElement !== context.parent ||
               !orderMatches(expected))
             console.warn('[ZenSiteFoldersDrag] Zia destination not restored');
