@@ -1,7 +1,7 @@
-# v0.3.7 regression audit and test candidate
+# v0.3.7 regression audit and v0.3.8 repair
 
 Base: `5a3fe4a3d8d6cb33b69127238159feefefa30fad` (main, v0.3.7).
-This branch is a test candidate. It does not change the Sine version, update main, create a tag, or publish a release.
+The user explicitly requested publication on 2026-11-01. The verified repair is prepared as v0.3.8 after versioned CI passes; physical macOS acceptance remains unverified.
 
 ## Source evidence
 
@@ -41,4 +41,4 @@ Ten native cases cover computed collapse height, rapid reversals, selected-row t
 
 Mouse/drag input in this suite is synthetic chrome input; layout, custom elements, tab objects, move APIs, events, animations and SessionStore are real. Headless macOS/Linux results do not certify physical trackpad behavior, GPU rendering, native animation feel, or a user's production session. Those remain required manual acceptance.
 
-Both unchanged baseline and candidate are run in CI. The baseline check requires the collapse, folder-drag and drop/ungroup regressions to fail; the candidate must pass every case. Reports include browser version, script hashes, Zia hashes and individual outcomes. See `docs/macOS-acceptance.md` before authorizing a merge/release.
+Both unchanged baseline and candidate are run in CI. The baseline check requires the collapse, folder-drag and drop/ungroup regressions to fail; the candidate must pass every case. Reports include browser version, script hashes, Zia hashes and individual outcomes. See `docs/macOS-acceptance.md` for the remaining physical acceptance checks.

@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Native Zen/Zia group spring, responsive in-folder tab drag order and group-to-top movement, direct safe ungroup with snapshot protection.",
+  "description": "Native collapse bridge, settled drag placement and ordered ungroup with SessionStore protection.",
   "author": "kcussiefil",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T13:41:02.085Z"
+  "updatedAt": "2026-11-01T14:40:11Z"
 }
