@@ -605,6 +605,9 @@
     try {
       const match = matchSnapshotTabs(current, snapshot);
       const tabMap = match.map;
+      // Preserve the snapshot IDs during verification even if v4 matched an
+      // orphan by unique URL. Never mint or overwrite IDs while restoring.
+      const originalIdForTab = new Map([...tabMap].map(([id, tab]) => [tab, id]));
       missing = snapshot.tabs.filter(x => !tabMap.has(x.id)).length;
       if (missing) {
         console.warn(TAG, 'Restore blocked before modification: missing tab IDs', {
@@ -688,7 +691,7 @@
         const group = findGroupByID(current, item.id);
         if (!group) return item.tabs.some(id => tabMap.has(id));
         const actual = [...group.querySelectorAll('tab')].filter(t => t.group === group)
-          .map(t => tabUID(t)).filter(id => item.tabs.includes(id));
+          .map(t => originalIdForTab.get(t)).filter(id => item.tabs.includes(id));
         const intended = item.tabs.filter(id => tabMap.has(id));
         return actual.join('|') !== intended.join('|');
       }).length;
@@ -696,7 +699,10 @@
       const topLevel = [...(root.children || [])].map(el => {
         const tag = el.localName || el.tagName?.toLowerCase();
         if (tag === 'tab-group') return 'group:' + el.id;
-        if (tag === 'tab') return 'tab:' + tabUID(el);
+        if (tag === 'tab') {
+          const id = originalIdForTab.get(el);
+          return id ? 'tab:' + id : null;
+        }
         return null;
       });
       const intended = snapshot.elements.map(e => e.type + ':' + e.id)
