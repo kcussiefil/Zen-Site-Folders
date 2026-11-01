@@ -167,6 +167,14 @@ const finish = arguments[arguments.length - 1];
     window.dispatchEvent(new MouseEvent('mousemove',{buttons:1,clientX:x,clientY:y}));
     assert(h.group.hasAttribute('data-zsf-drag-source'), 'dragging folder must expose its floating card');
     assert(first.hasAttribute('data-zsf-drag-avoid'), 'ordinary sibling must enter the avoidance path');
+    const docked = document.querySelector('.zsf-drag-ghost[data-zsf-docked]');
+    assert(docked && !document.querySelector('.zsf-drop-guide'),
+      'whole-folder drag must show its real destination as one native-style docked row');
+    const expectedTop = to.top;
+    const paintedTop = Number.parseFloat(docked.style.top);
+    assert(Math.abs(paintedTop-expectedTop)<5,
+      'live folder preview must already occupy the FINAL intended slot: ' +
+        JSON.stringify({paintedTop,expectedTop}));
     const shift=parseFloat(first.style.getPropertyValue('--zsf-drag-avoid-y'));
     assert(shift>15,
       'target neighbour must move down to make a visual group slot: ' +

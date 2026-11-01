@@ -129,7 +129,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.5.3');
+assert(api&&api.version==='0.5.4');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -142,7 +142,16 @@ async function main(){
   emit(window,'mousemove',gEvent(160,95));
   const ghost=root.querySelector('.zsf-drag-ghost');
   assert(ghost && !root.querySelector('.zsf-drop-guide'),
-    'group preview must be floating card plus live sibling avoidance without extra bar');
+    'group preview must use exactly one card and the native-style gap');
+  assert(ghost.hasAttribute('data-zsf-docked'),
+    'group ghost must be docked IN the displaced target row, not by the pointer');
+  assert.equal(ghost.style.top, '105px',
+    'moving folder above first group must show the final insertion position immediately');
+  assert.equal(ghost.style.height, '35px',
+    'the visible landing preview must use the SAME row pitch as avoidance');
+  assert(css.includes('.zsf-drag-ghost[data-zsf-docked]') &&
+    css.includes('transition: none !important'),
+    'dock must follow Zia-style immediate transforms without its own lag');
   assert(root.hasAttribute('data-zsf-hide-native-indicator'),
     'owned group drag hides native grey drop line with circle endcaps');
   assert(css.includes('#zen-drag-indicator') && css.includes('visibility: hidden !important'),
@@ -170,7 +179,8 @@ async function main(){
   assert.deepEqual(strip.children,[source,first,last],
     'GitHub group must reach top of ordinary tab list');
   assert.equal(moveLog.length,1,'use native browser moveTabBefore exactly once');
-  assert(!ghost.isConnected,'drop cleans floating overlay');
+  await new Promise(resolve=>setTimeout(resolve,90));
+  assert(!ghost.isConnected,'landed preview cleans itself after a short frame bridge');
   assert(!root.hasAttribute('data-zsf-hide-native-indicator'),
     'native indicator mask must clear after drop');
   assert(!first.hasAttribute('data-zsf-drag-avoid') &&

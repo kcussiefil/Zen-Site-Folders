@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.5.3
+// @version      0.5.4
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -163,6 +163,8 @@
   function beginAvoidance(subject) {
     if (subject.kind !== 'group') return;
     subject.avoidRows = captureAvoidRows(subject);
+    subject.dragPitch = Math.min(70, Math.max(30,
+      rectOf(subject.item)?.height || 35));
     subject.avoidOffsets = new Map();
     for (const node of subject.avoidRows) {
       if (node === subject.item) continue;
@@ -179,9 +181,9 @@
     const rows = subject.avoidRows;
     const from = rows.indexOf(subject.item), target = rows.indexOf(slot?.target);
     const insert = target < 0 ? from : target + (slot.before ? 0 : 1);
-    // A folder can contain hundreds of pixels of expanded tab rows;
-    // avoidance must use the measured HEADER pitch, not that full height.
-    const height = Math.min(70, Math.max(30, rectOf(subject.item)?.height || 35));
+    // Use the SAME pitch as the visually docked row below; no gap can
+    // disagree with the drop position even while Zen repaints the folder.
+    const height = subject.dragPitch || 35;
     for (let i = 0; i < rows.length; i++) {
       const node = rows[i];
       if (node === subject.item || !node?.isConnected) continue;
@@ -201,6 +203,40 @@
       node.style?.removeProperty?.('--zsf-drag-avoid-y');
     }
     subject?.avoidOffsets?.clear();
+  }
+  // Zia's native drag uses a captured row layout and transforms neighbours
+  // into a live insertion gap, rather than moving real tabs on mousemove.
+  // Draw our ONE existing drag card directly IN that gap so release and
+  // preview have the same target. The DOM is untouched until native drop.
+  function dockGroupPreview(subject, slot, pointerX, pointerY) {
+    if (!ghost || subject?.kind !== 'group') return;
+    if (!slot || !subject.avoidRows?.length) {
+      ghost.removeAttribute('data-zsf-docked');
+      ghost.style.removeProperty('width');
+      ghost.style.removeProperty('height');
+      ghost.style.removeProperty('--zsf-drag-dock-h');
+      return;
+    }
+    const rows = subject.avoidRows;
+    const from = rows.indexOf(subject.item), target = rows.indexOf(slot.target);
+    if (from < 0 || target < 0) return;
+    const insertion = target + (slot.before ? 0 : 1);
+    const pitch = subject.dragPitch || 35;
+    // Moving down: the intervening rows have already slid UP by one
+    // pitch. The visible gap is just ABOVE the unshifted marker coordinate.
+    // Moving up: the rows slide DOWN and the gap begins AT that marker.
+    let top = slot.markerY - (insertion > from + 1 ? pitch : 0);
+    if (insertion === from || insertion === from + 1) {
+      top = rectOf(subject.item)?.top ?? top;
+    }
+    const w = Math.max(60, Math.min(slot.box.width, (window.innerWidth || 1280) - 12));
+    const left = Math.max(3, Math.min(slot.box.left, (window.innerWidth || 1280) - w - 3));
+    ghost.setAttribute('data-zsf-docked', 'true');
+    ghost.style.left = Math.round(left) + 'px';
+    ghost.style.top = Math.round(top) + 'px';
+    ghost.style.width = Math.round(w) + 'px';
+    ghost.style.height = Math.round(pitch) + 'px';
+    ghost.style.setProperty('--zsf-drag-dock-h', Math.round(pitch) + 'px');
   }
   function slotForGroup(source, x, y, layout) {
     if (!ownGroup(source) || !withinSidebar(x, y)) return null;
@@ -346,14 +382,20 @@
   function update(event, scheduleScroll = true) {
     if (!active?.item?.isConnected || !ghost) return;
     const { x, y } = point(event);
-    const width = ghost.offsetWidth || 178;
-    const height = ghost.offsetHeight || 42;
-    ghost.style.left = Math.round(Math.max(6,
-      Math.min(x + 15, (window.innerWidth || 1280) - width - 6))) + 'px';
-    ghost.style.top = Math.round(Math.max(6,
-      Math.min(y + 12, (window.innerHeight || 800) - height - 6))) + 'px';
     const slot = chooseSlot(active, x, y);
     updateAvoidance(active, slot);
+    dockGroupPreview(active, slot, x, y);
+    if (active.kind !== 'group' || !slot) {
+      // A member tab keeps its native Zia preview while our small card
+      // reports the current target. An invalid group target falls back
+      // to following the cursor, never showing a misleading occupied slot.
+      const width = ghost.offsetWidth || 178;
+      const height = ghost.offsetHeight || 42;
+      ghost.style.left = Math.round(Math.max(6,
+        Math.min(x + 15, (window.innerWidth || 1280) - width - 6))) + 'px';
+      ghost.style.top = Math.round(Math.max(6,
+        Math.min(y + 12, (window.innerHeight || 800) - height - 6))) + 'px';
+    }
     if (scheduleScroll) scheduleAutoScroll(x, y);
     if (!slot) {
       ghost.setAttribute('data-invalid', 'true');
@@ -434,28 +476,48 @@
   }
   function finish(event) {
     if (!active) { pending = null; return; }
-    const slot = chooseSlot(active, point(event).x, point(event).y);
+    // The final release uses the SAME measured slot as the last visual
+    // dock, unless the pointer has moved or the slot is no longer valid.
+    const pointNow = point(event);
+    const slot = chooseSlot(active, pointNow.x, pointNow.y);
     const context = active;
+    const docked = slot && context.kind === 'group' &&
+      ghost?.hasAttribute?.('data-zsf-docked') ? ghost : null;
+    if (docked) ghost = null; // keep ONE preview visible during landing
     reset();
-    if (!slot) return;
+    if (!slot) { docked?.remove(); return; }
+    if (docked) {
+      // The original label remains invisible until its native DOM move
+      // reaches the exact insertion slot seen during the gesture.
+      context.item.setAttribute('data-zsf-drag-source', 'true');
+      docked.setAttribute('data-zsf-landing', 'true');
+    }
     const token = generation;
     const task = { done: null };
+    const endLanding = () => {
+      if (docked) {
+        context.item?.removeAttribute?.('data-zsf-drag-source');
+        docked.remove();
+      }
+    };
+    // The landing card is a frame bridge, NOT a wait before committing.
+    // Never retain it for Zen's full 4-second animation-idle timeout.
+    const landingTimeout = docked ? setTimeout(endLanding, 80) : null;
     task.done = (async () => {
       const valid = () => !destroyed && generation === token &&
         window.gZenWorkspaces?.activeWorkspace === context.workspace;
-      // The window capture listener runs before Zen/Zia's native drop
-      // handlers. Yield ONE microtask for the dispatch to finish, then
-      // move the existing tab or group immediately to the previewed slot.
-      // Never wait for a 400-600ms landing animation before the first move.
-      await Promise.resolve();
+      await Promise.resolve(); // finish DOM drop dispatch, at most one tick
       if (!valid()) return;
       commit(slot, context);
-      // Keep the existing one-time safety reconciliation for late native
-      // placements (e.g. Zia's delayed TabMove). It runs after the first
-      // visible move and therefore adds no perceived drop latency.
+      // Late native Zia/Zen changes are safety-checked separately. The
+      // docked image has already appeared in the accepted position.
       if (await nativeIdle(context.parent, valid) && valid() &&
           !orderMatches(slot)) commit(slot, context);
-    })().finally(() => tasks.delete(task));
+    })().finally(() => {
+      if (landingTimeout !== null) clearTimeout(landingTimeout);
+      endLanding();
+      tasks.delete(task);
+    });
     tasks.add(task);
   }
 
@@ -561,7 +623,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.5.3', chooseSlot, commit, beforeMutation, nativeIdle };
+  const api = { start, destroy, version: '0.5.4', chooseSlot, commit, beforeMutation, nativeIdle };
   window.__zsfDragV037 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
