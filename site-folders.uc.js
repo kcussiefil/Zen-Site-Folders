@@ -583,6 +583,34 @@
     }
   }
 
+  // An active window can restore owned site groups with *new* DOM/SessionStore
+  // group IDs. Never rely on snapshot.createdFolders alone. Ownership must
+  // follow our private prefix, our persisted ownership map or the attribute
+  // installed exclusively by this mod; never infer it from a matching title.
+  function rescueGroupInventory(current, snapshot) {
+    const tabsRoot = current?.node?.tabsContainer;
+    const remembered = readOwnedSites();
+    const created = new Set((snapshot?.createdFolders || []).filter(id =>
+      typeof id === 'string' && id.startsWith('zsf-')));
+    const all = new Set([
+      ...getGroups(current.node),
+      ...(tabsRoot?.querySelectorAll?.('tab-group:not([split-view-group])') || [])
+    ]);
+    for (const tab of allWorkspaceTabs(current.node, current.id)) {
+      if (tab.group?.isConnected) all.add(tab.group);
+    }
+    const ordinary = [...all].filter(group => group?.isConnected &&
+      !group.isZenFolder && !group.hasAttribute?.('split-view-group') &&
+      group.parentElement === tabsRoot);
+    const owned = ordinary.filter(group => {
+      const id = String(group.id || '');
+      return created.has(id) || id.startsWith('zsf-') ||
+        Boolean(id && remembered[id]) ||
+        Boolean(group.getAttribute?.('data-zsf-site'));
+    });
+    return { ordinary, owned };
+  }
+
   async function rescueSiteGroups() {
     if (running) return;
     const current = workspace();
@@ -592,155 +620,131 @@
       toast('目前沒有可救援的網站整理快照', true);
       return;
     }
-    const created = snapshot.createdFolders || [];
-    const getCreated = () => created.map(id => findGroupByID(current, id)).filter(group =>
-      group?.isConnected && !group.isZenFolder &&
-      group.parentElement === current.node.tabsContainer &&
-      group.id.startsWith('zsf-')
-    );
-    if (snapshot.rescueCompleted) {
-      const remaining = getCreated().some(group => [...group.querySelectorAll('tab')]
-        .some(tab => tab.group === group && !tab.hasAttribute('zen-empty-tab')));
-      if (remaining) {
-        toast('仍有本工具建立的群組包含分頁；拒絕清除快照', true);
-        return;
-      }
-      if (!confirmRescue('已核對所有分頁都還存在，且接受無法保證恢復舊有順序嗎？\n確定後只清除本工作區的舊版整理快照（不可復原），不會關閉任何分頁。')) return;
-      const next = { ...stored };
-      delete next[current.id];
-      if (writeSnapshots(next)) {
-        toast('已清除舊整理快照，可以重新建立新的安全備份');
-      } else {
-        toast('快照清除失敗，原備份仍保留', true);
-      }
-      updateButtons();
-      return;
-    }
-    const groups = getCreated();
+    const inventory = rescueGroupInventory(current, snapshot);
+    const groups = inventory.owned;
     if (!groups.length) {
-      // A Zen session restore may have recreated or removed the groups while
-      // preserving the earlier v3 snapshot. Never infer that an unknown
-      // group is ours, and never discard an unrecoverable snapshot without
-      // first preserving a second durable copy.
-      const candidates = new Set(getGroups(current.node));
-      for (const tab of allWorkspaceTabs(current.node, current.id)) {
-        if (tab.group?.isConnected) candidates.add(tab.group);
-      }
-      const owned = readOwnedSites();
-      const possibleOwned = [...candidates].filter(group => group?.isConnected &&
-        (String(group.id || '').startsWith('zsf-') ||
-         Boolean(group.getAttribute?.('data-zsf-site')) ||
-         Boolean(group.id && owned[group.id]))
-      );
-      if (possibleOwned.length) {
-        toast('仍偵測到 ' + possibleOwned.length + ' 個可能由本工具建立的群組；為保護分頁，未清除快照', true);
+      // An unknown ordinary tab group might be a restored owned group whose
+      // ID *and* tag have been lost. Fail closed: clearing the snapshot would
+      // remove the rescue arrow while that group remains in the sidebar.
+      if (inventory.ordinary.length) {
+        toast('仍有 ' + inventory.ordinary.length +
+          ' 個一般分頁群組無法確認歸屬；拒絕重置，還原箭頭及快照保留。' +
+          '請先備份工作階段並用群組右鍵檢查', true);
         return;
       }
-      if (!Array.isArray(snapshot.createdFolders) || !created.every(id => typeof id === 'string' && id.startsWith('zsf-'))) {
-        toast('舊快照未記錄可信任的群組 ID；拒絕清除，原始備份保留', true);
+      const created = snapshot.createdFolders;
+      if (!Array.isArray(created) ||
+          !created.every(id => typeof id === 'string' && id.startsWith('zsf-'))) {
+        toast('舊快照缺少可信任的群組識別資料；拒絕清除，備份保留', true);
         return;
       }
-      const visibleTabCount = allWorkspaceTabs(current.node, current.id)
-        .filter(tab => tab?.isConnected && !tab.hasAttribute('cloned')).length;
-      if (!confirmRescue('原本這次整理建立的群組已無法找到，目前也未偵測到本工具的群組。\n' +
-        '目前可辨識 ' + visibleTabCount + ' 個分頁，舊快照包含 ' + snapshot.tabs.length + ' 個分頁。\n' +
-        '此操作不會移動、關閉或重新載入任何分頁，但無法確認舊分頁是否全部仍存在。\n' +
-        '確定先把舊快照封存成另一份備份，再解除這次整理鎖定嗎？')) return;
+      const visible = allWorkspaceTabs(current.node, current.id).filter(tab =>
+        tab?.isConnected && !tab.hasAttribute('cloned')).length;
+      if (!confirmRescue('目前已找不到由本工具建立的任何網站群組，也沒有其他一般群組待確認。\n' +
+        '可辨識 ' + visible + ' 個分頁；舊快照包含 ' + snapshot.tabs.length +
+        ' 個。此操作不會移動或關閉分頁。\n' +
+        '確定將舊快照完整封存，再清除整理鎖定與還原箭頭嗎？')) return;
       const store = getSessionStore('getCustomWindowValue', 'setCustomWindowValue');
-      if (!store) {
-        toast('無法安全封存舊快照：SessionStore 不可寫入；未變更分頁或快照', true);
-        return;
-      }
-      let archived = {};
+      if (!store) { toast('SessionStore 無法寫入；快照未清除', true); return; }
+      let archives = {};
       try {
         const raw = store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY);
-        archived = raw ? JSON.parse(raw) : {};
-        if (!archived || typeof archived !== 'object' || Array.isArray(archived)) throw new Error('invalid archive');
+        archives = raw ? JSON.parse(raw) : {};
+        if (!archives || typeof archives !== 'object' ||
+            Array.isArray(archives)) throw new Error('invalid archive');
+        const history = Array.isArray(archives[current.id]) ? archives[current.id] : [];
+        const payload = JSON.stringify({ ...archives, [current.id]: [
+          ...history, { archivedAt: Date.now(),
+            reason: 'verified-no-ordinary-groups',
+            snapshot: JSON.parse(JSON.stringify(snapshot)) }
+        ] });
+        store.setCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY, payload);
+        if (store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY) !== payload)
+          throw new Error('archive readback mismatch');
       } catch (error) {
-        console.warn(TAG, 'Cannot parse old snapshot archive:', error);
-        toast('既有快照封存資料無法讀取；拒絕覆蓋，未變更快照', true);
+        console.warn(TAG, 'Cannot safely archive snapshot:', error);
+        toast('快照封存失敗；保留還原箭頭與原始快照', true);
         return;
       }
-      const history = Array.isArray(archived[current.id]) ? archived[current.id] : [];
-      const nextArchive = { ...archived, [current.id]: [...history, {
-        archivedAt: Date.now(), reason: 'orphaned-created-groups',
-        snapshot: JSON.parse(JSON.stringify(snapshot))
-      }] };
-      try {
-        const payload = JSON.stringify(nextArchive);
-        store.setCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY, payload);
-        if (store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY) !== payload) {
-          throw new Error('readback mismatch');
-        }
-      } catch (error) {
-        console.warn(TAG, 'Could not persist snapshot archive:', error);
-        toast('封存舊快照失敗；沒有解除整理鎖定', true);
+      // Recheck the live sidebar AFTER the confirmation and archive, BEFORE
+      // removing the only visible rescue entry point.
+      const rechecked = rescueGroupInventory(current, snapshot);
+      if (rechecked.ordinary.length || rechecked.owned.length) {
+        toast('確認期間又出現分頁群組；拒絕清除快照與還原箭頭', true);
         return;
       }
       const next = { ...stored };
       delete next[current.id];
       if (!writeSnapshots(next)) {
-        toast('舊快照已額外封存，但解除整理鎖定失敗；目前分頁未變更', true);
+        toast('備份已封存，但解除整理鎖定失敗；保留原快照', true);
         return;
       }
       updateButtons();
-      toast('已封存舊快照並解除整理鎖定；分頁未移動。建議先核對分頁再整理');
+      toast('確認沒有殘留群組，已封存舊快照並解除整理鎖定');
       return;
     }
+
     const candidates = [];
     for (const group of groups) {
-      for (const tab of group.querySelectorAll('tab')) {
-        if (tab.group !== group) continue;
-        if (!eligible(tab)) {
-          toast('救援停止：群組包含特殊或釘選分頁，未變更任何分頁', true);
-          return;
-        }
-        candidates.push({ tab, group });
+      const tabs = [...group.querySelectorAll('tab')].filter(tab =>
+        tab.group === group);
+      if (tabs.some(tab => !eligible(tab)) ||
+          group.parentElement !== current.node.tabsContainer) {
+        toast('安全拆分停止：群組含特殊、釘選或跨工作區分頁；未變更任何分頁', true);
+        return;
       }
+      candidates.push({ group, tabs });
     }
-    if (!candidates.length) {
-      toast('這次整理建立的群組沒有一般分頁；未變更任何分頁', true);
-      return;
-    }
-    if (!confirmRescue('安全拆分將解除本工具建立的 ' + groups.length +
-      ' 個網站群組中的 ' + candidates.length + ' 個分頁，不關閉或重新載入網頁。\n' +
-      '也可能解除整理後才加入群組的分頁，且無法保證回到原本的確切排序。\n' +
-      '目前快照會保留。確定執行嗎？')) return;
+    const count = candidates.reduce((n, entry) => n + entry.tabs.length, 0);
+    if (!confirmRescue('安全拆分將解除目前辨識為本工具建立的 ' + groups.length +
+      ' 個網站群組，保留其中 ' + count + ' 個分頁。\n' +
+      '即使 Zen 恢復工作階段後改變群組 ID，也會依可信任的擁有權標記辨識。\n' +
+      '分頁維持原本在資料夾內由上到下的順序；不會關閉或重新載入網頁。\n' +
+      '拆分後先保留快照與還原箭頭，供你核對。確定嗎？')) return;
+
     const browser = window.gBrowser;
-    if (typeof browser?.ungroupTab !== 'function') {
-      toast('Zen 不支援解除群組，未修改任何分頁', true); return;
+    if (typeof browser?.ungroupTab !== 'function' ||
+        typeof browser?.moveTabBefore !== 'function') {
+      toast('Zen 缺少維持解散順序所需的 API；未修改分頁', true);
+      return;
     }
     running = true;
     updateButtons();
     let moved = 0, errors = 0;
     try {
-      for (const group of groups) {
-        try { group.collapsed = false; } catch (_) {}
-        for (const {tab} of candidates.filter(item => item.group === group)) {
-          if (!tab?.isConnected || tab.group !== group) { errors++; continue; }
-          try {
-            browser.ungroupTab(tab);
-            if (tab.isConnected && tab.group !== group) moved++;
-            else errors++;
-          } catch (error) {
-            errors++;
-            console.warn(TAG, 'Rescue ungroup failed', error);
-          }
+      for (const { group, tabs } of candidates) {
+        if (!group.isConnected) { errors++; continue; }
+        if (tabs.length) {
+          const result = ungroupInDisplayOrder(group, tabs);
+          moved += result.moved;
+          errors += result.errors;
+        }
+        // Native Zen normally removes empty tab groups automatically.
+        // A leftover empty group is safe to remove ONLY after verifying it
+        // contains no live tabs; otherwise leave it and preserve the snapshot.
+        if (group.isConnected &&
+            ![...group.querySelectorAll('tab')].some(tab => tab.isConnected)) {
+          try { browser.removeTabGroup?.(group); }
+          catch (error) { console.warn(TAG, 'Empty group cleanup failed:', error); }
         }
       }
-      const remaining = getCreated().reduce((n, group) => n +
-        [...group.querySelectorAll('tab')].filter(tab => tab.group === group).length, 0);
-      if (!errors && !remaining) {
+      const remaining = rescueGroupInventory(current, snapshot);
+      const ownedWithTabs = remaining.owned.reduce((n, group) => n +
+        [...group.querySelectorAll('tab')].filter(tab =>
+          tab.isConnected && tab.group === group).length, 0);
+      if (!errors && !remaining.owned.length && !ownedWithTabs) {
         snapshot.rescueCompleted = true;
         snapshot.rescueAt = Date.now();
         if (!writeSnapshots(stored)) {
-          toast('分頁已拆分，但無法儲存救援進度；舊快照尚在', true);
+          toast('分頁已安全拆分，但無法儲存救援進度；原始快照仍保留', true);
         } else {
-          toast('已安全拆分 ' + moved + ' 個分頁；未關閉分頁。請核對後按「拆」按鈕確認清除舊快照');
+          toast('已拆分 ' + moved +
+            ' 個分頁，原有上下順序保留。快照與箭頭仍在；請核對後再次雙指點按箭頭確認清除');
         }
       } else {
-        toast('救援部分完成：已拆分 ' + moved + ' 個；仍有 ' +
-          remaining + ' 個分頁留在群組，錯誤 ' + errors + '；保留快照', true);
+        toast('已拆分 ' + moved + ' 個分頁；仍有 ' + remaining.owned.length +
+          ' 個本工具群組未完成，錯誤 ' + errors +
+          '。快照與還原箭頭保留，不會重置', true);
       }
     } finally {
       running = false;
@@ -1310,7 +1314,7 @@
           sortOwnedGroupNewestFirst(group);
       }, 80);
     });
-    window.__zenSiteFoldersV036 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV036 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
