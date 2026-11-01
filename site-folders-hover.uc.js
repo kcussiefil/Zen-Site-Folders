@@ -240,7 +240,8 @@
   function holdSidebar(hold) {
     const toolbox = hoverHost || document.getElementById('navigator-toolbox');
     if (!toolbox) return;
-    toolbox.toggleAttribute('data-zsf-preview-sidebar-hold', !!hold);
+    if (hold) toolbox.setAttribute('data-zsf-preview-sidebar-hold', 'true');
+    else toolbox.removeAttribute('data-zsf-preview-sidebar-hold');
   }
 
   function closeNow() {
