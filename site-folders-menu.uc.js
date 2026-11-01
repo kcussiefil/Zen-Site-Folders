@@ -190,22 +190,30 @@
     const label = group.querySelector('.tab-group-label-container');
     const favicon = label?.querySelector('.zsf-favicon');
     if (!favicon || !label) return;
-    label.querySelector('.zsf-menu-emoji')?.remove();
+    const currentEmoji = label.querySelector('.zsf-menu-emoji');
     if (!icon) {
+      if (!group.hasAttribute('data-zsf-custom-icon') && !currentEmoji && !favicon.hidden) return;
+      currentEmoji?.remove();
       group.removeAttribute('data-zsf-custom-icon');
       favicon.hidden = false;
       window.__zenSiteFoldersV029?.reapplyAppearance?.();
     } else if (validIcon(icon)) {
-      group.setAttribute('data-zsf-custom-icon', 'true');
+      if (!group.hasAttribute('data-zsf-custom-icon'))
+        group.setAttribute('data-zsf-custom-icon', 'true');
       if (/^(chrome|resource):\/\/|^data:image\/svg\+xml[,;]/i.test(icon)) {
+        currentEmoji?.remove();
         favicon.hidden = false;
-        favicon.setAttribute('src', icon);
+        if (favicon.getAttribute('src') !== icon) favicon.setAttribute('src', icon);
       } else {
         favicon.hidden = true;
-        const emoji = document.createXULElement('label');
-        emoji.classList.add('zsf-menu-emoji');
-        emoji.textContent = icon;
-        label.insertBefore(emoji, favicon.nextSibling);
+        if (currentEmoji) {
+          if (currentEmoji.textContent !== icon) currentEmoji.textContent = icon;
+        } else {
+          const emoji = document.createXULElement('label');
+          emoji.classList.add('zsf-menu-emoji');
+          emoji.textContent = icon;
+          label.insertBefore(emoji, favicon.nextSibling);
+        }
       }
     }
   }
