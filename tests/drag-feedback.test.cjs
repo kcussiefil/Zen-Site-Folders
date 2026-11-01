@@ -127,8 +127,8 @@ const doc={
   createElementNS:(ns,name)=>new Node(name)
 };
 vm.runInNewContext(src,{window,document:doc,console});
-const api=window.__zsfDragV035;
-assert.equal(api.version,'0.3.5');
+const api=window.__zsfDragV036;
+assert.equal(api.version,'0.3.6');
 const gesture={
   button:0,buttons:1,clientX:160,clientY:160,
   target:sourceLabel,composedPath:()=>[sourceLabel,source]

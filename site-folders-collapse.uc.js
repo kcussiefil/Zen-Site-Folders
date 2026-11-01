@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders — fluid native/fallback collapse
-// @version      0.3.5
+// @version      0.3.6
 // @description  Prefer Zia's native spring, otherwise animate actual group height.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfCollapseV035) return;
+  if (window.__zsfCollapseV036) return;
 
   const SELECTOR = 'tab-group[data-zsf-site]:not([split-view-group])';
   const SETTLED = 'data-zsf-collapse-settled';
@@ -255,12 +255,12 @@
       group.removeAttribute(ANIMATING);
       group.removeAttribute(SETTLED);
     }
-    if (window.__zsfCollapseV035 === api) delete window.__zsfCollapseV035;
+    if (window.__zsfCollapseV036 === api) delete window.__zsfCollapseV036;
   }
 
   const api = { start, destroy, prepare, onToggle, nativeGeometryAnimations,
-    version: '0.3.5' };
-  window.__zsfCollapseV035 = api;
+    version: '0.3.6' };
+  window.__zsfCollapseV036 = api;
   if (document.readyState === 'complete') start();
   else window.addEventListener('load', start, { once: true });
   window.addEventListener('unload', destroy, { once: true });

@@ -21,7 +21,7 @@ class FakeNode {
   }
   append(...children) { for (const child of children) { this.children.push(child); child.parentElement = this; } }
   appendChild(child) { this.append(child); return child; }
-  replaceChildren(...children) { this.children = []; this.append(...children); }
+  replaceChildren(...children) { this.replaceCount = (this.replaceCount || 0) + 1; this.children = []; this.append(...children); }
   setAttribute(key, value) { this.attrs[key] = String(value); }
   removeAttribute(key) { delete this.attrs[key]; }
   getAttribute(key) { return this.attrs[key] ?? null; }
@@ -109,6 +109,14 @@ async function main() {
       if (i >= 0) group.tabs.splice(i, 1);
       group.tabs.splice(group.tabs.indexOf(before), 0, tab);
     },
+    removeTab(tab, options) {
+      assert.equal(options.animate, true);
+      if (tabContainer.events.TabClose)
+        tabContainer.events.TabClose({ target: tab });
+      tab.closing = true;
+      group.tabs.splice(group.tabs.indexOf(tab), 1);
+      tab.isConnected = false;
+    },
   };
   const window = {
     gBrowser: browser, innerWidth: 1440, innerHeight: 900, events: {},
@@ -121,8 +129,8 @@ async function main() {
     createElementNS: (_ns, type) => new FakeNode(type),
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
-  const api = window.__zsfGroupHoverV035;
-  assert.equal(api.version, '0.3.5');
+  const api = window.__zsfGroupHoverV036;
+  assert.equal(api.version, '0.3.6');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
@@ -175,6 +183,31 @@ async function main() {
   tabSelectHandler();
   assert.equal(popup.querySelector('.zsf-hover-list').scrollTop, 97, 'scroll preserved across selected-tab refresh');
   assert.equal(audio.getAttribute('zia-act'), 'mute', 'audio control remains explicitly clickable');
+  // User closes the second member inside the popup. Native TabClose is fired
+  // before tab removal, so the preview must not render/reposition twice.
+  const stableX = popup.style.left;
+  const stableY = popup.style.top;
+  const stableOrigin = popup.style.transformOrigin;
+  const beforeCount = scroller.replaceCount;
+  const closeRow = popup.querySelector('.zsf-hover-list').children[1];
+  const closeControl = {
+    closest(selector) {
+      if (selector === '.zsf-hover-row') return closeRow;
+      if (selector === '.zsf-hover-action') return {getAttribute:()=>'close'};
+      return null;
+    }
+  };
+  popup.events.click({target: closeControl, stopPropagation() {}});
+  assert(popup.hasAttribute('data-acting'), 'close must freeze the card geometry');
+  await new Promise(resolve => setTimeout(resolve, 170));
+  assert.equal(popup.style.left, stableX, 'closing a preview tab must never shift popup left');
+  assert.equal(popup.style.top, stableY, 'closing a preview tab must never jump vertically');
+  assert.equal(popup.style.transformOrigin, stableOrigin, 'animation origin must stay fixed');
+  assert.equal(scroller.replaceCount - beforeCount, 1,
+    'native TabClose plus explicit close must produce one debounced render');
+  assert.equal(scroller.children.length, 2, 'remaining member and New Tab are visible');
+  assert(!popup.hidden, 'card stays open after one member closes');
+  assert(css.includes('#zsf-folder-hover-card[data-acting]'), 'close freeze CSS is active');
   api.closeNow();
 
   // Only our own groups trigger a preview, never Zia native folders.
@@ -187,7 +220,9 @@ async function main() {
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
   const fresh = popup.querySelector('.zsf-hover-list').children;
-  popup.events.click({ target: fresh[2], stopPropagation() {} });
+  const newRow = fresh.find(row => row.dataset?.action === 'new');
+  assert(newRow, 'New Tab row must remain available after closing a member');
+  popup.events.click({ target: newRow, stopPropagation() {} });
   assert.equal(created, 1, 'new tab only after an explicit click');
   assert.equal(browser.selectedTab.group, group);
   assert.equal(browser.selectedTab.pinned, false);

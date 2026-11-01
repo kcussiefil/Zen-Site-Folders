@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.3.5
+// @version      0.3.6
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfGroupHoverV035) return;
-  window.__zsfGroupHoverV035 = true;
+  if (window.__zsfGroupHoverV036) return;
+  window.__zsfGroupHoverV036 = true;
 
   const TAG = '[ZenSiteFoldersHover]';
   const XHTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -22,6 +22,7 @@
   let openTimer = null;
   let closeTimer = null;
   let exitTimer = null;
+  let refreshTimer = null;
   let pendingLabel = null;
   let started = false;
   let destroyed = false;
@@ -234,14 +235,41 @@
   function closeNow() {
     clearOpen();
     clearClose();
+    if (refreshTimer != null) clearTimeout(refreshTimer);
+    refreshTimer = null;
     if (card) {
       card.hidden = true;
       card.removeAttribute('data-open');
       card.removeAttribute('data-snap');
       card.removeAttribute('data-closing');
+      card.removeAttribute('data-acting');
     }
     activeGroup = null;
     activeLabel = null;
+  }
+
+  // Native TabClose fires BEFORE Firefox removes the tab. Rebuilding the
+  // card then AND again 80ms later caused a transient layout/origin change
+  // that looked like the whole preview moved left. During an explicit close,
+  // freeze its screen position and update only the list once.
+  function freezeDuringTabClose() {
+    if (!card || card.hidden) return;
+    card.removeAttribute('data-open');
+    card.setAttribute('data-snap', 'true');
+    card.setAttribute('data-acting', 'true');
+  }
+  function scheduleStableRefresh(delay = 85) {
+    if (refreshTimer != null) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null;
+      if (!card || card.hidden || !activeGroup?.isConnected) {
+        closeNow();
+        return;
+      }
+      if (!render(activeGroup)) closeNow();
+      // Intentionally no position(activeLabel): left/top/transformOrigin remain
+      // stable while a close changes card content and selected tab.
+    }, delay);
   }
 
   function scheduleClose() {
@@ -264,6 +292,7 @@
     clearOpen();
     clearClose();
     if (!render(group)) return;
+    card?.removeAttribute?.('data-acting');
     activeGroup = group;
     activeLabel = label;
     card.hidden = false;
@@ -292,6 +321,7 @@
         if (action === 'mute') {
           tab.toggleMuteAudio?.();
         } else if (action === 'close') {
+          freezeDuringTabClose();
           window.gBrowser?.removeTab?.(tab, { animate: true });
         } else {
           return;
@@ -299,12 +329,9 @@
       } catch (error) {
         console.warn(TAG, 'Explicit card action failed:', action, error);
       }
-      // Preserve list scroll position across explicit close/mute actions.
-      setTimeout(() => {
-        if (!activeGroup?.isConnected || !card || card.hidden) return;
-        if (render(activeGroup)) position(activeLabel);
-        else closeNow();
-      }, 80);
+      // One debounced refresh shared with native TabClose/TabSelect; do not
+      // reposition the card while Firefox is closing a member.
+      scheduleStableRefresh(action === 'close' ? 100 : 60);
       return;
     }
     if (row.dataset.action === 'new') {
@@ -388,7 +415,8 @@
     bind(tabContainer, 'TabGroupExpand', closeNow);
     bind(window, 'TabSelect', () => {
       if (activeGroup?.isConnected && activeLabel?.isConnected && card && !card.hidden) {
-        if (render(activeGroup)) position(activeLabel);
+        if (card.hasAttribute('data-acting')) scheduleStableRefresh();
+        else if (render(activeGroup)) position(activeLabel);
         else closeNow();
       }
     });
@@ -402,14 +430,15 @@
       // its listener has had a chance to update --zia-sound-wave.
       requestAnimationFrame(() => {
         if (card && !card.hidden && activeGroup?.isConnected &&
-            render(activeGroup)) position(activeLabel);
+            render(activeGroup) && !card.hasAttribute('data-acting'))
+          position(activeLabel);
       });
     });
-    bind(tabContainer, 'TabClose', () => {
-      if (activeGroup?.isConnected && activeLabel?.isConnected) {
-        if (render(activeGroup)) position(activeLabel);
-        else closeNow();
-      }
+    bind(tabContainer, 'TabClose', event => {
+      if (!card || card.hidden || !activeGroup?.isConnected) return;
+      if (event?.target?.group !== activeGroup) return;
+      freezeDuringTabClose();
+      scheduleStableRefresh(100);
     });
     bind(window, 'blur', closeNow);
     bind(window, 'resize', closeNow);
@@ -427,10 +456,10 @@
     handlers.length = 0;
     card?.remove();
     card = null;
-    if (window.__zsfGroupHoverV035 === api) delete window.__zsfGroupHoverV035;
+    if (window.__zsfGroupHoverV036 === api) delete window.__zsfGroupHoverV036;
   }
-  const api = { start, destroy, closeNow, position, version: '0.3.5' };
-  window.__zsfGroupHoverV035 = api;
+  const api = { start, destroy, closeNow, position, version: '0.3.6' };
+  window.__zsfGroupHoverV036 = api;
   if (document.readyState === 'complete') {
     if (!start()) window.addEventListener('load', start, { once: true });
   } else {

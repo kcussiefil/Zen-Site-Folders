@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Unpinned website groups with Zia-native styling, visual drag previews and drop guides, animated sound bars and safe undo.",
+  "description": "Unpinned site groups with order-preserving ungroup and safe rescue of restored IDs, stable Zia preview close and drag guides.",
   "author": "kcussiefil",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T12:08:36.906Z"
+  "updatedAt": "2026-11-01T12:43:15.436Z"
 }
