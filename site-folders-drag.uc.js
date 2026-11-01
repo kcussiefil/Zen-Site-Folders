@@ -320,7 +320,9 @@
     ghost.style.setProperty('--zsf-drag-dock-h', Math.round(pitch) + 'px');
   }
   function slotForGroup(source, x, y, layout) {
-    if (!ownGroup(source) || !withinSidebar(x, y)) return null;
+    const delegated = ziaShim?.group === source && source?.isConnected &&
+      source.matches?.(GROUP) && !source.pinned;
+    if (!(ownGroup(source) || delegated) || !withinSidebar(x, y)) return null;
     const candidates = topLevelSiblings(source);
     if (!candidates.length) return null;
     const entries = (layout || candidates.map(item => ({ item, box: rectOf(item) })))
@@ -572,13 +574,48 @@
   }
   function finish(event) {
     if (ziaDelegate) {
-      // Zia's registered capture drop handler has already scheduled its
-      // own finishFolderDrop at this point. Prevent Zen's second native
-      // drop handler from nesting the flat site group elsewhere.
+      // Zia has already painted its FINAL visual position and scheduled
+      // finishFolderDrop in a setTimeout(0) from an earlier capture handler.
+      // Plain tab-group is NOT a zen-folder: its fallback can sometimes
+      // land above the separator (pinned section) despite an ordinary
+      // target. Verify the same captured slot in the immediately following
+      // task, before the next rendered frame, WITHOUT a second animation.
+      const context = ziaDelegate;
+      const p = point(event);
+      const expected = chooseSlot(context, p.x, p.y);
       event.preventDefault?.();
       event.stopPropagation?.();
       pending = null;
       releaseZiaAfterDrop();
+      if (expected && expected.target?.isConnected &&
+          expected.target.parentElement === context.parent) {
+        setTimeout(() => {
+          if (destroyed || !context.group?.isConnected ||
+              context.workspace !== window.gZenWorkspaces?.activeWorkspace ||
+              !expected.target.isConnected ||
+              expected.target.parentElement !== context.parent) return;
+          const group = context.group;
+          const correct = group.parentElement === context.parent &&
+            orderMatches(expected);
+          if (correct) return;
+          if (group.pinned || group.hasAttribute?.('zen-essential') ||
+              [...(group.tabs || [])].some(tab => tab.pinned)) return;
+          try {
+            // Zia's native single controller remains the visual owner.
+            // This guard runs ONLY on a proven invalid ordinary-group
+            // placement; it never creates/closes/replaces any tab.
+            if (expected.before)
+              window.gBrowser.moveTabBefore(group, expected.target);
+            else
+              window.gBrowser.moveTabAfter(group, expected.target);
+          } catch (error) {
+            console.warn('[ZenSiteFoldersDrag] Zia ordinary-slot guard:', error);
+          }
+          if (group.parentElement !== context.parent ||
+              !orderMatches(expected))
+            console.warn('[ZenSiteFoldersDrag] Zia destination not restored');
+        }, 0);
+      }
       return;
     }
     if (!active) { pending = null; return; }
@@ -695,7 +732,11 @@
       }
       if (active) reset();
       ziaDelegate = { group: ziaShim.group,
+        item: ziaShim.group,
+        kind: 'group',
         parent: ziaShim.group.parentElement,
+        layout: pending?.layout || captureLayout({kind:'group',item:ziaShim.group}),
+        scrolls: pending?.scrolls || [],
         workspace: window.gZenWorkspaces?.activeWorkspace };
       pending = null;
       return;
