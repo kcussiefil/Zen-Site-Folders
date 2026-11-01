@@ -553,7 +553,7 @@
         toast('仍偵測到 ' + possibleOwned.length + ' 個可能由本工具建立的群組；為保護分頁，未清除快照', true);
         return;
       }
-      if (!created.length || !created.every(id => typeof id === 'string' && id.startsWith('zsf-'))) {
+      if (!Array.isArray(snapshot.createdFolders) || !created.every(id => typeof id === 'string' && id.startsWith('zsf-'))) {
         toast('舊快照未記錄可信任的群組 ID；拒絕清除，原始備份保留', true);
         return;
       }
@@ -902,21 +902,14 @@
         node.querySelector('.pinned-tabs-container-separator');
       if (!separator) continue;
       const undoButton = separator.querySelector('.zsf-undo-button');
-      const rescueButton = separator.querySelector('.zsf-rescue-button');
       const sortButton = separator.querySelector('.zsf-sort-button');
       const snapshot = snapshots[node.id];
       if (undoButton) {
         undoButton.hidden = !Boolean(snapshot);
         undoButton.disabled = running;
-      }
-      if (rescueButton) {
-        const available = Boolean(snapshot && [3, 4].includes(snapshot.version) &&
-          (snapshot.rescueCompleted || snapshot.createdFolders?.length));
-        rescueButton.hidden = !available;
-        rescueButton.disabled = running;
-        rescueButton.setAttribute('tooltiptext', snapshot?.rescueCompleted
-          ? '安全拆分已完成：核對分頁後，左鍵確認清除舊快照'
-          : '安全拆分：左鍵拆開本工具建立的群組，不會關閉分頁');
+        undoButton.setAttribute('tooltiptext', snapshot
+          ? '左鍵還原｜觸控板雙指點按（右鍵）安全拆分'
+          : '還原整理前的分頁順序及群組');
       }
       if (sortButton) sortButton.disabled = running;
     }
@@ -1083,6 +1076,34 @@
     }
   }
 
+  // Trackpad two-finger secondary click on macOS is either a right-button
+  // mousedown followed by contextmenu, or a contextmenu-only event. Handle
+  // both in capture phase before Zen/Zia's toolbar contextmenu handlers.
+  // This applies ONLY to our undo button; ordinary menus remain untouched.
+  let lastSecondaryUndo = 0;
+  function onUndoSecondaryClick(event) {
+    if (event.type === 'mousedown' && event.button !== 2) return;
+    const path = typeof event.composedPath === 'function' ?
+      event.composedPath() : [event.target];
+    const button = path.find(node => node?.classList?.contains?.('zsf-undo-button'));
+    if (!button || button.hidden || button.disabled || !button.isConnected) return;
+    const current = workspace();
+    const snapshot = current && readSnapshots()[current.id];
+    if (!snapshot) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+    const now = Date.now();
+    // macOS sends both mousedown and contextmenu for the same gesture.
+    if (now - lastSecondaryUndo < 650) return;
+    lastSecondaryUndo = now;
+    rescueSiteGroups().catch(error => {
+      console.error(TAG, 'Secondary-click rescue failed:', error);
+      toast('安全拆分操作失敗，快照保留', true);
+    });
+  }
+
   function addButton() {
     // Zen creates one native pinned-tabs separator per Space. Install into
     // all of them, not just the one that happened to be active at startup.
@@ -1108,27 +1129,19 @@
       if (!undoButton) {
         undoButton = document.createXULElement('toolbarbutton');
         undoButton.classList.add('zsf-undo-button');
-        undoButton.setAttribute('tooltiptext', '還原整理前的分頁順序及群組（不關閉分頁）');
+        undoButton.setAttribute('tooltiptext', '左鍵還原｜雙指點按（右鍵）安全拆分');
         undoButton.setAttribute('aria-label', '還原整理前的分頁');
-        undoButton.addEventListener('command', () => undo().catch(e => console.error(TAG, e)));
+        undoButton.addEventListener('command', event => {
+          // Right-click must never fall through into the normal undo action.
+          if (event.button === 2 || Date.now() - lastSecondaryUndo < 650) return;
+          undo().catch(e => console.error(TAG, e));
+        });
         separator.insertBefore(undoButton, line);
       }
 
-      // Dedicated left-click rescue control: Zen/Zia can intercept native
-      // contextmenu on toolbarbuttons, so recovery must not depend on it.
-      let rescueButton = separator.querySelector('.zsf-rescue-button');
-      if (!rescueButton) {
-        rescueButton = document.createXULElement('toolbarbutton');
-        rescueButton.classList.add('zsf-rescue-button');
-        rescueButton.setAttribute('label', '拆');
-        rescueButton.setAttribute('aria-label', '安全拆分網站群組');
-        rescueButton.addEventListener('command', () =>
-          rescueSiteGroups().catch(e => {
-            console.error(TAG, 'Safe rescue failed:', e);
-            toast('安全拆分操作失敗，已保留備份', true);
-          }));
-        separator.insertBefore(rescueButton, line);
-      }
+      // Remove the experimental third control left by a prior live update.
+      // Only the folder icon and the undo arrow should remain visible.
+      separator.querySelector('.zsf-rescue-button')?.remove();
 
       // Remove the v0.1.4 extra spacer if a live-reload preserved it.
       // Zen's own toolbarseparator already expands to fill remaining space.
@@ -1144,6 +1157,10 @@
       initTimer = setTimeout(initialize, 1000);
       return;
     }
+    // Use capture at the browser window: contextmenu on XUL toolbarbuttons
+    // can be consumed by native Zen/Zia handlers before a target listener.
+    window.addEventListener('mousedown', onUndoSecondaryClick, true);
+    window.addEventListener('contextmenu', onUndoSecondaryClick, true);
     addButton();
     reapplyAppearance();
     // SessionStore may restore group elements after window load.
@@ -1170,6 +1187,8 @@
   if (document.readyState === 'complete') initialize();
   else window.addEventListener('load', initialize, { once: true });
   window.addEventListener('unload', () => {
+    window.removeEventListener('mousedown', onUndoSecondaryClick, true);
+    window.removeEventListener('contextmenu', onUndoSecondaryClick, true);
     clearTimeout(initTimer);
     if (waveFrame != null) cancelAnimationFrame(waveFrame);
     if (noticeTimer) clearTimeout(noticeTimer);
