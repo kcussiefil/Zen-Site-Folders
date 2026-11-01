@@ -1,4 +1,4 @@
-# Zen Site Folders 0.3.3 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.3.4 — 一般分頁區域群組（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內依記錄的開啟時間由新到舊排序（沒有開啟時間的歷史分頁依原位置估算），圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,13 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.3.4 收合時保留 Zia 原生選取分頁外觀（2026-11-01）
+- **修正收合後目前分頁突然變成另一種外框**：v0.3.3 曾在收合穩態下對 `.tab-stack > .tab-background` 強制指定 `background-color`、`box-shadow` 和 `border-radius`，把 Zia 已有的深色選取背景、漸層光暈及細緻邊緣蓋掉。v0.3.4 移除這三種自訂外觀，讓同一個實際分頁在展開與收合時都由 Zia 原生 `.tabbrowser-tab[visuallyselected]` 樣式呈現。
+- **減少動畫結束時的高度跳動**：移除收合穩態額外指定的 `min-height`；fallback WAAPI 現在將目前分頁的真實高度、上下外邊距及容器上下內距一起算入最後一格的高度，避免動畫結束時重新布局造成突然位移。
+- **保留功能**：收合後只顯示正在查看的分頁；保留 Zia 原有 420ms 動態高度動畫優先順序及 WAAPI 備援；一般網站群組仍未釘選、由新到舊排序。
+- **風險隔離**：主整理、SessionStore 快照、Undo、安全拆分、右鍵選單與快速預覽邏輯完全未修改，只有腳本版號更新。
+- **測試**：新增原生選取樣式不可被自訂覆寫、目前分頁真實高度（含 margin/padding）之模擬回歸測試；實際 Zia 視覺效果仍須在你的 Zen/macOS 環境確認。
 
 ## v0.3.3 原生 Zia 動態波形與無等待開合動畫（2026-11-01）
 - **音量動畫**：快速預覽不再顯示靜態的喇叭 SVG；在音訊分頁上讀取 Zia 已建立的 `--zia-sound-wave`、`--zia-sound-muted` 動態 SVG，直接在卡片內呈現同一組四條波形。靜音狀態同步，保留點擊切換靜音；如 Zia 尚未建立該變數，使用 Zia 靜態波形圖示作安全備援。
