@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.0 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.3.1 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -184,11 +184,9 @@ tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):
   visibility: visible !important;
   opacity: 1 !important;
 }
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):not([split-view-group])
-> .tab-group-container > tab:not([selected]) {
-  display: none !important;
-}
+/* Delay hiding sibling tabs until the native Zia spring has finished.
+   v0.3.0 hid some elements immediately and left other groups uncollapsed.
+   The settle controller adds data-zsf-collapse-settled after 470ms. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
 tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):not([split-view-group])
 > .tab-group-container > tab[selected] {
@@ -258,7 +256,8 @@ tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):
 }
 
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container:not([hidden]) {
-  display: flex !important;
+  /* Do NOT force display:flex here. Zen uses native visibility/height during
+     collapse, and our previous !important prevented that state from winning. */
   flex-direction: column !important;
   width: 100% !important;
   box-sizing: border-box !important;
@@ -267,7 +266,6 @@ tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):
   background-color: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
-  overflow: visible !important;
 }
 
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container > :is(.tabbrowser-tab, tab) {
@@ -288,6 +286,20 @@ tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container[hidden] 
 tab-group[data-zsf-site][collapsed]:not(:has(> .tab-group-container > tab[selected])):not([split-view-group])
 > .tab-group-container:not([hidden]) {
   overflow: clip !important;
+}
+
+/* Reliable final collapse state, applied only AFTER Zen/Zia finishes its
+   420ms native spring. Never act on user-created groups or zen-folder.
+   No separate animation, no DOM reparenting, and no tab persistence changes. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([split-view-group]):not(:has(> .tab-group-container > tab[selected]))
+> .tab-group-container {
+  display: none !important;
+}
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([split-view-group]):has(> .tab-group-container > tab[selected])
+> .tab-group-container > tab:not([selected]) {
+  display: none !important;
 }
 
 /* Share Zia's actual list classes / variables. Our popup remains an
