@@ -187,6 +187,46 @@ const finish = arguments[arguments.length - 1];
       else delete g.isZenFolder;
     }
   });
+  await test('Zia single-controller group drop lands at the displayed slot', async h => {
+    const g = h.group, prefix = h.prefix;
+    gBrowser.moveTabAfter(g, prefix);
+    g.collapsed = true;
+    await idle(g);
+    prefix.scrollIntoView({block:'nearest'});
+    const head = g.querySelector(':scope > .tab-group-label-container');
+    const from = head.getBoundingClientRect(), to = prefix.getBoundingClientRect();
+    assert(from.height>5 && to.height>5, 'native group and prefix must be visible');
+    const x=to.left+Math.min(25,to.width/2), y=to.top+2;
+    head.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,composed:true,
+      button:0,buttons:1,clientX:from.left+25,clientY:from.top+10}));
+    assert(g.isZenFolder, 'native group adapter should be active before OS dragstart');
+    const transfer=new DataTransfer();
+    head.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:from.left+25,clientY:from.top+10}));
+    assert(document.documentElement.hasAttribute('zia-dragging-tab'),
+      'Zia should be the only controller of an active group drag');
+    prefix.dispatchEvent(new DragEvent('dragover',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y}));
+    await delay(60);
+    assert(!document.querySelector('.zsf-drag-ghost'),
+      'Site Folders must not paint a competing landing position');
+    // Zia's actual sibling row shifts BEFORE the group is dropped.
+    const ziaShifted = prefix.hasAttribute('zia-shift') ||
+      /translateY\([^)]*[1-9]/.test(prefix.style.getPropertyValue('transform'));
+    assert(ziaShifted, 'Zia must visibly displace the target BEFORE release');
+    prefix.dispatchEvent(new DragEvent('drop',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y}));
+    window.dispatchEvent(new DragEvent('dragend',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y}));
+    await delay(350);
+    const topLevel=[...root().children].filter(n =>
+      n.localName==='tab-group'||gBrowser.isTab(n));
+    assert(topLevel.indexOf(g)===topLevel.indexOf(prefix)-1,
+      'group must land exactly before target, not jump to a delayed second slot');
+    assert(g.parentElement===root() && !g.isZenFolder,
+      'group remains top-level and ordinary after Zia drop');
+    assert(same(order(g),h.tabs),'Zia drop must not change member order or identity');
+  });
   await test('whole group drag animates neighbour avoidance and clears on Escape', async h => {
     const first=h.prefix;
     // Enforce a known pre-drag order rather than depending on Zen's restored
