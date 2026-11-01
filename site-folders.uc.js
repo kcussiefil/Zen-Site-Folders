@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.3.5
+// @version      0.3.6
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV035) return;
-  window.__zenSiteFoldersV035 = true;
+  if (window.__zenSiteFoldersV036) return;
+  window.__zenSiteFoldersV036 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -488,6 +488,77 @@
       }
     }
     return { map, urlMatches };
+  }
+
+  // Native ungroupTab may prepend each member outside the group, reversing
+  // visible order. Capture the original top-to-bottom tab objects FIRST and
+  // use only Firefox tab-moving APIs after every member is safely ungrouped.
+  // Never close, recreate, pin, reload, or rewrite any tab identity.
+  function ungroupInDisplayOrder(group, orderedTabs = null) {
+    const browser = window.gBrowser;
+    const list = orderedTabs || [...(group?.querySelectorAll?.('tab') || [])]
+      .filter(tab => tab.group === group);
+    const result = { moved: 0, errors: 0, ordered: false };
+    if (!group?.isConnected || group.isZenFolder || !list.length ||
+        typeof browser?.ungroupTab !== 'function' ||
+        (list.length > 1 && typeof browser?.moveTabBefore !== 'function') ||
+        list.some(tab => !eligible(tab) || tab.group !== group)) {
+      result.errors = Math.max(list.length, 1);
+      return result;
+    }
+    const originalParent = group.parentElement;
+    const siblings = [...(originalParent?.children || [])];
+    const index = siblings.indexOf(group);
+    const movable = node => node?.isConnected &&
+      (node.localName === 'tab' || node.localName === 'tab-group') &&
+      !node.hasAttribute?.('split-view-group');
+    const next = index >= 0 ? siblings.slice(index + 1).find(movable) : null;
+    const previous = index >= 0 ? siblings.slice(0, index).reverse().find(movable) : null;
+    for (const tab of list) {
+      if (!tab?.isConnected || tab.group !== group) {
+        result.errors++;
+        continue;
+      }
+      try {
+        browser.ungroupTab(tab);
+        if (tab.isConnected && tab.group !== group && !tab.pinned) result.moved++;
+        else result.errors++;
+      } catch (error) {
+        result.errors++;
+        console.warn(TAG, 'Ungroup failed:', error);
+      }
+    }
+    if (result.errors) return result;
+    try {
+      // Keep the whole run at the original group's position if a native
+      // sibling anchor survives; otherwise sort the newly ungrouped members
+      // against one another. Reverse traversal guarantees A,B,C (not C,B,A).
+      if (next?.isConnected && next.parentElement === originalParent) {
+        for (const tab of list) browser.moveTabBefore(tab, next);
+      } else if (previous?.isConnected && previous.parentElement === originalParent &&
+                 typeof browser.moveTabAfter === 'function') {
+        let anchor = previous;
+        for (const tab of list) {
+          browser.moveTabAfter(tab, anchor);
+          anchor = tab;
+        }
+      } else {
+        for (let i = list.length - 2; i >= 0; i--)
+          browser.moveTabBefore(list[i], list[i + 1]);
+      }
+    } catch (error) {
+      result.errors++;
+      console.warn(TAG, 'Post-ungroup order restoration failed:', error);
+      return result;
+    }
+    const current = workspace();
+    const flat = current ? allWorkspaceTabs(current.node, current.id) :
+      [...(browser.tabs || [])];
+    const positions = list.map(tab => flat.indexOf(tab));
+    result.ordered = positions.every((n, i) => n >= 0 &&
+      (!i || n === positions[i - 1] + 1));
+    if (!result.ordered) result.errors++;
+    return result;
   }
 
   // User-invoked escape hatch for v3 snapshots whose custom tab IDs no longer
@@ -1239,7 +1310,7 @@
           sortOwnedGroupNewestFirst(group);
       }, 80);
     });
-    window.__zenSiteFoldersV035 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV036 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
