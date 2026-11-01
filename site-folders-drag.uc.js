@@ -98,7 +98,7 @@
       space?.querySelector?.('.workspace-arrowscrollbox'),
       window.gZenWorkspaces?.activeWorkspaceElement?.scrollbox?.scrollbox
     ];
-    return candidates.find(node => node?.isConnected !== false &&
+    return candidates.find(node => node && node.isConnected !== false &&
       typeof node.scrollTop === 'number' && node.scrollHeight > node.clientHeight + 3 &&
       typeof node.getBoundingClientRect === 'function') || null;
   }
