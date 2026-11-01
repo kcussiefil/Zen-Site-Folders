@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.4.2 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.4.3 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -414,15 +414,25 @@ tab-group[data-zsf-site] > .tab-group-label-container > .tab-group-label::after 
    to our group's existing label only. */
 
 
-/* v0.3.5 — non-interactive drag affordances for unpinned website groups.
+/* v0.4.3 — group avoidance and deduplicated native drag preview.
    The native Zen/Zia drag engine owns movement and drop acceptance. */
+/* Both our website GROUP and a member TAB keep their original native
+   geometry/hit testing but not the duplicate grey dragged source card. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
 tab-group[data-zsf-site][data-zsf-drag-source]
-> .tab-group-label-container {
-  opacity: .53 !important;
-  background: color-mix(in srgb, currentColor 8%, transparent) !important;
-  outline: 1px dashed color-mix(in srgb, currentColor 26%, transparent) !important;
-  outline-offset: -1px !important;
+> .tab-group-label-container,
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+.tabbrowser-tab[data-zsf-drag-member] {
+  opacity: 0 !important;
+  background: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+/* A group drag previews its target by translating only the sibling rows
+   between original slot and destination; native DOM order never changes. */
+#tabbrowser-tabs [data-zsf-drag-avoid] {
+  translate: 0 var(--zsf-drag-avoid-y, 0px) !important;
+  transition: translate 155ms cubic-bezier(.2,.8,.2,1) !important;
 }
 #zsf-drag-ghost { /* intentionally unused; class is the public selector */ }
 .zsf-drag-ghost {
