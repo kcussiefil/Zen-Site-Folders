@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.9 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.4.0 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -191,7 +191,8 @@
   opacity: 0 !important;
   transition: opacity 0.15s ease-in !important;
 }
-#tabbrowser-tabs tab-group[data-zsf-site][collapsed][has-active]:not([split-view-group]) > .tab-group-container:not([zia-folder-holding]) {
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed][has-active]:not([split-view-group]) > .tab-group-container:not([zia-folder-holding]),
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]):has(> .tab-group-container > .tabbrowser-tab:is([selected], [visuallyselected])) > .tab-group-container:not([zia-folder-holding]) {
   --zia-glow-room: calc(-1 * (var(--zia-active-glow-blur, 0px) + var(--zia-active-glow-spread, 0px) + var(--zia-active-glow-reach, 0px)));
   overflow: visible !important;
   clip-path: inset(var(--zia-glow-room));

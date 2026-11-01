@@ -227,6 +227,21 @@ const finish = arguments[arguments.length - 1];
     const arrow = gZenWorkspaces.activeWorkspaceElement.querySelector('.zsf-undo-button');
     assert(arrow && !arrow.hidden, 'actual restore arrow must remain visible');
   });
+  await test('opening selected folder preserves glow during native expansion', async h => {
+    gBrowser.selectedTab=h.tabs[1]; h.group.collapsed=true; await idle(h.group);
+    h.group.collapsed=false;
+    for (const wait of [0,40,100]) {
+      if (wait) await delay(wait);
+      const container=h.group.groupContainer, paint=getComputedStyle(container);
+      if (!container.hasAttribute('zia-folder-holding')) assert(paint.overflowY==='visible' && paint.clipPath!=='none',
+        'opening must retain expanded glow paint room instead of the inline hidden clip: '+JSON.stringify({wait,overflow:paint.overflowY,clip:paint.clipPath,inline:container.style.overflowY}));
+      assert(h.tabs[1].getBoundingClientRect().height>10, 'selected row remains visible during opening');
+    }
+    await idle(h.group);
+    assert(h.group.groupContainer.getBoundingClientRect().height>60, 'normal expanded layout must remain intact');
+    const settled=getComputedStyle(h.group.groupContainer);
+    assert(settled.overflowY==='visible' && settled.clipPath!=='none', 'selected glow room must survive the opening transition');
+  });
   await test('simultaneous collapsed groups keep headers as actual hit targets', async h => {
     const [A,B,C,D] = h.tabs;
     gBrowser.ungroupTab(C); gBrowser.ungroupTab(D);

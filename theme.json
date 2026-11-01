@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Restore visible tabs after collapsed-group undo; isolate folder hit targets and selected-tab paint.",
+  "description": "Preserve the selected tab glow while opening site folders.",
   "author": "kcussiefil",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T15:01:55.981345Z"
+  "updatedAt": "2026-11-01T15:23:55.490498Z"
 }
