@@ -8,3 +8,58 @@ new vm.Script(src);
 assert(!/\.animate\s*\(|\bpinTab\(|\bremoveTab\(|\bmoveTab/.test(src), 'bridge must use native motion and preserve tabs');
 assert(!/isZenFolder\s*=|pinned\s*=/.test(src), 'ordinary group type and pin status must remain intact');
 console.log('PASS: motion bridge safety; native layout behavior covered by browser suite');
+
+// Mocked native bridge: a selection switch in a collapsed group must NOT
+// trigger an overlapping expand/collapse pair (v0.4.1 regression).
+const calls = [];
+const cleaned = [];
+const oldActive = new Set(['folder-active']);
+const retiredStyles = [];
+const first = {
+  selected: true, multiselected: false, isConnected: true,
+  getAttribute: name => oldActive.has(name) ? 'true' : null,
+  hasAttribute: name => oldActive.has(name),
+  removeAttribute: name => oldActive.delete(name),
+  style: { removeProperty() {}, setProperty(name, value) { retiredStyles.push([name, value]); } }
+};
+const second = { selected: false, multiselected: false, isConnected: true, getAttribute: () => null };
+const group = {
+  isConnected: true, isZenFolder: false, pinned: false, collapsed: false,
+  tabs: [first, second], groupContainer: { hidden: false },
+  matches: () => true
+};
+const folderPrototype = {
+  get activeGroups() { return []; },
+  get childActiveGroups() { return []; },
+  get activeTabs() { return this._activeTabs; },
+  set activeTabs(value) { this._activeTabs = value; }
+};
+const win = {
+  addEventListener() {},
+  customElements: { get: () => ({ prototype: folderPrototype }) },
+  gBrowser: { tabContainer: { _invalidateCachedVisibleTabs() {} } },
+  gZenFolders: {
+    animateExpand(g) { assert.equal(g, group); calls.push('expand'); return Promise.resolve(); },
+    animateCollapse(g) { assert.equal(g, group); calls.push('collapse'); return Promise.resolve(); },
+    styleCleanup(tabs) { cleaned.push(...tabs); }
+  }
+};
+vm.runInNewContext(src, {
+  window: win, document: { readyState: 'loading' }, console, queueMicrotask
+});
+const bridge = win.__zsfCollapseV037;
+assert(bridge && bridge.version === '0.4.2');
+bridge.sync(group);
+assert.deepEqual(calls, ['expand'], 'initial expanded state uses only expansion');
+group.collapsed = true;
+bridge.sync(group);
+assert.deepEqual(calls, ['expand', 'collapse'], 'closing once uses only collapse');
+first.selected = false;
+second.selected = true;
+bridge.sync(group);
+assert.deepEqual(calls, ['expand', 'collapse', 'collapse'], 'selection change never expands while closed');
+assert.deepEqual(cleaned, [second], 'only newly selected hidden tab gets native style cleanup');
+assert(!oldActive.has('folder-active'), 'former selected tab must not remain active in native group');
+assert.deepEqual(retiredStyles, [['height', '0px'], ['min-height', '0px'], ['opacity', '0']],
+  'former selected tab must release its layout box');
+console.log('PASS: single-path audio/selection motion and native row cleanup');

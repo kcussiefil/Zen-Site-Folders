@@ -92,7 +92,14 @@ const finish = arguments[arguments.length - 1];
     assert(h.tabs[1].getBoundingClientRect().height > 10, 'selected tab in collapsed folder must be visible');
     assert(h.tabs.filter(tab => tab !== h.tabs[1]).every(tab => tab.getBoundingClientRect().height <= 1), 'other rows stay collapsed');
     gBrowser.selectedTab = h.tabs[3]; await idle(h.group);
-    assert(h.tabs[3].getBoundingClientRect().height > 10 && h.tabs[1].getBoundingClientRect().height <= 1, 'selection transfer must reveal only the new row');
+    assert(h.tabs[3].getBoundingClientRect().height > 10 && h.tabs[1].getBoundingClientRect().height <= 1,
+      'selection transfer must reveal only the new row: ' + JSON.stringify(h.tabs.map(t => ({
+        name: t.zsfTestName, selected: t.selected,
+        active: t.hasAttribute('folder-active'),
+        height: t.getBoundingClientRect().height,
+        opacity: getComputedStyle(t).opacity,
+        style: t.getAttribute('style')
+      }))));
     gBrowser.selectedTab = h.prefix; await idle(h.group);
     assert(h.group.groupContainer.getBoundingClientRect().height <= 1, 'leaving active folder must close remaining room');
     assert(!h.group.isZenFolder, 'ordinary group must remain ordinary');
@@ -318,6 +325,44 @@ const finish = arguments[arguments.length - 1];
     assert(tab.getBoundingClientRect().height > 10 &&
       h.group.groupContainer.getBoundingClientRect().height > 60,
       'selected tab and group remain fully visible with audio indicator');
+  });
+  await test('changing selected soundplaying tab inside collapsed group uses one native path', async h => {
+    const tab = h.tabs[0];
+    tab.setAttribute('soundplaying', 'true');
+    tab.dispatchEvent(new CustomEvent('TabAttrModified', {
+      bubbles: true, detail: { changed: ['soundplaying'] }
+    }));
+    gBrowser.selectedTab = tab;
+    h.group.collapsed = true;
+    await idle(h.group);
+    const zen = window.gZenFolders;
+    const nativeExpand = zen.animateExpand;
+    const nativeCollapse = zen.animateCollapse;
+    let expansions = 0, collapses = 0;
+    zen.animateExpand = function (group, ...args) {
+      if (group === h.group) expansions++;
+      return nativeExpand.call(this, group, ...args);
+    };
+    zen.animateCollapse = function (group, ...args) {
+      if (group === h.group) collapses++;
+      return nativeCollapse.call(this, group, ...args);
+    };
+    try {
+      gBrowser.selectedTab = h.tabs[1];
+      await delay(120);
+      await idle(h.group);
+      assert(expansions === 0, 'changing selected tab while closed must not launch a competing expansion: ' + expansions);
+      assert(collapses <= 1, 'event and attribute observers must coalesce to one collapse: ' + collapses);
+      assert(h.tabs[1].getBoundingClientRect().height > 10,
+        'newly selected tab must remain visible inside closed folder');
+      assert(h.tabs[0].getBoundingClientRect().height <= 1,
+        'former selected soundplaying tab must no longer occupy a visible row');
+      assert(Number(getComputedStyle(h.tabs[1]).opacity) > .9,
+        'newly selected tab must not retain opacity 0');
+    } finally {
+      zen.animateExpand = nativeExpand;
+      zen.animateCollapse = nativeCollapse;
+    }
   });
   await test('simultaneous collapsed groups keep headers as actual hit targets', async h => {
     const [A,B,C,D] = h.tabs;

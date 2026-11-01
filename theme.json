@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Zia-native folder spring with stable vertical scroll anchoring, reduced expanded-folder clipping cost and targeted state updates.",
+  "description": "Single native Zen/Zia spring path for audio-playing tabs, reduced sidebar repaint and scoped selection updates.",
   "author": "kcussiefil",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T15:48:41.283Z"
+  "updatedAt": "2026-11-01T16:09:00.000Z"
 }
