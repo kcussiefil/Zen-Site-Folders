@@ -1,19 +1,20 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.2.6
+// @version      0.2.7
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV026) return;
-  window.__zenSiteFoldersV026 = true;
+  if (window.__zenSiteFoldersV027) return;
+  window.__zenSiteFoldersV027 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
   const ICON_CLASS = 'zsf-favicon';
   const TAB_UID_KEY = 'zsf-tab-uid-v1';
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
+  const ARCHIVED_SNAPSHOTS_KEY = 'zsf-archived-snapshots-v1';
   const OWNED_GROUPS_KEY = 'zsf-owned-group-sites-v1';
   const MIN_WAVE_MS = 1250;
   const SITE_NAMES = {
@@ -534,7 +535,73 @@
     }
     const groups = getCreated();
     if (!groups.length) {
-      toast('找不到這次整理建立的群組；未變更分頁或快照', true);
+      // A Zen session restore may have recreated or removed the groups while
+      // preserving the earlier v3 snapshot. Never infer that an unknown
+      // group is ours, and never discard an unrecoverable snapshot without
+      // first preserving a second durable copy.
+      const candidates = new Set(getGroups(current.node));
+      for (const tab of allWorkspaceTabs(current.node, current.id)) {
+        if (tab.group?.isConnected) candidates.add(tab.group);
+      }
+      const owned = readOwnedSites();
+      const possibleOwned = [...candidates].filter(group => group?.isConnected &&
+        (String(group.id || '').startsWith('zsf-') ||
+         Boolean(group.getAttribute?.('data-zsf-site')) ||
+         Boolean(group.id && owned[group.id]))
+      );
+      if (possibleOwned.length) {
+        toast('仍偵測到 ' + possibleOwned.length + ' 個可能由本工具建立的群組；為保護分頁，未清除快照', true);
+        return;
+      }
+      if (!created.length || !created.every(id => typeof id === 'string' && id.startsWith('zsf-'))) {
+        toast('舊快照未記錄可信任的群組 ID；拒絕清除，原始備份保留', true);
+        return;
+      }
+      const visibleTabCount = allWorkspaceTabs(current.node, current.id)
+        .filter(tab => tab?.isConnected && !tab.hasAttribute('cloned')).length;
+      if (!confirmRescue('原本這次整理建立的群組已無法找到，目前也未偵測到本工具的群組。\\n' +
+        '目前可辨識 ' + visibleTabCount + ' 個分頁，舊快照包含 ' + snapshot.tabs.length + ' 個分頁。\\n' +
+        '此操作不會移動、關閉或重新載入任何分頁，但無法確認舊分頁是否全部仍存在。\\n' +
+        '確定先把舊快照封存成另一份備份，再解除這次整理鎖定嗎？')) return;
+      const store = getSessionStore('getCustomWindowValue', 'setCustomWindowValue');
+      if (!store) {
+        toast('無法安全封存舊快照：SessionStore 不可寫入；未變更分頁或快照', true);
+        return;
+      }
+      let archived = {};
+      try {
+        const raw = store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY);
+        archived = raw ? JSON.parse(raw) : {};
+        if (!archived || typeof archived !== 'object' || Array.isArray(archived)) throw new Error('invalid archive');
+      } catch (error) {
+        console.warn(TAG, 'Cannot parse old snapshot archive:', error);
+        toast('既有快照封存資料無法讀取；拒絕覆蓋，未變更快照', true);
+        return;
+      }
+      const history = Array.isArray(archived[current.id]) ? archived[current.id] : [];
+      const nextArchive = { ...archived, [current.id]: [...history, {
+        archivedAt: Date.now(), reason: 'orphaned-created-groups',
+        snapshot: JSON.parse(JSON.stringify(snapshot))
+      }] };
+      try {
+        const payload = JSON.stringify(nextArchive);
+        store.setCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY, payload);
+        if (store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY) !== payload) {
+          throw new Error('readback mismatch');
+        }
+      } catch (error) {
+        console.warn(TAG, 'Could not persist snapshot archive:', error);
+        toast('封存舊快照失敗；沒有解除整理鎖定', true);
+        return;
+      }
+      const next = { ...stored };
+      delete next[current.id];
+      if (!writeSnapshots(next)) {
+        toast('舊快照已額外封存，但解除整理鎖定失敗；目前分頁未變更', true);
+        return;
+      }
+      updateButtons();
+      toast('已封存舊快照並解除整理鎖定；分頁未移動。建議先核對分頁再整理');
       return;
     }
     const candidates = [];
@@ -1097,7 +1164,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV026 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV027 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
