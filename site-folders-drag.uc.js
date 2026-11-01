@@ -18,17 +18,13 @@
   const tasks = new Set();
   let generation = 0;
   let lastWorkspace = window.gZenWorkspaces?.activeWorkspace;
-  let ziaShim = null, ziaDelegate = null, ziaFallbackFrame = 0, ziaCleanupTimer = 0;
+  let ziaShim = null, ziaDelegate = null, ziaCleanupTimer = 0;
 
   // Zia detects a whole native folder by isZenFolder in its tabFromEvent()
   // and begin() functions. That flag must NEVER be stored on our normal
   // group outside a gesture: Zen's folder lifecycle also checks it.
   function restoreZiaShim() {
     if (ziaCleanupTimer) { clearTimeout(ziaCleanupTimer); ziaCleanupTimer = 0; }
-    if (ziaFallbackFrame) {
-      window.cancelAnimationFrame?.(ziaFallbackFrame);
-      ziaFallbackFrame = 0;
-    }
     const shim = ziaShim;
     ziaShim = null;
     if (shim?.group) {
@@ -106,7 +102,7 @@
   }
   function ownGroup(node) {
     return !!node?.isConnected && node.matches?.(GROUP) &&
-      !node.pinned && !node.isZenFolder;
+      !node.pinned && (!node.isZenFolder || ziaShim?.group === node);
   }
   function isPlainTab(node) {
     return !!node?.isConnected &&
@@ -634,12 +630,13 @@
       }
       return;
     }
-    if (!active) { pending = null; return; }
+    if (!active) { pending = null; restoreZiaShim(); return; }
     // The final release uses the SAME measured slot as the last visual
     // dock, unless the pointer has moved or the slot is no longer valid.
     const pointNow = point(event);
     const slot = chooseSlot(active, pointNow.x, pointNow.y);
     const context = active;
+    restoreZiaShim();
     if (context.delegatedToZia) {
       reset();
       return; // Zia is the single writer of the actual tab order.
@@ -695,11 +692,9 @@
       scrollPort: port, scrolls: captureScrolls(event, port),
       layout: captureLayout(source), root: source.parent.parentElement,
       collapsed: source.parent.collapsed } : null;
-    // Zia's native controller is entered only by real user gestures.
-    // Synthetic MouseEvents used by tests/other Mods must retain the
-    // established standalone ZSF fallback without transient identity.
-    if (source?.kind === 'group' && event.isTrusted === true)
-      primeZiaShim(source);
+    // Prepare recognition regardless of event provenance. Ownership is
+    // established only by dragstart and Zia's actual running state.
+    if (source?.kind === 'group') primeZiaShim(source);
   }
   function onMove(event) {
     if (ziaDelegate) return; // Zia solely owns the preview and destination.
@@ -712,29 +707,8 @@
       }
       if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < THRESHOLD)
         return;
-      if (ziaShim) {
-        // In genuine macOS drag gestures, let native dragstart arrive
-        // before starting our pointer-only fallback. Synthetic regression
-        // events have no native dragstart, and remain deterministic.
-        if (event.isTrusted !== true) {
-          // Chrome-privileged synthetic input has isTrusted=false (and
-          // some test harnesses omit it entirely). Never defer a normal
-          // pointer fallback or make it wait for a native dragstart.
-          restoreZiaShim();
-          activate(pending, event);
-          return;
-        }
-        if (!ziaFallbackFrame) {
-          const captured = { clientX: event.clientX, clientY: event.clientY };
-          ziaFallbackFrame = window.requestAnimationFrame?.(() => {
-            ziaFallbackFrame = 0;
-            if (!pending || ziaDelegate || ziaIsDragging()) return;
-            restoreZiaShim();
-            activate(pending, captured);
-          }) || 0;
-        }
-        return;
-      }
+      // No native dragstart has claimed this gesture. Paint the fallback
+      // now, retaining recognition for a later native dragstart takeover.
       activate(pending, event);
     } else if (event.buttons & 1) update(event);
   }
@@ -745,17 +719,14 @@
     if (ziaShim && ziaIsDragging() &&
         (path.includes(ziaShim.group) ||
          ziaShim.group.contains?.(event.target))) {
-      if (ziaFallbackFrame) {
-        window.cancelAnimationFrame?.(ziaFallbackFrame);
-        ziaFallbackFrame = 0;
-      }
+      const context = pending || active;
       if (active) reset();
       ziaDelegate = { group: ziaShim.group,
         item: ziaShim.group,
         kind: 'group',
         parent: ziaShim.group.parentElement,
-        layout: pending?.layout || captureLayout({kind:'group',item:ziaShim.group}),
-        scrolls: pending?.scrolls || [],
+        layout: context?.layout || captureLayout({kind:'group',item:ziaShim.group}),
+        scrolls: context?.scrolls || [],
         workspace: window.gZenWorkspaces?.activeWorkspace };
       pending = null;
       return;

@@ -531,8 +531,8 @@ const finish = arguments[arguments.length - 1];
         clientY: from.top + 12, dataTransfer: new DataTransfer()
       });
       // Sine runs this in a separate headless browser with synthetic
-      // events. Real-user mousedown alone primes the Zia adapter; invoke
-      // the same preparation explicitly for this isolated regression.
+      // events. Prime the adapter explicitly before testing the normal
+      // mousedown/fallback/late-dragstart lifecycle below.
       const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
         drag.prepareZiaGroupDrag(g);
       assert(prepared, 'Zia compatibility adapter must prime the owned group: ' +
@@ -544,7 +544,18 @@ const finish = arguments[arguments.length - 1];
           canDropType:typeof gZenFolders?.canDropElement }));
       assert(g.isZenFolder === true,
         'adapter must transiently expose native folder identity');
+      // Reproduce the missing-dragstart interval before allowing Zia
+      // to accept the later native event in this same gesture.
+      head.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, composed:true,
+        button:0, buttons:1, clientX:from.left+24, clientY:from.top+12}));
+      window.dispatchEvent(new MouseEvent('mousemove', {buttons:1,
+        clientX:from.left+24, clientY:from.top-30}));
+      assert(drag.debugDrag(g).activeKind === 'group' &&
+        g.hasAttribute('data-zsf-drag-source'),
+        'missing dragstart must immediately activate pointer fallback');
       head.dispatchEvent(event);
+      assert(drag.debugDrag(g).ziaDelegate && !g.hasAttribute('data-zsf-drag-source'),
+        'late native takeover must remove the fallback source mask');
       assert(document.documentElement.hasAttribute('zia-dragging-tab'),
         'Zia must take over the actual native group drag');
       assert(!document.querySelector('.zsf-drag-ghost'),

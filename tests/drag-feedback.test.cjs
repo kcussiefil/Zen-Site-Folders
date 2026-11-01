@@ -304,6 +304,23 @@ async function main(){
     dataTransfer:{setDragImage(){unrelatedBlanked=true;}}});
   assert(!unrelatedBlanked,'unrelated native drag preview must stay intact');
 
+  // Privileged synthetic events can be trusted: no dragstart means the
+  // pointer fallback must own the preview immediately, without a frame.
+  window.__ziaLoaded = true;
+  emit(strip,'mousedown',{...gEvent(160,160),isTrusted:true});
+  emit(window,'mousemove',{...gEvent(160,120),isTrusted:true});
+  assert.equal(api.debugDrag(source).activeKind,'group');
+  assert.equal(api.debugDrag(source).ziaDelegate,false);
+  assert(source.hasAttribute('data-zsf-drag-source'));
+  root.setAttribute('zia-dragging-tab','true');
+  emit(window,'dragstart',{...gEvent(160,120),dataTransfer:{}});
+  assert.equal(api.debugDrag(source).ziaDelegate,true);
+  assert.equal(api.debugDrag(source).activeKind,null);
+  assert(!source.hasAttribute('data-zsf-drag-source'));
+  root.removeAttribute('zia-dragging-tab');
+  emit(window,'keydown',{key:'Escape'});
+  assert(!source.isZenFolder);
+
   // Temporary Zia group hand-off: the normal JS unit fixture emulates
   // the flag Zia sets during its own window-capture dragstart.
   window.__ziaLoaded = true;
