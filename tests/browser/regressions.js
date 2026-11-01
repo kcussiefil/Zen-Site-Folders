@@ -50,6 +50,11 @@ const finish = arguments[arguments.length - 1];
   }
   async function test(name, fn) {
     if (selectedCase && !name.includes(selectedCase)) return;
+    // Zia's native whole-folder drop is stateful, so validate it in the
+    // dedicated, fresh-profile CI step rather than after 21 fixtures have
+    // left native animations and workspace history in the same process.
+    if (!selectedCase && name === 'Zia single-controller group drop lands at the displayed slot')
+      return;
     try {
       const h = await fixture(name);
       await guarded(h, () => fn(h));
