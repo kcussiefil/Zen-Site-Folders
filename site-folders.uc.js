@@ -567,7 +567,7 @@
       const hostRect = separator.getBoundingClientRect();
       const lineRect = line.getBoundingClientRect();
       const controls = [...separator.querySelectorAll('toolbarbutton')].filter(button =>
-        !button.hidden && !button.disabled && button.getClientRects().length &&
+        !button.hidden && button.getClientRects().length &&
         getComputedStyle(button).display !== 'none'
       );
       const leftGuard = Math.max(lineRect.left,
