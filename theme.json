@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Hide Zen's circular drag indicator and make group/member drops immediate, preserving native settle reconciliation.",
+  "description": "Instant native-like live group/member reordering; remove redundant ZSF drop line.",
   "author": "kcussiefil",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T17:16:00.000Z"
+  "updatedAt": "2026-11-01T17:25:00.000Z"
 }

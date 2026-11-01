@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.5.0
+// @version      0.5.1
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -11,7 +11,7 @@
   const NS = 'http://www.w3.org/1999/xhtml';
   const THRESHOLD = 6;
   const EDGE_ZONE = 52;
-  let pending = null, active = null, ghost = null, guide = null;
+  let pending = null, active = null, ghost = null;
   let nativeBlank = null, autoFrame = 0, autoPointer = null;
   let started = false, destroyed = false;
   const listeners = [];
@@ -257,7 +257,7 @@
   function chooseSlot(subject, x, y) {
     if (!subject) return null;
     const dy = (subject.scrolls || []).reduce((sum, item) => sum + item.node.scrollTop - item.top, 0);
-    const layout = subject.layout?.map(entry => ({ item: entry.item, box: {
+    const layout = subject.liveMoved ? null : subject.layout?.map(entry => ({ item: entry.item, box: {
       ...entry.box, top: entry.box.top - dy, bottom: entry.box.bottom - dy
     } }));
     if (subject.kind === 'group') return slotForGroup(subject.item, x, y, layout);
@@ -316,16 +316,36 @@
       ghost.append(icon, content);
       document.documentElement.appendChild(ghost);
     }
-    if (!guide?.isConnected) {
-      guide = create('div', 'zsf-drop-guide');
-      guide.hidden = true;
-      document.documentElement.appendChild(guide);
+  }
+  function originOrder(subject) {
+    return subject.kind === 'group'
+      ? [subject.item, ...topLevelSiblings(subject.item)].sort(
+        (a, b) => Array.from(subject.parent.children).indexOf(a) -
+          Array.from(subject.parent.children).indexOf(b))
+      : groupMembers(subject.parent);
+  }
+  function restoreOriginalPosition(subject) {
+    if (!subject?.liveMoved || !subject.item?.isConnected ||
+        subject.item.pinned || !subject.origin) return;
+    const { previous, next } = subject.origin;
+    const isValid = node => node?.isConnected && node.parentElement ===
+      subject.item.parentElement && !node.pinned;
+    try {
+      if (isValid(next)) window.gBrowser?.moveTabBefore?.(subject.item, next);
+      else if (isValid(previous)) window.gBrowser?.moveTabAfter?.(subject.item, previous);
+    } catch (error) {
+      console.warn('[ZenSiteFoldersDrag] Unable to restore cancelled preview:', error);
     }
   }
   function activate(subject, event) {
     if (active || !subject?.item?.isConnected) return;
     pending = null;
     active = subject;
+    const original = originOrder(subject);
+    const at = original.indexOf(subject.item);
+    subject.origin = { previous: original[at - 1] || null, next: original[at + 1] || null };
+    subject.previewSlot = undefined;
+    subject.liveMoved = false;
     // Zen's grey bar with circular ends is the DOM drop indicator,
     // NOT the native DataTransfer drag image. Mask only our own drag.
     document.documentElement.setAttribute('data-zsf-hide-native-indicator', 'true');
@@ -344,7 +364,6 @@
     ghost.querySelector('.zsf-drag-hint').textContent = '拖曳以調整順序';
     ghost.removeAttribute('data-invalid');
     ghost.hidden = false;
-    if (subject.kind === 'group') beginAvoidance(subject);
     update(event);
   }
   function update(event, scheduleScroll = true) {
@@ -357,10 +376,9 @@
     ghost.style.top = Math.round(Math.max(6,
       Math.min(y + 12, (window.innerHeight || 800) - height - 6))) + 'px';
     const slot = chooseSlot(active, x, y);
-    updateAvoidance(active, slot);
+    active.previewSlot = slot;
     if (scheduleScroll) scheduleAutoScroll(x, y);
     if (!slot) {
-      guide.hidden = true;
       ghost.setAttribute('data-invalid', 'true');
       ghost.querySelector('.zsf-drag-hint').textContent = '此處無法調整順序';
       return;
@@ -368,11 +386,17 @@
     ghost.removeAttribute('data-invalid');
     ghost.querySelector('.zsf-drag-hint').textContent =
       '移到「' + itemName(slot.target) + '」' + (slot.before ? '上方' : '下方');
-    guide.hidden = false;
-    guide.style.left = Math.round(slot.box.left + 7) + 'px';
-    guide.style.width = Math.round(Math.max(16, slot.box.width - 14)) + 'px';
-    guide.style.top = Math.round(slot.markerY - 1) + 'px';
-    guide.setAttribute('data-position', slot.before ? 'before' : 'after');
+    // Native-like live ordering: the existing tab/group moves as soon as
+    // the pointer crosses a slot. No duplicate ZSF drop line and no
+    // animation-idle wait before the user sees its final placement.
+    // Keep a single remembered source so Esc/invalid drops can undo it.
+    if (!orderMatches(slot) &&
+        (active.kind === 'group' || active.item.group === active.parent)) {
+      if (commit(slot, active)) {
+        active.liveMoved = true;
+        active.layout = null;
+      }
+    }
   }
   function orderMatches(slot) {
     const { source, target, before } = slot;
@@ -427,11 +451,11 @@
     }
     return true;
   }
-  function reset() {
+  function reset(accepted = false) {
+    if (!accepted) restoreOriginalPosition(active);
     if (autoFrame) window.cancelAnimationFrame?.(autoFrame);
     autoFrame = 0;
     autoPointer = null;
-    clearAvoidance(active);
     document.documentElement.removeAttribute('data-zsf-hide-native-indicator');
     if (active?.kind === 'group')
       active.item?.removeAttribute?.('data-zsf-drag-source');
@@ -439,15 +463,16 @@
       active.item?.removeAttribute?.('data-zsf-drag-member');
     active = pending = null;
     ghost?.remove();
-    guide?.remove();
-    ghost = guide = null;
+    ghost = null;
   }
   function finish(event) {
     if (!active) { pending = null; return; }
+    // The release coordinate is authoritative: a drag may end at a new
+    // location without another mousemove/dragover event being dispatched.
     const slot = chooseSlot(active, point(event).x, point(event).y);
     const context = active;
-    reset();
-    if (!slot) return;
+    if (!slot) { reset(); return; }
+    reset(true);
     const token = generation;
     const task = { done: null };
     task.done = (async () => {
@@ -565,7 +590,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.5.0', chooseSlot, commit, beforeMutation, nativeIdle };
+  const api = { start, destroy, version: '0.5.1', chooseSlot, commit, beforeMutation, nativeIdle };
   window.__zsfDragV037 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });

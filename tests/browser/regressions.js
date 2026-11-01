@@ -117,7 +117,8 @@ const finish = arguments[arguments.length - 1];
     window.dispatchEvent(new MouseEvent('mousemove', { buttons: 1, clientX: x, clientY: y }));
     // Model the asynchronous native/Zia placing boundary using its observable busy flag.
     // The move itself is performed by the real gBrowser, which emits native TabMove/Ungrouped.
-    assert(document.querySelector('.zsf-drop-guide') && !document.querySelector('.zsf-drop-guide').hidden, 'gesture must resolve a real visible drop guide');
+    assert(document.querySelector('.zsf-drag-ghost') &&
+      !document.querySelector('.zsf-drop-guide'), 'gesture uses only live DOM reordering plus floating card');
     const strip = gBrowser.tabContainer;
     if (lateMove) {
       queueMicrotask(() => strip.setAttribute('zia-settling', 'true'));
@@ -164,21 +165,18 @@ const finish = arguments[arguments.length - 1];
       button:0,buttons:1,clientX:from.left+20,clientY:from.top+10}));
     window.dispatchEvent(new MouseEvent('mousemove',{buttons:1,clientX:x,clientY:y}));
     assert(h.group.hasAttribute('data-zsf-drag-source'), 'dragging folder must expose its floating card');
-    assert(first.hasAttribute('data-zsf-drag-avoid'), 'ordinary sibling must enter the avoidance path');
-    const shift=parseFloat(first.style.getPropertyValue('--zsf-drag-avoid-y'));
-    assert(shift>15,
-      'target neighbour must move down to make a visual group slot: ' +
-      JSON.stringify({ shift, sourceTop:from.top, targetTop:to.top,
-        guess:drag.chooseSlot({kind:'group',item:h.group,parent:h.group.parentElement},x,y)?.target?.id,
-        order:[...h.group.parentElement.children].filter(n =>
-          n.localName==='tab-group'||gBrowser.isTab(n)).map(n=>n.id) }));
+    const siblings=[...h.group.parentElement.children].filter(n =>
+      n.localName==='tab-group'||gBrowser.isTab(n));
+    assert(siblings.indexOf(h.group)<siblings.indexOf(first),
+      'whole folder must enter its new DOM position during drag, before drop');
+    assert(!document.querySelector('.zsf-drop-guide'),
+      'no duplicate horizontal drop indicator is allowed');
     await delay(90);
     const opacity=Number(getComputedStyle(head).opacity);
     assert(opacity<.05, 'native source grey bar must be hidden while group ghost is visible: '+opacity);
     window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
-    assert(!first.hasAttribute('data-zsf-drag-avoid') &&
-      !first.style.getPropertyValue('--zsf-drag-avoid-y'),
-      'Escape must remove group avoidance on the actual Zen tab');
+    assert(!first.hasAttribute('data-zsf-drag-avoid'),
+      'native live reorder must not leave extra avoidance transforms');
     assert(!h.group.hasAttribute('data-zsf-drag-source'),'Escape clears native-source mask');
     assert(same(order(h.group),h.tabs),'group animation never mutates member order');
   });
