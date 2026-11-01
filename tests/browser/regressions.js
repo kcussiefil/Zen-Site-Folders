@@ -24,7 +24,7 @@ const finish = arguments[arguments.length - 1];
     const prefix = make('prefix'), tabs = ['A', 'B', 'C', 'D'].map(make), suffix = make('suffix');
     // Only the scroll stability test needs a guaranteed overflowing real
     // arrowscrollbox even when run alone with --case.
-    if (caseName.includes('scroll offset')) {
+    if (caseName.includes('scroll offset') || caseName.includes('drag edge')) {
       for (let i = 0; i < 34; i++) make('overflow-' + i);
     }
     const group = gBrowser.addTabGroup(tabs, { id: 'zsf-native-test-' + id,
@@ -147,6 +147,56 @@ const finish = arguments[arguments.length - 1];
       assert(same(order(h.group), [A, B, C, D]), 'consecutive drag to middle must persist');
       assert(moves.length >= 3, 'test must execute native move events');
     } finally { gBrowser.tabContainer.removeEventListener('TabMove', listener); }
+  });
+  await test('whole group drag animates neighbour avoidance and clears on Escape', async h => {
+    const head=h.group.querySelector(':scope > .tab-group-label-container');
+    const first=h.prefix;
+    first.scrollIntoView({block:'nearest'});
+    await delay(250);
+    const from=head.getBoundingClientRect(), to=first.getBoundingClientRect();
+    assert(from.height>10 && to.height>10, 'group and target row must have real geometry');
+    const x=to.left+Math.min(24,to.width/2), y=to.top+3;
+    head.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,composed:true,
+      button:0,buttons:1,clientX:from.left+20,clientY:from.top+10}));
+    window.dispatchEvent(new MouseEvent('mousemove',{buttons:1,clientX:x,clientY:y}));
+    assert(h.group.hasAttribute('data-zsf-drag-source'), 'dragging folder must expose its floating card');
+    assert(first.hasAttribute('data-zsf-drag-avoid'), 'ordinary sibling must enter the avoidance path');
+    assert(parseFloat(first.style.getPropertyValue('--zsf-drag-avoid-y'))>15,
+      'target neighbour must move down to make a visual group slot');
+    await delay(90);
+    const opacity=Number(getComputedStyle(head).opacity);
+    assert(opacity<.05, 'native source grey bar must be hidden while group ghost is visible: '+opacity);
+    window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    assert(!first.hasAttribute('data-zsf-drag-avoid') &&
+      !first.style.getPropertyValue('--zsf-drag-avoid-y'),
+      'Escape must remove group avoidance on the actual Zen tab');
+    assert(!h.group.hasAttribute('data-zsf-drag-source'),'Escape clears native-source mask');
+    assert(same(order(h.group),h.tabs),'group animation never mutates member order');
+  });
+  await test('drag edge autoscroll moves ordinary Space list without a drop', async h => {
+    const scroll=gZenWorkspaces.activeWorkspaceElement.scrollbox?.scrollbox;
+    assert(scroll && scroll.scrollHeight>scroll.clientHeight+90,
+      'fixture must have a scrollable real Zen arrowscrollbox');
+    scroll.scrollTop=0;
+    await delay(900);
+    const initial=scroll.scrollTop;
+    const head=h.group.querySelector(':scope > .tab-group-label-container');
+    head.scrollIntoView({block:'nearest',behavior:'instant'});
+    await delay(120);
+    const from=head.getBoundingClientRect(), box=scroll.getBoundingClientRect();
+    assert(from.height>5,'source group label must be visible');
+    const x=Math.max(box.left+30,from.left+20), y=box.bottom-12;
+    head.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,composed:true,
+      button:0,buttons:1,clientX:from.left+20,clientY:from.top+10}));
+    window.dispatchEvent(new MouseEvent('mousemove',{buttons:1,clientX:x,clientY:y}));
+    await delay(250);
+    assert(scroll.scrollTop>initial+10,'drag near lower edge must auto-scroll visible tab rows: '+
+      JSON.stringify({initial,actual:scroll.scrollTop,bottom:box.bottom}));
+    window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    const halted=scroll.scrollTop;
+    await delay(110);
+    assert(Math.abs(scroll.scrollTop-halted)<4,'scrolling must stop after Escape');
+    assert(same(order(h.group),h.tabs),'edge scrolling must never move members without a drop');
   });
   await test('whole group can reach first ordinary slot', async h => {
     const normal = () => [...root().children].filter(node => node.localName === 'tab-group' ||
