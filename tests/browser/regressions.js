@@ -164,9 +164,15 @@ const finish = arguments[arguments.length - 1];
       // Sine runs this in a separate headless browser with synthetic
       // events. Real-user mousedown alone primes the Zia adapter; invoke
       // the same preparation explicitly for this isolated regression.
-      assert(typeof drag.prepareZiaGroupDrag === 'function' &&
-        drag.prepareZiaGroupDrag(g),
-        'Zia compatibility adapter must prime the owned group');
+      const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
+        drag.prepareZiaGroupDrag(g);
+      assert(prepared, 'Zia compatibility adapter must prime the owned group: ' +
+        JSON.stringify({ zia: window.__ziaLoaded, isZenFolder:g.isZenFolder,
+          match:g.matches('tab-group[data-zsf-site]:not([split-view-group])'),
+          connected:g.isConnected, pinned:g.pinned, owns:g.hasAttribute('data-zsf-site'),
+          groupDescriptor:String(Object.getOwnPropertyDescriptor(g,'isZenFolder')?.configurable),
+          canDropExtensible:Object.isExtensible(gZenFolders),
+          canDropType:typeof gZenFolders?.canDropElement }));
       assert(g.isZenFolder === true,
         'adapter must transiently expose native folder identity');
       head.dispatchEvent(event);
@@ -197,9 +203,12 @@ const finish = arguments[arguments.length - 1];
     const from = head.getBoundingClientRect(), to = prefix.getBoundingClientRect();
     assert(from.height>5 && to.height>5, 'native group and prefix must be visible');
     const x=to.left+Math.min(25,to.width/2), y=to.top+2;
-    assert(typeof drag.prepareZiaGroupDrag === 'function' &&
-      drag.prepareZiaGroupDrag(g),
-      'native adapter should be active before OS dragstart');
+    const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
+      drag.prepareZiaGroupDrag(g);
+    assert(prepared, 'native adapter should be active before OS dragstart: ' +
+      JSON.stringify({zia:window.__ziaLoaded, isZenFolder:g.isZenFolder,
+        connected:g.isConnected, matches:g.matches('tab-group[data-zsf-site]:not([split-view-group])'),
+        canDropType:typeof gZenFolders?.canDropElement}));
     const transfer=new DataTransfer();
     head.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
       dataTransfer:transfer,clientX:from.left+25,clientY:from.top+10}));
