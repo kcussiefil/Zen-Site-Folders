@@ -468,7 +468,7 @@
             if (created > 0) break;
           }
         } catch (_) {}
-        if (created > snapshot.capturedAt + 1000) continue;
+        if (!created || created > snapshot.capturedAt + 1000) continue;
         map.set(item.id, tab);
         used.add(tab);
         urlMatches++;
@@ -494,7 +494,7 @@
     const getCreated = () => created.map(id => findGroupByID(current, id)).filter(group =>
       group?.isConnected && !group.isZenFolder &&
       group.parentElement === current.node.tabsContainer &&
-      siteOfGroup(group)
+      group.id.startsWith('zsf-')
     );
     if (snapshot.rescueCompleted) {
       const remaining = getCreated().some(group => [...group.querySelectorAll('tab')]
