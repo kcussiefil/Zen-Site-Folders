@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.5.1
+// @version      0.5.2
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==

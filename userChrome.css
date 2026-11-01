@@ -516,3 +516,14 @@ tab-group[data-zsf-site][data-zsf-drag-source]
   visibility: hidden !important;
   opacity: 0 !important;
 }
+
+/* v0.5.2 — keep the compact-mode sidebar visible while the external
+   ZSF folder hover card is being inspected. Leave Zen/Zia's native hover
+   attributes untouched and let their ordinary slide-out resume on close. */
+:root[zen-compact-mode="true"] #navigator-toolbox[data-zsf-preview-sidebar-hold]:not([animate="true"]) {
+  translate: none !important;
+  visibility: visible !important;
+}
+:root[zen-compact-mode="true"] #navigator-toolbox[data-zsf-preview-sidebar-hold] #titlebar {
+  visibility: visible !important;
+}

@@ -135,12 +135,21 @@ async function main() {
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
   const api = window.__zsfGroupHoverV037;
-  assert.equal(api.version, '0.4.1');
+  assert.equal(api.version, '0.5.2');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
   const popup = root.children.find(node => node.id === 'zsf-folder-hover-card');
   assert(popup && !popup.hidden, 'hover must show popup');
+  assert(host.hasAttribute('data-zsf-preview-sidebar-hold'),
+    'opening external card must keep compact sidebar expanded');
+  assert(css.includes('#navigator-toolbox[data-zsf-preview-sidebar-hold]') &&
+    css.includes('translate: none !important'),
+    'compact-mode sidebar must remain visually open during card hover');
+  const manifest = require('../theme.json');
+  assert.equal(manifest.version, '0.5.2');
+  assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
+    'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
   assert.equal(rows.length, 3, 'all tabs and New Tab row are visible');
   assert.equal(rows[0].zsfTab, first);
@@ -177,6 +186,8 @@ async function main() {
   popup.events.click({ target: rows[1], stopPropagation() {} });
   assert.equal(browser.selectedTab, second, 'click must select correct tab');
   assert(popup.hidden, 'popup should hide after selection');
+  assert(!host.hasAttribute('data-zsf-preview-sidebar-hold'),
+    'choosing a preview tab must release compact sidebar');
   assert(!popup.hasAttribute('data-open'), 'close clears animation flag so it restarts next time');
   // Updating the selection should not reset a long card to its first row.
   host.events.mouseover({ target });
@@ -212,8 +223,12 @@ async function main() {
     'native TabClose plus explicit close must produce one debounced render');
   assert.equal(scroller.children.length, 2, 'remaining member and New Tab are visible');
   assert(!popup.hidden, 'card stays open after one member closes');
+  assert(host.hasAttribute('data-zsf-preview-sidebar-hold'),
+    'closing one member must not prematurely collapse preview sidebar');
   assert(css.includes('#zsf-folder-hover-card[data-acting]'), 'close freeze CSS is active');
   api.closeNow();
+  assert(!host.hasAttribute('data-zsf-preview-sidebar-hold'),
+    'closing preview must always release sidebar hold');
 
   // Only our own groups trigger a preview, never Zia native folders.
   const other = { ...group, matches: () => false };
@@ -234,6 +249,8 @@ async function main() {
   assert.equal(group.tabs[0], browser.selectedTab, 'new tab must be inserted at top');
 
   api.destroy();
+  assert(!host.hasAttribute('data-zsf-preview-sidebar-hold'),
+    'unload must not leave compact sidebar locked');
   assert.equal(popup.isConnected, false, 'unload must remove the popup');
   assert.equal(Object.keys(host.events).length, 0, 'unload must remove host listeners');
   console.log('PASS: hover preview, click selection, native-folder exclusion, explicit new tab, cleanup, safety guards');

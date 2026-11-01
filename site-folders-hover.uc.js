@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.5.1
+// @version      0.5.2
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -232,9 +232,22 @@
       Math.round(anchorY - y) + 'px';
   }
 
+  // Zen compact mode hides the sidebar when its own pointer is left.
+  // Our hover card lives outside the toolbox, so leaving the sidebar
+  // to enter the card must NOT count as finishing the preview.
+  // Do not toggle native zen-has-hover / zen-compact-mode-active flags:
+  // they are owned by Zen and could override Zia or remain stuck.
+  function holdSidebar(hold) {
+    const toolbox = hoverHost || document.getElementById('navigator-toolbox');
+    if (!toolbox) return;
+    if (hold) toolbox.setAttribute('data-zsf-preview-sidebar-hold', 'true');
+    else toolbox.removeAttribute('data-zsf-preview-sidebar-hold');
+  }
+
   function closeNow() {
     clearOpen();
     clearClose();
+    holdSidebar(false);
     if (refreshTimer != null) clearTimeout(refreshTimer);
     refreshTimer = null;
     if (card) {
@@ -291,12 +304,19 @@
     const wasUp = card?.isConnected && !card.hidden && !card.hasAttribute('data-closing');
     clearOpen();
     clearClose();
-    if (!render(group)) return;
+    if (!render(group)) {
+      closeNow();
+      return;
+    }
     card?.removeAttribute?.('data-acting');
     activeGroup = group;
     activeLabel = label;
     card.hidden = false;
     card.removeAttribute('data-open');
+    // Pin the flyout before measuring the anchor. Otherwise compact mode
+    // starts sliding the toolbox away during the 8px mouse transition
+    // between the folder label and this separate popup.
+    holdSidebar(true);
     position(label);
     if (wasUp) {
       card.setAttribute('data-snap', 'true');
@@ -458,7 +478,7 @@
     card = null;
     if (window.__zsfGroupHoverV037 === api) delete window.__zsfGroupHoverV037;
   }
-  const api = { start, destroy, closeNow, position, version: '0.4.1' };
+  const api = { start, destroy, closeNow, position, version: '0.5.2' };
   window.__zsfGroupHoverV037 = api;
   if (document.readyState === 'complete') {
     if (!start()) window.addEventListener('load', start, { once: true });

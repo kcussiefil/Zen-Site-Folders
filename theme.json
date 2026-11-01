@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Instant native-like live group/member reordering; remove redundant ZSF drop line.",
+  "description": "Keep Zen compact sidebar expanded during folder hover preview; Sine update timestamp fixed.",
   "author": "kcussiefil",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T17:25:00.000Z"
+  "updatedAt": "2026-11-01T17:39:31.251Z"
 }
