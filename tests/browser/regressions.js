@@ -250,10 +250,16 @@ const finish = arguments[arguments.length - 1];
       return node;
     }
     for(const group of [h.group,second,third]) {
-      group.scrollIntoView({block:'nearest'});
+      group.scrollIntoView({block:'nearest',behavior:'instant'});
       const header=group.querySelector(':scope > .tab-group-label-container');
       const box=header.getBoundingClientRect();
-      const hit=deepest(box.left+box.width*.6,box.top+box.height*.5);
+      // Group rows can extend beyond the sidebar's clipped scrollport.
+      // A user can only click the intersection visible inside the toolbox.
+      const sidebar=document.getElementById('navigator-toolbox').getBoundingClientRect();
+      const left=Math.max(box.left,sidebar.left,0), right=Math.min(box.right,sidebar.right,innerWidth);
+      const top=Math.max(box.top,sidebar.top,0), bottom=Math.min(box.bottom,sidebar.bottom,innerHeight);
+      assert(right-left>4 && bottom-top>4, 'header must be visible inside sidebar: '+JSON.stringify({box:box.toJSON(),sidebar:sidebar.toJSON()}));
+      const hit=deepest(left+Math.min(24,(right-left)/2),(top+bottom)/2);
       assert(header.contains(hit), 'click point for '+group.id+' must hit its own header, got '+hit?.localName+' in '+hit?.closest?.('tab-group')?.id);
     }
   });
