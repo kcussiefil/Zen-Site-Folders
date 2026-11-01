@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Preserve the selected tab glow while opening site folders.",
+  "description": "Zia-native folder spring with stable vertical scroll anchoring, reduced expanded-folder clipping cost and targeted state updates.",
   "author": "kcussiefil",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T15:23:55.490498Z"
+  "updatedAt": "2026-11-01T15:48:41.283Z"
 }
