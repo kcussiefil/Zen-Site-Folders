@@ -89,6 +89,7 @@ async function main() {
   });
   const first = makeTab('YouTube video 1', true);
   const second = makeTab('YouTube video 2');
+  first.hasAttribute = name => name === 'soundplaying';
   group.tabs = [first, second];
   const tabContainer = new FakeNode('tab-container');
   let created = 0;
@@ -131,6 +132,12 @@ async function main() {
   assert.equal(rows[2].dataset.action, 'new');
   assert.equal(rows[0].getAttribute('zia-selected'), 'true', 'selected row uses Zia highlight');
   assert(rows[0].className.includes('zia-folder-card-row'), 'Zia list styling is inherited');
+  assert.equal(rows[0].children.length, 4, 'native Zia row uses favicon, speaker, title, action');
+  assert(rows[0].children[1].className.includes('zia-folder-card-sound'),
+    'speaker follows favicon exactly as Zia native list');
+  assert(rows[0].children[1].src.endsWith('/volume.svg'),
+    'audio icon uses original Zia sound-playing glyph');
+  assert(css.includes('.zsf-hover-action[zia-act="mute"]'), 'speaker size/spacing override must exist');
   assert(popup.hasAttribute('data-open'), 'first show plays Zia-style entry animation');
   assert.equal(popup.style.maxHeight, '884px', 'card height limited by window geometry');
   window.innerHeight = 330;
