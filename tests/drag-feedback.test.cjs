@@ -6,8 +6,13 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'site-folders-drag.uc.js'
 const core = fs.readFileSync(path.join(__dirname, '..', 'site-folders.uc.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 new vm.Script(src);
-assert(!/\bpreventDefault\(|\bstopPropagation\(|dropEffect\s*=/.test(src),
-  'must never interrupt native Zen/Zia drop events');
+assert(!/dropEffect\s*=/.test(src), 'never alter native drag effect');
+assert((src.match(/event\.preventDefault\?\.\(\)/g)||[]).length===2 &&
+       (src.match(/event\.stopPropagation\?\.\(\)/g)||[]).length===2,
+  'Zen interception is scoped to Zia-delegated group dragover/drop only');
+assert(src.includes('if (ziaDelegate)') &&
+  src.includes('Zia already painted the displaced rows'),
+  'normal Zen/Zia drop events must not be intercepted');
 assert((src.match(/\.setDragImage\(/g)||[]).length===1,
   'only the ZSF-scoped OS preview may be overwritten, not native drop events');
 assert(!/\.(?:pinTab|unpinTab|removeTab)\s*\(/.test(src),
