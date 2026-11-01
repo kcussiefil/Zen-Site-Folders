@@ -1,0 +1,73 @@
+name: Publish Zen Site Folders Releases
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - theme.json
+      - "releases/**"
+      - ".github/workflows/publish-releases.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-zen-site-folders-releases
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'kcussiefil/Zen-Site-Folders'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Publish tagged release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          publish() {
+            local tag="$1" target="$2" notes="releases/$1.md"
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Invalid release tag: $tag"
+              exit 1
+            fi
+            if [[ ! -s "$notes" ]]; then
+              echo "::error::Missing release notes file: $notes"
+              exit 1
+            fi
+            if gh release view "$tag" --repo "$GH_REPO" >/dev/null 2>&1; then
+              echo "Already published: $tag"
+              return
+            fi
+            gh release create "$tag" \
+              --repo "$GH_REPO" \
+              --target "$target" \
+              --title "Zen Site Folders $tag" \
+              --notes-file "$notes" \
+              --prerelease
+            echo "Published $tag from $target"
+          }
+
+          # Historical versions are tagged at their actual code commits.
+          while read -r tag sha; do
+            [[ -n "$tag" ]] || continue
+            publish "$tag" "$sha"
+          done <<'HISTORY'
+          v0.1.9 41deb2959f98838c942a30ae1ce90769dfc10688
+          v0.2.0 c2960596dd27549fc2df65a49452985d72be99fc
+          v0.2.1 240914a6f150e0121c5081a9327453d12f824387
+          v0.2.2 224468b4e2aba58ba10379503bfa8f91c29f10ed
+          v0.2.3 def581fea2a6eaea196c48ccbc3fbd7d43cd5268
+          v0.2.4 4cb1fd33cef3b65c5ffd668ef5cf4a1d66785498
+          HISTORY
+
+          current="$(node -p "JSON.parse(require('fs').readFileSync('theme.json', 'utf8')).version")"
+          publish "v$current" "$GITHUB_SHA"
