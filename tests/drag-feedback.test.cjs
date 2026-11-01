@@ -194,6 +194,17 @@ async function main(){
     'native fallback must support member moving to group start');
   assert(!memberGhost.isConnected,'member ghost removed on drop');
   assert(!src.includes("window.addEventListener('TabGrouped'"));
+  // A normal Zen workspace switch need not emit ZenWorkspacesUIUpdate.
+  // The pending transaction must check the actual workspace identity too.
+  window.gZenWorkspaces = { activeWorkspace: 'space1' };
+  const beforeSwitch = container.children.slice();
+  emit(strip, 'mousedown', tabEvent(100,210,B));
+  emit(window, 'mousemove', tabEvent(100,180,B));
+  emit(window, 'drop', tabEvent(100,180,B));
+  window.gZenWorkspaces.activeWorkspace = 'space2';
+  await waitNative();
+  assert(container.children.every((tab, i) => tab === beforeSwitch[i]),
+    'a workspace switch without UI notification must invalidate pending correction');
   api.destroy();
   assert.equal((events.get('window:mousemove')||[]).length,0,'no leaked listeners');
   console.log('PASS: group-to-first actual move, member reorder and persistence, native-only API, invalid drop, visual cleanup');

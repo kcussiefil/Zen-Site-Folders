@@ -323,7 +323,8 @@
     const token = generation;
     const task = { done: null };
     task.done = (async () => {
-      const valid = () => !destroyed && generation === token;
+      const valid = () => !destroyed && generation === token &&
+        window.gZenWorkspaces?.activeWorkspace === context.workspace;
       if (await nativeIdle(context.parent, valid)) commit(slot, context);
     })().finally(() => tasks.delete(task));
     tasks.add(task);
@@ -334,6 +335,7 @@
     const source = sourceFromEvent(event);
     generation++;
     pending = source ? { ...source, x: event.clientX, y: event.clientY,
+      workspace: window.gZenWorkspaces?.activeWorkspace,
       scrolls: (event.composedPath?.() || []).filter(node => node?.scrollHeight > node?.clientHeight && typeof node.scrollTop === 'number')
         .map(node => ({ node, top: node.scrollTop })),
       layout: captureLayout(source), root: source.parent.parentElement,
@@ -349,7 +351,10 @@
   }
   function onStart(event) {
     const source = pending?.item?.isConnected ? pending : sourceFromEvent(event);
-    if (source && !source.layout) source.layout = captureLayout(source);
+    if (source && !source.layout) {
+      source.layout = captureLayout(source);
+      source.workspace = window.gZenWorkspaces?.activeWorkspace;
+    }
     if (source) {
       activate(source, event);
       if (active) active.native = true;
