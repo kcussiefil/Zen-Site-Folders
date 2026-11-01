@@ -256,7 +256,10 @@ async function main(){
   assert(!first.hasAttribute('data-zsf-drag-avoid'),'Esc clears avoidance flags');
   // A dragstart from an unrelated regular tab must not blank its OS image.
   let unrelatedBlanked=false;
-  emit(window,'dragstart',{...tabEvent(100,180,A),
+  const outsideTab=new Node('tab','tabbrowser-tab');
+  outsideTab.parentElement=strip;
+  emit(window,'dragstart',{...tabEvent(100,180,outsideTab),
+    composedPath:()=>[outsideTab,strip],
     dataTransfer:{setDragImage(){unrelatedBlanked=true;}}});
   assert(!unrelatedBlanked,'unrelated native drag preview must stay intact');
   api.destroy();
