@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.3.6
+// @version      0.3.7
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfMenuV036) return;
+  if (window.__zsfMenuV037) return;
   const TAG = '[ZenSiteFoldersMenu]';
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
   const ARCHIVE_KEY = 'zsf-archived-snapshots-v1';
@@ -282,15 +282,15 @@
 
   function ungroup(group) {
     const list = members(group);
-    const helper = window.__zenSiteFoldersV036?.ungroupInDisplayOrder;
+    const helper = window.__zenSiteFoldersV037?.ungroupInDisplayOrder;
     if (typeof helper !== 'function') {
       alertUser('保序解散功能尚未載入；為避免分頁倒序，沒有進行解散。');
       return;
     }
     if (!list.length) { alertUser('群組中沒有可解散的一般分頁。'); return; }
-    if (!promptConfirm('確定解散「' + group.label + '」群組？\n' +
-      '共 ' + list.length + ' 個分頁將保留，並維持原本由上到下的順序。\n' +
-      '如果有整理快照，會自動先封存備份，並保留還原箭頭。')) return;
+    // A normal ungroup never closes tabs or reloads pages. The menu command
+    // itself is explicit consent; archive and perform it without a modal.
+    // Deleting a group or converting to pinned remains confirmed separately.
     if (!archiveSnapshotForMutation('解散群組', true)) return;
     const result = helper(group, list);
     if (result.errors || result.moved !== list.length || !result.ordered) {
@@ -485,8 +485,8 @@
     menu?.remove();
   }
 
-  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.6' };
-  window.__zsfMenuV036 = api;
+  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.7' };
+  window.__zsfMenuV037 = api;
   if (document.readyState === 'complete') init();
   else bind(window, 'load', init, { once: true });
   bind(window, 'unload', destroy, { once: true });
