@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.1.5 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.1.6 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -88,7 +88,7 @@
 .pinned-tabs-container-separator .zsf-wave-path {
   stroke: currentColor !important;
   fill: none !important;
-  stroke-width: .7px !important;
+  stroke-width: 1.5px !important;
   vector-effect: non-scaling-stroke;
 }
 .pinned-tabs-container-separator.zsf-is-sorting .zsf-wave {
@@ -96,6 +96,35 @@
 }
 .pinned-tabs-container-separator.zsf-is-sorting > toolbarseparator {
   opacity: 0 !important;
+}
+/* Zen native toasts only support Fluent IDs. This is a directly rendered
+   text message, so status/errors remain legible even with Zia installed. */
+#zen-toast-container #zsf-notification {
+  max-width: min(440px, 70vw) !important;
+  min-height: 40px !important;
+  max-height: 58px !important;
+  padding: 8px 12px !important;
+  overflow: hidden !important;
+  background: #242629 !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+  color: #f7f7f7 !important;
+  opacity: 1 !important;
+  transform: none !important;
+  scale: 1 !important;
+}
+#zen-toast-container #zsf-notification[zsf-error] {
+  border-color: rgba(255,210,160,.55) !important;
+}
+#zen-toast-container #zsf-notification .zsf-notification-text {
+  display: block !important;
+  max-width: 415px !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #f7f7f7 !important;
 }
 /* Native/Advanced Tab Groups colour, scoped to our own site groups only. */
 #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) {
