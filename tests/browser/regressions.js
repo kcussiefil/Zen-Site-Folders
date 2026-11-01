@@ -150,6 +150,31 @@ const finish = arguments[arguments.length - 1];
       assert(moves.length >= 3, 'test must execute native move events');
     } finally { gBrowser.tabContainer.removeEventListener('TabMove', listener); }
   });
+  await test('Zia shared folder adapter probe', async h => {
+    const g = h.group;
+    const before = Object.getOwnPropertyDescriptor(g, 'isZenFolder');
+    const head = g.querySelector(':scope > .tab-group-label-container');
+    const from = head.getBoundingClientRect();
+    try {
+      Object.defineProperty(g, 'isZenFolder', { configurable: true, value: true });
+      const event = new DragEvent('dragstart', {
+        bubbles: true, composed: true, clientX: from.left + 24,
+        clientY: from.top + 12, dataTransfer: new DataTransfer()
+      });
+      head.dispatchEvent(event);
+      assert(document.documentElement.hasAttribute('zia-dragging-tab'),
+        'Zia did not recognize a temporarily adapted native tab-group as a folder');
+      assert(!document.querySelector('.zsf-drag-ghost'),
+        'Site Folders must not run a second preview if Zia accepted the folder');
+      window.dispatchEvent(new DragEvent('dragend', { bubbles: true }));
+      await delay(150);
+      assert(!document.documentElement.hasAttribute('zia-dragging-tab'),
+        'Zia must clean its own temporary drag state');
+    } finally {
+      if (before) Object.defineProperty(g, 'isZenFolder', before);
+      else delete g.isZenFolder;
+    }
+  });
   await test('whole group drag animates neighbour avoidance and clears on Escape', async h => {
     const first=h.prefix;
     // Enforce a known pre-drag order rather than depending on Zen's restored
