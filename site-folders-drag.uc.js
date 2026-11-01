@@ -873,6 +873,12 @@
     // Explicit probe for isolated native Zen+Zia regression tests.
     prepareZiaGroupDrag(group) {
       return primeZiaShim({ kind: 'group', item: group });
+    },
+    debugDrag(group) {
+      return { activeKind: active?.kind || null, pendingKind: pending?.kind || null,
+        ziaDelegate: !!ziaDelegate, ziaShim: !!ziaShim,
+        groupIsZenFolder: !!group?.isZenFolder, ownGroup: ownGroup(group),
+        rootZia: ziaIsDragging(), ghost: !!ghost?.isConnected };
     }
   };
   window.__zsfDragV037 = api;
