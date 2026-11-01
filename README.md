@@ -1,4 +1,4 @@
-# Zen Site Folders 0.3.4 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.3.5 — 一般分頁區域群組（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內依記錄的開啟時間由新到舊排序（沒有開啟時間的歷史分頁依原位置估算），圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,17 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.3.5 網站群組拖曳位置提示（2026-11-01）
+- 依據使用者 4.6 秒螢幕錄影，群組在拖曳後確實會變動順序，但過程缺少明顯的移動預覽和插入位置提示。
+- 新增獨立 `site-folders-drag.uc.js`，只對本 Mod 的一般未釘選 `tab-group[data-zsf-site]` 監看使用者從群組名稱列開始的拖曳。
+- 移動超過 6px 或收到原生 `dragstart` 後，顯示**跟隨游標的半透明群組浮動預覽**（網站圖示、群組名稱）；來源群組名稱列降低透明度、加上淡虛線。
+- 指向同一工作區及同一層級的其他群組或普通分頁時，顯示**細插入線與上方／下方文字提示**；超出側邊欄或同層有效範圍時改為不可放置樣式。
+- 原生 Zen／Zia 仍負責**實際群組移動與是否允許放置**。此提示只表示依目前畫面推估的同層插入位置，不取代瀏覽器最終的落點判定；不處理將群組嵌入其他資料夾，也不允許自動釘選。
+- 浮動預覽與插入線一律 `pointer-events: none`；不呼叫 `preventDefault`、`stopPropagation`、`setDragImage`、`dropEffect` 或任何分頁移動 API。
+- 放開滑鼠、原生 `drop`／`dragend`、按 Esc、視窗失焦、切換工作區時會清除視覺狀態。
+- 核心整理、開合、動態波形、SessionStore 快照、還原與安全拆分邏輯未修改；CI 增加視覺拖曳、同層落點、無效區域及清理回歸測試。
+- 尚未在 macOS Zen 真實拖曳的每個階段完成端到端驗證，建議先在測試工作區試用。
 
 ## v0.3.4 收合時保留 Zia 原生選取分頁外觀（2026-11-01）
 - **修正收合後目前分頁突然變成另一種外框**：v0.3.3 曾在收合穩態下對 `.tab-stack > .tab-background` 強制指定 `background-color`、`box-shadow` 和 `border-radius`，把 Zia 已有的深色選取背景、漸層光暈及細緻邊緣蓋掉。v0.3.4 移除這三種自訂外觀，讓同一個實際分頁在展開與收合時都由 Zia 原生 `.tabbrowser-tab[visuallyselected]` 樣式呈現。
