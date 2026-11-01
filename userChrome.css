@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.3 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.3.4 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -204,20 +204,18 @@ tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([data-zsf-ani
 > .tab-group-container > tab:not([selected]) {
   display: none !important;
 }
+/* Keep the *real* selected tab visible, but do not restyle it on collapse.
+   v0.3.3 replaced Zia's dark selected-row glow/shine with an unrelated glass
+   border, producing the abrupt appearance switch in the screenshots.
+   Zia's .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background
+   already owns background, glow, squircle and shine in both states.
+   Likewise, preserve Zen's measured natural tab height across the transition. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
 tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([data-zsf-animating]):has(> .tab-group-container > tab[selected]):not([split-view-group])
 > .tab-group-container > tab[selected] {
   display: flex !important;
   visibility: visible !important;
-  min-height: var(--zia-tab-height, 34px) !important;
   pointer-events: auto !important;
-}
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed][data-zsf-collapse-settled]:not([data-zsf-animating]):has(> .tab-group-container > tab[selected]):not([split-view-group])
-> .tab-group-container > tab[selected] > .tab-stack > .tab-background {
-  background-color: var(--zia-active-tab-bg-folder, rgba(0,0,0,.36)) !important;
-  box-shadow: var(--zia-glass-edge-lit, 0 1px 4px rgba(0,0,0,.2)) !important;
-  border-radius: var(--zia-tab-radius, 11px) !important;
 }
 /* v0.2.8: own site groups look like a compact Zia folder WITHOUT
    Advanced Tab Groups. Do not restyle native Zen folders or user-made groups. */
