@@ -348,6 +348,8 @@ async function main(){
   assert.deepEqual(container.children,ziaOrder,
     'without a mocked Zia drop, our delegated path must not mutate the DOM');
   root.removeAttribute('zia-dragging-tab');
+  assert(api.commit({kind:'group',source,target:first,before:true},
+    {kind:'group',parent:strip}), 'restore native-test source ordering');
 
   // The gap math must also work when moving DOWN, where Zia shifts
   // intervening rows upward. The preview must already occupy the exact
