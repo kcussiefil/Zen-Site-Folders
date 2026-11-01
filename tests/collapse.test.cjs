@@ -23,9 +23,11 @@ const frames = async () => {
   await Promise.resolve();
 };
 const tick = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
+  // Promise.allSettled(native.finished) crosses several microtask turns
+  // before its cleanup callback enqueues requestAnimationFrame.
+  for (let i = 0; i < 8; i++) await Promise.resolve();
   await frames();
+  for (let i = 0; i < 3; i++) await Promise.resolve();
 };
 
 class FakeAnimation {
