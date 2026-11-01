@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.1.4
+// @version      0.1.5
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV014) return;
-  window.__zenSiteFoldersV014 = true;
+  if (window.__zenSiteFoldersV015) return;
+  window.__zenSiteFoldersV015 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -488,7 +488,16 @@
   function startWave() {
     const separator = workspace()?.node.querySelector('.pinned-tabs-container-separator');
     if (!separator) return;
-    ensureWave(separator);
+    const svg = ensureWave(separator);
+    const line = separator.querySelector(':scope > toolbarseparator');
+    if (svg && line) {
+      // Align the effect with the actual native separator's current geometry.
+      // It adjusts automatically when Undo appears or the sidebar is resized.
+      const hostRect = separator.getBoundingClientRect();
+      const lineRect = line.getBoundingClientRect();
+      svg.style.setProperty('--zsf-wave-left', Math.max(0, lineRect.left - hostRect.left).toFixed(1) + 'px');
+      svg.style.setProperty('--zsf-wave-width', Math.max(0, lineRect.width).toFixed(1) + 'px');
+    }
     separator.classList.add('zsf-is-sorting');
     waveStart = performance.now();
     waveEnding = false;
@@ -525,16 +534,21 @@
   }
 
   function updateButtons() {
-    const current = workspace();
+    // Every Space has its own separator; the undo snapshot is per workspace.
+    // Avoid global duplicate IDs, and keep inactive Spaces in sync too.
     const snapshots = readSnapshots();
-    const hasUndo = !!(current && snapshots[current.id]);
-    const undoButton = current?.node.querySelector('#zsf-undo-button');
-    const sortButton = current?.node.querySelector('#zsf-sort-button');
-    if (undoButton) {
-      undoButton.hidden = !hasUndo;
-      undoButton.disabled = running;
+    for (const node of document.querySelectorAll('zen-workspace')) {
+      const separator = node.pinnedTabsContainer?.separatorElement ||
+        node.querySelector('.pinned-tabs-container-separator');
+      if (!separator) continue;
+      const undoButton = separator.querySelector('.zsf-undo-button');
+      const sortButton = separator.querySelector('.zsf-sort-button');
+      if (undoButton) {
+        undoButton.hidden = !Boolean(snapshots[node.id]);
+        undoButton.disabled = running;
+      }
+      if (sortButton) sortButton.disabled = running;
     }
-    if (sortButton) sortButton.disabled = running;
   }
 
   function toast(message) {
@@ -621,43 +635,47 @@
   }
 
   function addButton() {
-    const current = workspace();
-    if (!current) return;
-    const separator = current.node.querySelector('.pinned-tabs-container-separator');
-    if (!separator || separator.closest('.zen-library-spaces, zen-library')) return;
-    let sortButton = separator.querySelector('#zsf-sort-button');
-    if (!sortButton) {
-      sortButton = document.createXULElement('toolbarbutton');
-      sortButton.id = 'zsf-sort-button';
-      sortButton.setAttribute('tooltiptext', '依網站整理分頁（整理前會保存還原快照）');
-      sortButton.setAttribute('aria-label', '依網站整理分頁');
-      sortButton.addEventListener('command', () => organize().catch(e => console.error(TAG, e)));
-      separator.insertBefore(sortButton, separator.firstChild);
+    // Zen creates one native pinned-tabs separator per Space. Install into
+    // all of them, not just the one that happened to be active at startup.
+    // The native toolbarseparator already has flex=1, keeping Clear at right.
+    for (const node of document.querySelectorAll('zen-workspace')) {
+      const separator = node.pinnedTabsContainer?.separatorElement ||
+        node.querySelector('.pinned-tabs-container-separator');
+      if (!separator || separator.closest('.zen-library-spaces, zen-library')) continue;
+      const line = separator.querySelector(':scope > toolbarseparator');
+      if (!line) continue;
+
+      let sortButton = separator.querySelector('.zsf-sort-button');
+      if (!sortButton) {
+        sortButton = document.createXULElement('toolbarbutton');
+        sortButton.classList.add('zsf-sort-button');
+        sortButton.setAttribute('tooltiptext', '依網站整理分頁（整理前會保存還原快照）');
+        sortButton.setAttribute('aria-label', '依網站整理分頁');
+        sortButton.addEventListener('command', () => organize().catch(e => console.error(TAG, e)));
+        separator.insertBefore(sortButton, line);
+      }
+
+      let undoButton = separator.querySelector('.zsf-undo-button');
+      if (!undoButton) {
+        undoButton = document.createXULElement('toolbarbutton');
+        undoButton.classList.add('zsf-undo-button');
+        undoButton.setAttribute('tooltiptext', '還原整理前的分頁順序及群組（不關閉任何分頁）');
+        undoButton.setAttribute('aria-label', '還原整理前的分頁');
+        undoButton.addEventListener('command', () => undo().catch(e => console.error(TAG, e)));
+        separator.insertBefore(undoButton, line);
+      }
+
+      // Remove the v0.1.4 extra spacer if a live-reload preserved it.
+      // Zen's own toolbarseparator already expands to fill remaining space.
+      separator.querySelector(':scope > .zsf-sort-spacer')?.remove();
+      ensureWave(separator);
     }
-    let undoButton = separator.querySelector('#zsf-undo-button');
-    if (!undoButton) {
-      undoButton = document.createXULElement('toolbarbutton');
-      undoButton.id = 'zsf-undo-button';
-      undoButton.setAttribute('tooltiptext', '還原整理前的分頁順序及群組（不關閉任何分頁）');
-      undoButton.setAttribute('aria-label', '還原整理前的分頁');
-      undoButton.addEventListener('command', () => undo().catch(e => console.error(TAG, e)));
-      separator.insertBefore(undoButton, sortButton.nextSibling);
-    }
-    // Left: sort + undo; central native divider; right: Zen Clear Tabs.
-    // No wrapper around controls; don't change Zia's existing button handlers.
-    if (!separator.querySelector('toolbarseparator') &&
-        !separator.querySelector('.zsf-sort-spacer')) {
-      const spacer = document.createXULElement('spacer');
-      spacer.classList.add('zsf-sort-spacer');
-      spacer.setAttribute('flex', '1');
-      separator.insertBefore(spacer, undoButton.nextSibling);
-    }
-    ensureWave(separator);
     updateButtons();
   }
 
   function initialize() {
-    if (!window.gBrowser?.tabContainer || !window.gZenWorkspaces) {
+    if (!window.gBrowser?.tabContainer || !window.gZenWorkspaces ||
+        !document.querySelector('zen-workspace .pinned-tabs-container-separator')) {
       initTimer = setTimeout(initialize, 1000);
       return;
     }
@@ -672,11 +690,16 @@
       // build. Group creation/moves must happen only from the explicit button.
       // This prevents competing re-entrant sorts during Zia folder animations.
     });
-    window.addEventListener('zen-workspace-switched', () => {
-      setTimeout(() => { addButton(); reapplyAppearance(); }, 150);
+    // Zen updates the Space list with this event. Normal switching doesn't
+    // necessarily emit it, but every existing Space already has its controls.
+    window.addEventListener('ZenWorkspacesUIUpdate', () => {
+      setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
+    });
+    window.addEventListener('AfterWorkspacesSessionRestore', () => {
+      setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV014 = { organize, undo, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV015 = { organize, undo, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
