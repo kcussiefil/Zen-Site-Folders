@@ -467,8 +467,9 @@
   }
   function finish(event) {
     if (!active) { pending = null; return; }
-    const slot = active.previewSlot === undefined ?
-      chooseSlot(active, point(event).x, point(event).y) : active.previewSlot;
+    // The release coordinate is authoritative: a drag may end at a new
+    // location without another mousemove/dragover event being dispatched.
+    const slot = chooseSlot(active, point(event).x, point(event).y);
     const context = active;
     if (!slot) { reset(); return; }
     reset(true);
