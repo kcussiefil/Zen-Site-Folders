@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.3.4
+// @version      0.3.5
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV034) return;
-  window.__zenSiteFoldersV034 = true;
+  if (window.__zenSiteFoldersV035) return;
+  window.__zenSiteFoldersV035 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -1239,7 +1239,7 @@
           sortOwnedGroupNewestFirst(group);
       }, 80);
     });
-    window.__zenSiteFoldersV034 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV035 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();

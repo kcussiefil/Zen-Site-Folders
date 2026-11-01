@@ -110,8 +110,8 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   class FakeMutationObserver { observe() {} disconnect() {} }
   vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
-  const api = window.__zsfMenuV034;
-  assert.equal(api.version, '0.3.4');
+  const api = window.__zsfMenuV035;
+  assert.equal(api.version, '0.3.5');
   const event = { target: label, screenX: 30, screenY: 40, prevented: false,
     composedPath: () => [label, group],
     preventDefault() { this.prevented = true; }, stopPropagation() {}, stopImmediatePropagation() {} };

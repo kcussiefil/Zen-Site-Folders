@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Unpinned site groups with Zia-native selected-tab appearance preserved through smooth collapse, animated sound bars and glass hover cards.",
+  "description": "Unpinned website groups with Zia-native styling, visual drag previews and drop guides, animated sound bars and safe undo.",
   "author": "kcussiefil",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -30,6 +30,12 @@
         "chrome://browser/content/browser.xhtml"
       ],
       "loadOrder": 10
+    },
+    "site-folders-drag.uc.js": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ],
+      "loadOrder": 40
     }
   },
   "tags": [
@@ -42,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T11:53:49.111Z"
+  "updatedAt": "2026-11-01T12:08:36.906Z"
 }

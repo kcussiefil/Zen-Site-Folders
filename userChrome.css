@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.4 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.3.5 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -446,3 +446,97 @@ tab-group[data-zsf-site] > .tab-group-label-container > .tab-group-label::after 
 
 /* No extra visible toolbar buttons; the native XUL context menu is attached
    to our group's existing label only. */
+
+
+/* v0.3.5 — non-interactive drag affordances for unpinned website groups.
+   The native Zen/Zia drag engine owns movement and drop acceptance. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site][data-zsf-drag-source]
+> .tab-group-label-container {
+  opacity: .53 !important;
+  background: color-mix(in srgb, currentColor 8%, transparent) !important;
+  outline: 1px dashed color-mix(in srgb, currentColor 26%, transparent) !important;
+  outline-offset: -1px !important;
+}
+#zsf-drag-ghost { /* intentionally unused; class is the public selector */ }
+.zsf-drag-ghost {
+  position: fixed !important;
+  z-index: 2147483645 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  max-width: min(250px, calc(100vw - 12px)) !important;
+  min-height: 42px !important;
+  padding: 7px 11px !important;
+  box-sizing: border-box !important;
+  background: color-mix(in srgb, var(--zia-tab-card-bg, #28282b) 82%, transparent) !important;
+  color: var(--toolbar-color, #f4f4f5) !important;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent) !important;
+  border-radius: var(--zia-tab-card-radius, 12px) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25) !important;
+  backdrop-filter: blur(18px) saturate(1.3) !important;
+  -moz-window-dragging: no-drag !important;
+  pointer-events: none !important;
+  opacity: .98 !important;
+}
+.zsf-drag-ghost[hidden], .zsf-drop-guide[hidden] {
+  display: none !important;
+}
+.zsf-drag-ghost[data-invalid] {
+  opacity: .6 !important;
+  border-style: dashed !important;
+}
+.zsf-drag-icon {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  flex: 0 0 18px !important;
+  object-fit: contain !important;
+}
+.zsf-drag-texts {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+}
+.zsf-drag-title {
+  display: block !important;
+  font: inherit !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.zsf-drag-hint {
+  display: block !important;
+  font-size: 10px !important;
+  font-weight: 400 !important;
+  opacity: .7 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.zsf-drop-guide {
+  position: fixed !important;
+  z-index: 2147483646 !important;
+  height: 2px !important;
+  border-radius: 2px !important;
+  background: var(--zen-primary-color, var(--toolbar-color, #f2f2f2)) !important;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.19), 0 0 9px rgba(255,255,255,.23) !important;
+  pointer-events: none !important;
+}
+.zsf-drop-guide::before {
+  content: "" !important;
+  position: absolute !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: inherit !important;
+  top: -2px !important;
+  left: -3px !important;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .zsf-drag-ghost { transition: opacity 90ms ease-out !important; }
+  .zsf-drop-guide { transition: top 85ms ease-out, left 85ms ease-out !important; }
+}
