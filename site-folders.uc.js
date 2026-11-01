@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.2.4
+// @version      0.2.5
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV024) return;
-  window.__zenSiteFoldersV024 = true;
+  if (window.__zenSiteFoldersV025) return;
+  window.__zenSiteFoldersV025 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -370,7 +370,7 @@
           if (seen.has(id)) reject('群組內分頁的識別碼重複');
           seen.add(id);
           ids.push(id);
-          tabs.push({ id, group: element.id, pinned: !!tab.pinned });
+          tabs.push({ id, group: element.id, pinned: !!tab.pinned, url: tabURL(tab) });
         }
         elements.push({
           type: 'group', id: element.id, label: String(element.label || element.getAttribute('label') || ''),
@@ -387,7 +387,7 @@
         if (!id) reject('一般分頁無法保存識別碼');
         if (seen.has(id)) reject('一般分頁的識別碼重複');
         seen.add(id);
-        tabs.push({ id, group: null, pinned: !!element.pinned });
+        tabs.push({ id, group: null, pinned: !!element.pinned, url: tabURL(element) });
         elements.push({ type: 'tab', id });
       } else if (tag === 'tab-group' && element.hasAttribute('split-view-group')) {
         // No modified tabs in splits: leave that wrapper untouched.
@@ -402,7 +402,7 @@
       reject('有 ' + missing.length + ' 個分頁無法完整備份；可能位於特殊資料夾');
     }
     if (!elements.length && needsBackup.length) reject('沒有找到可還原的原始分頁順序');
-    return { version: 3, workspaceId: current.id, capturedAt: Date.now(), elements, tabs, createdFolders: [] };
+    return { version: 4, workspaceId: current.id, capturedAt: Date.now(), elements, tabs, createdFolders: [] };
   }
 
   function findTabMap(current) {
@@ -424,6 +424,163 @@
     return map;
   }
 
+  // Match pre-existing custom IDs first. Version 4 can additionally recover
+  // exactly one missing tab from exactly one live tab with the identical URL.
+  // Never infer matches from site, title, position or duplicate URLs.
+  function matchSnapshotTabs(current, snapshot) {
+    const all = allWorkspaceTabs(current.node, current.id);
+    const existing = findTabMap(current);
+    const map = new Map();
+    const used = new Set();
+    for (const original of snapshot.tabs) {
+      const tab = existing.get(original.id);
+      if (tab?.isConnected && !used.has(tab)) {
+        map.set(original.id, tab);
+        used.add(tab);
+      }
+    }
+    let urlMatches = 0;
+    if (snapshot.version >= 4) {
+      const missing = snapshot.tabs.filter(item => !map.has(item.id));
+      const count = new Map();
+      for (const item of missing) {
+        if (item.url) count.set(item.url, (count.get(item.url) || 0) + 1);
+      }
+      const live = new Map();
+      for (const tab of all) {
+        if (used.has(tab)) continue;
+        const url = tabURL(tab);
+        if (!url) continue;
+        if (!live.has(url)) live.set(url, []);
+        live.get(url).push(tab);
+      }
+      for (const item of missing) {
+        if (!item.url || count.get(item.url) !== 1) continue;
+        const candidates = live.get(item.url) || [];
+        if (candidates.length !== 1) continue;
+        const tab = candidates[0];
+        if (!tab?.isConnected || used.has(tab) || !!tab.pinned !== !!item.pinned) continue;
+        // Do not associate a URL opened after capture with a lost old tab.
+        let created = 0;
+        try {
+          for (const store of sessionStores()) {
+            created = Number(store?.getCustomTabValue?.(tab, STORE_KEY)) || 0;
+            if (created > 0) break;
+          }
+        } catch (_) {}
+        if (created > snapshot.capturedAt + 1000) continue;
+        map.set(item.id, tab);
+        used.add(tab);
+        urlMatches++;
+      }
+    }
+    return { map, urlMatches };
+  }
+
+  // User-invoked escape hatch for v3 snapshots whose custom tab IDs no longer
+  // exist. Never closes, recreates, reloads, pins or guesses tab identities.
+  // All tabs in this mod's generated ordinary groups are left in their current
+  // relative location; full historical order cannot be established from v3.
+  async function rescueSiteGroups() {
+    if (running) return;
+    const current = workspace();
+    const stored = readSnapshots();
+    const snapshot = current && stored[current.id];
+    if (!snapshot || ![3, 4].includes(snapshot.version)) {
+      toast('目前沒有可救援的網站整理快照', true);
+      return;
+    }
+    const created = snapshot.createdFolders || [];
+    const getCreated = () => created.map(id => findGroupByID(current, id)).filter(group =>
+      group?.isConnected && !group.isZenFolder &&
+      group.parentElement === current.node.tabsContainer &&
+      siteOfGroup(group)
+    );
+    if (snapshot.rescueCompleted) {
+      const remaining = getCreated().some(group => [...group.querySelectorAll('tab')]
+        .some(tab => tab.group === group && !tab.hasAttribute('zen-empty-tab')));
+      if (remaining) {
+        toast('仍有本工具建立的群組包含分頁；拒絕清除快照', true);
+        return;
+      }
+      if (!window.confirm('已核對所有分頁都還存在，且接受無法保證恢復舊有順序嗎？\n確定後只清除本工作區的舊版整理快照（不可復原），不會關閉任何分頁。')) return;
+      const next = { ...stored };
+      delete next[current.id];
+      if (writeSnapshots(next)) {
+        toast('已清除舊整理快照，可以重新建立新的安全備份');
+      } else {
+        toast('快照清除失敗，原備份仍保留', true);
+      }
+      updateButtons();
+      return;
+    }
+    const groups = getCreated();
+    if (!groups.length) {
+      toast('找不到這次整理建立的群組；未變更分頁或快照', true);
+      return;
+    }
+    const candidates = [];
+    for (const group of groups) {
+      for (const tab of group.querySelectorAll('tab')) {
+        if (tab.group !== group) continue;
+        if (!eligible(tab)) {
+          toast('救援停止：群組包含特殊或釘選分頁，未變更任何分頁', true);
+          return;
+        }
+        candidates.push({ tab, group });
+      }
+    }
+    if (!candidates.length) {
+      toast('這次整理建立的群組沒有一般分頁；未變更任何分頁', true);
+      return;
+    }
+    if (!window.confirm('安全拆分將解除本工具建立的 ' + groups.length +
+      ' 個網站群組中的 ' + candidates.length + ' 個分頁，不關閉或重新載入網頁。\n' +
+      '也可能解除整理後才加入群組的分頁，且無法保證回到原本的確切排序。\n' +
+      '目前快照會保留。確定執行嗎？')) return;
+    const browser = window.gBrowser;
+    if (typeof browser?.ungroupTab !== 'function') {
+      toast('Zen 不支援解除群組，未修改任何分頁', true); return;
+    }
+    running = true;
+    updateButtons();
+    let moved = 0, errors = 0;
+    try {
+      for (const group of groups) {
+        try { group.collapsed = false; } catch (_) {}
+        for (const {tab} of candidates.filter(item => item.group === group)) {
+          if (!tab?.isConnected || tab.group !== group) { errors++; continue; }
+          try {
+            browser.ungroupTab(tab);
+            if (tab.isConnected && tab.group !== group) moved++;
+            else errors++;
+          } catch (error) {
+            errors++;
+            console.warn(TAG, 'Rescue ungroup failed', error);
+          }
+        }
+      }
+      const remaining = getCreated().reduce((n, group) => n +
+        [...group.querySelectorAll('tab')].filter(tab => tab.group === group).length, 0);
+      if (!errors && !remaining) {
+        snapshot.rescueCompleted = true;
+        snapshot.rescueAt = Date.now();
+        if (!writeSnapshots(stored)) {
+          toast('分頁已拆分，但無法儲存救援進度；舊快照尚在', true);
+        } else {
+          toast('已安全拆分 ' + moved + ' 個分頁；未關閉分頁。請核對後右鍵箭頭完成備份清理');
+        }
+      } else {
+        toast('救援部分完成：已拆分 ' + moved + ' 個；仍有 ' +
+          remaining + ' 個分頁留在群組，錯誤 ' + errors + '；保留快照', true);
+      }
+    } finally {
+      running = false;
+      updateButtons();
+      setTimeout(reapplyAppearance, 150);
+    }
+  }
+
   function findGroupByID(current, id) {
     return getGroups(current.node).find(g => g.id === id) || null;
   }
@@ -436,7 +593,8 @@
     const stored = readSnapshots();
     const snapshot = current && stored[current.id];
     if (!snapshot) { toast('這個工作區沒有可還原的整理紀錄'); return; }
-    if (snapshot.version !== 3) { toast('舊版快照不支援新版安全還原，請勿重試；請保留備份', true); return; }
+    if (snapshot.version !== 3 && snapshot.version !== 4) { toast('這份舊版快照不支援自動還原；保留備份', true); return; }
+    if (snapshot.rescueCompleted) { toast('已進行安全拆分。核對分頁後，可右鍵還原箭頭清除舊快照', true); return; }
     if (!window.gBrowser?.ungroupTab || !window.gBrowser?.moveTabBefore) {
       toast('Zen 的原生還原 API 不可用，未修改分頁'); return;
     }
@@ -445,13 +603,14 @@
     let errors = 0;
     let missing = 0;
     try {
-      const tabMap = findTabMap(current);
+      const match = matchSnapshotTabs(current, snapshot);
+      const tabMap = match.map;
       missing = snapshot.tabs.filter(x => !tabMap.has(x.id)).length;
       if (missing) {
         console.warn(TAG, 'Restore blocked before modification: missing tab IDs', {
-          missing, snapshotTotal: snapshot.tabs.length, found: tabMap.size
+          missing, snapshotTotal: snapshot.tabs.length, found: tabMap.size, urlMatches: match.urlMatches, createdFolders: snapshot.createdFolders?.length || 0
         });
-        toast('還原暫停：有 ' + missing + ' 個分頁無法辨識；未繼續移動分頁，備份保留。請重新啟動 Zen 後再檢查', true);
+        toast('還原暫停：仍有 ' + missing + ' 個分頁無法辨識。未移動分頁、備份保留；可右鍵還原箭頭執行安全拆分', true);
         return;
       }
       // v3 modifies only ordinary groups; never unpin or delete a Zen folder.
@@ -738,7 +897,7 @@
       const absent = required.filter(name => typeof browser?.[name] !== 'function');
       if (absent.length) throw new Error('缺少還原 API：' + absent.join('、'));
       const stored = readSnapshots();
-      if (stored[current.id] && stored[current.id].version !== 3) {
+      if (stored[current.id] && stored[current.id].version !== 4) {
         throw new Error('仍有舊版快照；為保護分頁已拒絕整理，請先備份並處理舊版工作階段');
       }
       if (!stored[current.id]) {
@@ -767,7 +926,7 @@
             // A crash/partial sort must not leave an untracked owned folder.
             const saved = readSnapshots();
             const snapshot = saved[current.id];
-            if (!snapshot || snapshot.version !== 3) throw new Error('快照已遺失');
+            if (!snapshot || snapshot.version !== 4) throw new Error('快照已遺失');
             const id = 'zsf-' + String(Services.uuid.generateUUID()).replace(/[{}]/g, '');
             snapshot.createdFolders.push(id);
             if (!writeSnapshots(saved)) throw new Error('資料夾 ID 無法保存');
@@ -847,9 +1006,14 @@
       if (!undoButton) {
         undoButton = document.createXULElement('toolbarbutton');
         undoButton.classList.add('zsf-undo-button');
-        undoButton.setAttribute('tooltiptext', '還原整理前的分頁順序及群組（不關閉任何分頁）');
+        undoButton.setAttribute('tooltiptext', '左鍵還原；右鍵救援拆分／確認清除已核對快照（不關閉分頁）');
         undoButton.setAttribute('aria-label', '還原整理前的分頁');
         undoButton.addEventListener('command', () => undo().catch(e => console.error(TAG, e)));
+        undoButton.addEventListener('contextmenu', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          rescueSiteGroups().catch(e => console.error(TAG, 'Safe rescue failed:', e));
+        });
         separator.insertBefore(undoButton, line);
       }
 
@@ -887,7 +1051,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV024 = { organize, undo, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV025 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
