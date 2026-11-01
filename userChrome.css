@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.2.7 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.2.8 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -187,4 +187,198 @@
   margin-block: 0 !important;
   pointer-events: none !important;
   overflow: hidden !important;
+}
+
+/* v0.2.8: own site groups look like a compact Zia folder WITHOUT
+   Advanced Tab Groups. Do not restyle native Zen folders or user-made groups. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs > zen-workspace tab-group[data-zsf-site]:not([split-view-group]),
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  margin-block: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+}
+
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container {
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-height: var(--zia-tab-height, 32px) !important;
+  margin: 0 !important;
+  padding: 0 8px 0 0 !important;
+  border: 0 !important;
+  border-radius: var(--zia-tab-radius, 11px) !important;
+  background: transparent !important;
+  cursor: pointer !important;
+}
+
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container:hover {
+  background-color: color-mix(in srgb, currentColor 6%, transparent) !important;
+}
+
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 26px !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  color: inherit !important;
+  font-weight: var(--zia-folder-weight, 550) !important;
+  text-overflow: ellipsis !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+}
+
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .zsf-favicon {
+  display: block !important;
+  margin: 0 8px 0 10px !important;
+  align-self: center !important;
+}
+
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 0 3px !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container > :is(.tabbrowser-tab, tab) {
+  margin-inline-start: 14px !important;
+  margin-inline-end: 0 !important;
+  max-width: calc(100% - 14px) !important;
+}
+
+/* Native collapsed attribute is the single source of truth. ATG is not
+   required to suppress children, including when Zen leaves aria-hidden unset. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group]) > .tab-group-container,
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group]) > .tab-group-container:not([hidden]) {
+  display: none !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Self-contained folder hover list: inherits Zia's neutral glass variables but
+   intentionally has its own ID, DOM and event handlers. Zia's native popup is
+   never replaced or patched; existing Zen folders remain fully Zia-managed. */
+#zsf-folder-hover-card {
+  position: fixed !important;
+  display: block;
+  z-index: 2147483646 !important;
+  box-sizing: border-box !important;
+  width: 222px !important;
+  max-width: min(260px, calc(100vw - 16px)) !important;
+  max-height: min(72vh, 560px) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background-color: var(--zia-tab-card-bg, rgb(38, 38, 42)) !important;
+  color: rgba(255, 255, 255, .84) !important;
+  border: 1px solid rgba(255, 255, 255, .10) !important;
+  border-radius: var(--zia-tab-card-radius, 14px) !important;
+  box-shadow: var(--zia-glass-edge-lit, 0 10px 30px rgba(0, 0, 0, .33)) !important;
+  backdrop-filter: blur(18px) saturate(1.3) !important;
+  -moz-window-dragging: no-drag !important;
+  pointer-events: auto !important;
+}
+
+#zsf-folder-hover-card[hidden] { display: none !important; }
+
+#zsf-folder-hover-card[data-open] {
+  animation: zsf-folder-hover-in .20s cubic-bezier(.2, .9, .3, 1) both;
+}
+
+@keyframes zsf-folder-hover-in {
+  from { opacity: 0; transform: scale(.96) translateX(-3px); }
+  to { opacity: 1; transform: scale(1) translateX(0); }
+}
+
+#zsf-folder-hover-card > .zsf-hover-list {
+  box-sizing: border-box;
+  max-height: min(70vh, 540px);
+  overflow-y: auto;
+  padding: 8px 7px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .18) transparent;
+}
+
+#zsf-folder-hover-card .zsf-hover-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: var(--zia-tab-height, 32px);
+  min-height: 28px;
+  padding: 0 8px;
+  margin: 2px 0;
+  border: 0;
+  border-radius: var(--zia-tab-radius, 10px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--zia-text-size, 12px);
+  cursor: default;
+  outline-offset: -2px;
+}
+
+#zsf-folder-hover-card .zsf-hover-row:hover,
+#zsf-folder-hover-card .zsf-hover-row:focus-visible {
+  background: rgba(255, 255, 255, .095);
+}
+
+#zsf-folder-hover-card .zsf-hover-row[data-selected="true"] {
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+}
+
+#zsf-folder-hover-card .zsf-hover-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex: 0 0 16px;
+  opacity: .9;
+}
+
+#zsf-folder-hover-card .zsf-hover-title {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#zsf-folder-hover-card .zsf-hover-new {
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, .065);
+  border-radius: 0;
+  opacity: .65;
+}
+
+:root[zia-light] #zsf-folder-hover-card {
+  color: rgba(28, 28, 32, .82) !important;
+  border-color: rgba(0, 0, 0, .10) !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .14) !important;
+}
+
+:root[zia-light] #zsf-folder-hover-card .zsf-hover-row:is(:hover, :focus-visible),
+:root[zia-light] #zsf-folder-hover-card .zsf-hover-row[data-selected="true"] {
+  background-color: rgba(0, 0, 0, .07);
+  color: rgb(28, 28, 32);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #zsf-folder-hover-card[data-open] { animation: none !important; }
 }
