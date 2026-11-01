@@ -562,7 +562,15 @@ const finish = arguments[arguments.length - 1];
     const head = g.querySelector(':scope > .tab-group-label-container');
     const from = head.getBoundingClientRect(), to = prefix.getBoundingClientRect();
     assert(from.height>5 && to.height>5, 'native group and prefix must be visible');
-    const x=to.left+Math.min(25,to.width/2), y=to.top+2;
+    const sep=root().querySelector('.pinned-tabs-container-separator') ||
+      gZenWorkspaces.activeWorkspaceElement.querySelector('.pinned-tabs-container-separator');
+    const sepRect=sep?.getBoundingClientRect();
+    const x=to.left+Math.min(25,to.width/2), y=to.top+Math.max(5,to.height*.2);
+    const initial={fromTop:from.top,fromHeight:from.height,fromBottom:from.bottom,
+      targetTop:to.top,targetHeight:to.height,releaseY:y,
+      sepTop:sepRect?.top,sepBottom:sepRect?.bottom,
+      groupPinned:g.pinned,prefixPinned:prefix.pinned,
+      groupParent:g.parentElement?.className,prefixParent:prefix.parentElement?.className};
     const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
       drag.prepareZiaGroupDrag(g);
     assert(prepared, 'native adapter should be active before OS dragstart: ' +
@@ -602,7 +610,7 @@ const finish = arguments[arguments.length - 1];
         folder:g.isZenFolder,
         rootZia:document.documentElement.hasAttribute('zia-dragging-tab'),
         prefixShift:prefix.style.getPropertyValue('transform'),
-        sourceTransform:g.style.getPropertyValue('transform')}));
+        sourceTransform:g.style.getPropertyValue('transform'), initial}));
     assert(g.parentElement===root() && !g.isZenFolder,
       'group remains top-level and ordinary after Zia drop');
     assert(same(order(g),h.tabs),'Zia drop must not change member order or identity');
