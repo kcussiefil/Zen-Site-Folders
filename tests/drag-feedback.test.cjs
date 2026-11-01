@@ -96,6 +96,13 @@ function move(sourceNode,targetNode,before){
   const array=sourceNode.parentElement.children;
   array.splice(array.indexOf(sourceNode),1);
   array.splice(array.indexOf(targetNode)+(before?0:1),0,sourceNode);
+  // Native Zen relayouts the actual tab rows after moving them. Simulate
+  // refreshed row geometry or the next pointer target would hit stale rows.
+  if (sourceNode.localName === 'tab') {
+    array.filter(n => n.localName === 'tab').forEach((tab, i) => {
+      tab.box = { ...tab.box, top: 165 + i * 35, bottom: 199 + i * 35 };
+    });
+  }
   moveLog.push({sourceNode,targetNode,before});
 }
 const window={localName:'window',innerWidth:1024,innerHeight:800,
