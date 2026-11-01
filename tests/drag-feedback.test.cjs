@@ -298,6 +298,28 @@ async function main(){
     composedPath:()=>[outsideTab,strip],
     dataTransfer:{setDragImage(){unrelatedBlanked=true;}}});
   assert(!unrelatedBlanked,'unrelated native drag preview must stay intact');
+
+  // Zia implements its own native tab row displacement and target
+  // calculation. Our preview MUST disappear when Zia starts that drag,
+  // otherwise our CSS masks Zia's actual moving row.
+  const ziaOrder = container.children.slice();
+  emit(strip,'mousedown',tabEvent(100,175,C));
+  emit(window,'mousemove',tabEvent(100,202,C));
+  const duplicate = root.querySelector('.zsf-drag-ghost');
+  assert(duplicate && !duplicate.hidden, 'fixture starts the custom fallback preview');
+  root.setAttribute('zia-dragging-tab','true');
+  emit(window,'dragover',tabEvent(100,210,C));
+  assert(duplicate.hidden && !C.hasAttribute('data-zsf-drag-member'),
+    'native Zia drag must stay visible and its own visual position authoritative');
+  const beforeNativeRelease = moveLog.length;
+  emit(window,'drop',tabEvent(100,180,C));
+  await waitNative();
+  assert.equal(moveLog.length,beforeNativeRelease,
+    'custom drag must not reorder native Zia member tabs a second time');
+  assert.deepEqual(container.children,ziaOrder,
+    'without a mocked Zia drop, our delegated path must not mutate the DOM');
+  root.removeAttribute('zia-dragging-tab');
+
   api.destroy();
   assert.equal((events.get('window:mousemove')||[]).length,0,'no leaked listeners');
   console.log('PASS: native grey picture suppression, group sibling avoidance, edge autoscroll, original drag safety and cleanup');
