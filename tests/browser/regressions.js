@@ -251,7 +251,8 @@ const finish = arguments[arguments.length - 1];
     const space = gZenWorkspaces.activeWorkspaceElement;
     const scroll = space.scrollbox?.scrollbox;
     assert(scroll && typeof scroll.scrollTop === 'number', 'real Zen arrowscrollbox scrollport must exist');
-    assert(space.hasAttribute('data-zsf-scroll-stable'), 'only a Space owning site groups must opt out of anchoring');
+    await delay(120); // observe the asynchronous structural group registration
+    assert(space.hasAttribute('data-zsf-scroll-stable'), 'owning Space must opt out of anchoring, not every native workspace');
     // This triggers Zia's CSS sound bars on a REAL tab without requiring a
     // remote video stream; video decode/GPU contention is a physical follow-up.
     const tab = h.tabs[1];
@@ -266,10 +267,17 @@ const finish = arguments[arguments.length - 1];
     gBrowser.selectedTab = tab;
     h.group.collapsed = true;
     await idle(h.group);
-    scroll.scrollTop = Math.min(180, scroll.scrollHeight - scroll.clientHeight - 30);
-    await delay(140);
+    const wanted = Math.min(180, scroll.scrollHeight - scroll.clientHeight - 30);
+    scroll.scrollTop = wanted;
+    // Zen's arrowscrollbox supports smooth scrolling. Setting scrollTop
+    // starts an asynchronous scroll animation in some versions, so an
+    // immediate measurement would incorrectly attribute that motion to
+    // expanding the folder. Require a fully settled baseline first.
+    await delay(900);
     const start = scroll.scrollTop;
-    assert(start > 30, 'must begin with nonzero actual scrollTop');
+    assert(start > 30 && Math.abs(start - wanted) <= 2,
+      'baseline must be at a stable nonzero position before opening: ' +
+      JSON.stringify({start, wanted}));
     const samples = [start];
     h.group.collapsed = false;
     // Sample mid-animation and after settling, not just the final frame.
