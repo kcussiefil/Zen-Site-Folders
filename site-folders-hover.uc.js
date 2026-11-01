@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.2.8
+// @version      0.2.9
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfGroupHoverV028) return;
-  window.__zsfGroupHoverV028 = true;
+  if (window.__zsfGroupHoverV029) return;
+  window.__zsfGroupHoverV029 = true;
 
   const TAG = '[ZenSiteFoldersHover]';
   const XHTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -189,10 +189,17 @@
             typeof browser?.moveTabToExistingGroup !== 'function') {
           throw new Error('Zen lacks ordinary group tab API');
         }
+        const previousTop = members(group)[0] || null;
         const tab = browser.addTrustedTab('about:newtab', { relatedToCurrent: false });
         if (!tab?.isConnected || tab.pinned) throw new Error('New tab was not ordinary');
         browser.moveTabToExistingGroup(tab, group);
         if (tab.group !== group) throw new Error('Could not add new tab to group');
+        // A newly created member is newest: insert at the top, but do not
+        // reposition the group itself or turn the tab into a pinned tab.
+        if (previousTop?.isConnected && previousTop.group === group &&
+            typeof browser.moveTabBefore === 'function') {
+          browser.moveTabBefore(tab, previousTop);
+        }
         browser.selectedTab = tab;
       } catch (error) {
         console.warn(TAG, 'New tab in ordinary group unavailable:', error);
@@ -263,10 +270,10 @@
     handlers.length = 0;
     card?.remove();
     card = null;
-    if (window.__zsfGroupHoverV028 === api) delete window.__zsfGroupHoverV028;
+    if (window.__zsfGroupHoverV029 === api) delete window.__zsfGroupHoverV029;
   }
-  const api = { start, destroy, closeNow, version: '0.2.8' };
-  window.__zsfGroupHoverV028 = api;
+  const api = { start, destroy, closeNow, version: '0.2.9' };
+  window.__zsfGroupHoverV029 = api;
   if (document.readyState === 'complete') {
     if (!start()) window.addEventListener('load', start, { once: true });
   } else {
