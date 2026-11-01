@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Ordinary unpinned website and about-page tab groups, cached icons, neutral styling, animated divider and persistent one-click undo. Zia-compatible.",
+  "description": "Ordinary unpinned website groups with Zia-like folder rows and an independent right-side hover list, neutral styling and protected undo.",
   "author": "kcussiefil",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -12,6 +12,12 @@
       "include": [
         "chrome://browser/content/browser.xhtml"
       ]
+    },
+    "site-folders-hover.uc.js": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ],
+      "loadOrder": 20
     }
   },
   "tags": [
@@ -24,5 +30,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T09:18:42.764Z"
+  "updatedAt": "2026-11-01T09:40:56.650Z"
 }
