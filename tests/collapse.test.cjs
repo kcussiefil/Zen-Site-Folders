@@ -13,6 +13,10 @@ assert(src.includes('box.animate(frames'), 'actual container height must animate
 assert(src.includes('nativeGeometryAnimations'), 'native Zia animation must take priority');
 assert(css.includes('[data-zsf-animating]'), 'layout stays visible while an animation runs');
 assert(css.includes('[data-zsf-collapse-settled]'), 'final closed state must be protected');
+assert(!/> \.tab-group-container > tab\[selected\] > \.tab-stack > \.tab-background\s*\{/.test(css),
+  'own CSS must NOT replace Zia native selected background, glow and shine in collapsed state');
+assert(!/min-height: var\(--zia-tab-height, 34px\) !important;\s*pointer-events: auto !important;/.test(css),
+  'selected row must keep its natural height across expanded and collapsed states');
 assert(!/moveTabBefore|moveTabToExistingGroup|pinTab\(|unpinTab\(|removeTab\(/.test(src),
   'collapse must never change any live tab');
 
@@ -96,10 +100,18 @@ async function main() {
   const listeners = {};
   let observer = null;
   let reducedMotion = false;
+  let selectedWithSpacing = null;
   const window = {
     gBrowser: { tabContainer: { querySelectorAll: () => groups } },
     matchMedia: () => ({ matches: reducedMotion }),
-    getComputedStyle: () => ({ paddingTop: '0px', paddingBottom: '0px' }),
+    getComputedStyle: node => {
+      if (selectedWithSpacing && node === selectedWithSpacing)
+        return { marginTop: '4px', marginBottom: '3px' };
+      if (selectedWithSpacing && node === group.box)
+        return { paddingTop: '2px', paddingBottom: '3px' };
+      return { paddingTop: '0px', paddingBottom: '0px',
+        marginTop: '0px', marginBottom: '0px' };
+    },
     addEventListener(type, fn) { listeners[type] = fn; },
     removeEventListener(type) { delete listeners[type]; },
   };
@@ -115,8 +127,8 @@ async function main() {
     setTimeout() { throw new Error('fixed timer must not be used'); },
     clearTimeout() {},
   });
-  const api = window.__zsfCollapseV033;
-  assert.equal(api.version, '0.3.3');
+  const api = window.__zsfCollapseV034;
+  assert.equal(api.version, '0.3.4');
   assert(existing.hasAttribute('data-zsf-collapse-settled'),
     'restored collapsed group must be settled immediately');
 
@@ -181,18 +193,20 @@ async function main() {
     getBoundingClientRect: () => ({ height: 34 }),
   };
   group.tabs = [selected, { isConnected: true, group, selected: false, hasAttribute: () => false }];
+  selectedWithSpacing = selected;
   group.box.height = 300;
   api.prepare(group);
   group.setAttribute('collapsed', 'true');
   listeners.TabGroupCollapse({ target: group, type: 'TabGroupCollapse' });
   await frames();
   call = group.box.created.at(-1);
-  assert.equal(call.keyframes.at(-1).height, '34px',
-    'selected member stays visible in the closed group');
+  assert.equal(call.keyframes.at(-1).height, '46px',
+    'collapse target must include selected tab height, margins and container padding');
   call.animation.finish();
   await tick();
   assert(group.hasAttribute('data-zsf-collapse-settled'));
   assert(selected.isConnected && selected.group === group);
+  selectedWithSpacing = null;
 
   // Native Zia geometry animation exists: do NOT start a second spring.
   group.tabs = [];
