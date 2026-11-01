@@ -238,11 +238,15 @@ async function main(){
   const beforeSwitch = container.children.slice();
   emit(strip, 'mousedown', tabEvent(100,210,B));
   emit(window, 'mousemove', tabEvent(100,180,B));
+  assert.notDeepEqual(container.children,beforeSwitch,
+    'new live drag must update the DOM before dropping');
   emit(window, 'drop', tabEvent(100,180,B));
+  await Promise.resolve();
+  const acceptedOrder = container.children.slice();
   window.gZenWorkspaces.activeWorkspace = 'space2';
   await waitNative();
-  assert(container.children.every((tab, i) => tab === beforeSwitch[i]),
-    'a workspace switch without UI notification must invalidate pending correction');
+  assert(container.children.every((tab, i) => tab === acceptedOrder[i]),
+    'workspace switch must not permit a late correction after accepted live drop');
   // A real Zen arrowscrollbox need not be in the pointer event path.
   const port=new Node('scrollbox');
   port.scrollTop=110;port.scrollHeight=1000;port.clientHeight=320;
