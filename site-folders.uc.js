@@ -565,8 +565,25 @@
       // It adjusts automatically when Undo appears or the sidebar is resized.
       const hostRect = separator.getBoundingClientRect();
       const lineRect = line.getBoundingClientRect();
-      svg.style.setProperty('--zsf-wave-left', Math.max(0, lineRect.left - hostRect.left).toFixed(1) + 'px');
-      svg.style.setProperty('--zsf-wave-width', Math.max(0, lineRect.width).toFixed(1) + 'px');
+      const undoButton = separator.querySelector('.zsf-undo-button:not([hidden])');
+      const sortButton = separator.querySelector('.zsf-sort-button:not([hidden])');
+      const clearButton = separator.querySelector('.zen-tabs-clear-button, .zen-clear-tabs-button');
+      // The wave is restricted to the free line segment, even while undo is
+      // shown or CSS layout is animating. Never paint over toolbar controls.
+      const controlRight = Math.max(
+        lineRect.left,
+        ...( [sortButton, undoButton]
+          .filter(button => button && button.getClientRects().length)
+          .map(button => button.getBoundingClientRect().right + 6))
+      );
+      const start = Math.max(lineRect.left, controlRight);
+      const end = Math.max(start, Math.min(lineRect.right,
+        clearButton?.getClientRects().length
+          ? clearButton.getBoundingClientRect().left - 6 : lineRect.right));
+      const width = Math.max(0, end - start);
+      svg.style.setProperty('--zsf-wave-left', Math.max(0, start - hostRect.left).toFixed(1) + 'px');
+      svg.style.setProperty('--zsf-wave-width', width.toFixed(1) + 'px');
+      svg.style.visibility = width >= 12 ? 'visible' : 'hidden';
     }
     separator.classList.add('zsf-is-sorting');
     waveStart = performance.now();
@@ -741,7 +758,7 @@
           }
           if (!folder || folder.isZenFolder || !folder.isConnected ||
               folder.parentElement !== current.node.tabsContainer) {
-            throw new Error('沒有建立出原生 Zen 資料夾');
+            throw new Error('沒有建立出一般分頁群組');
           }
           for (const {tab} of items) {
             if (!tab.isConnected) { errors++; continue; }
@@ -769,7 +786,7 @@
         toast(`整理不完整：${completed}/${requested} 個分頁已入資料夾，可按還原`, true);
         console.warn(TAG, 'Ordinary group sort incomplete', { requested, completed, errors });
       } else {
-        toast(`已整理 ${completed} 個分頁，新增 ${newFolders} 個 Zen 資料夾`);
+        toast(`已整理 ${completed} 個分頁，新增 ${newFolders} 個一般分頁群組`);
       }
     } catch (e) {
       console.error(TAG, 'Sort stopped:', e);
