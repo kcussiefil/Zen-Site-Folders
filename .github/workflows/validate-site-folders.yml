@@ -84,6 +84,8 @@ jobs:
           fi
       - name: Verify isolated Zia group landing first
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "Zia single-controller group drop" --output native-results/zia-landing
+      - name: Verify legacy pointer-only group fallback separately
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "whole group drag animates neighbour avoidance" --output native-results/group-fallback
       - name: Prove regressions fail on v0.3.8
         shell: bash
         run: |
