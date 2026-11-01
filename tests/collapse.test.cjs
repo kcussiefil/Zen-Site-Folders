@@ -36,8 +36,9 @@ async function main() {
   unrelated.matches = () => false;
   const events = {};
   let observer;
+  const groupsInTabContainer = [existing];
   const window = {
-    gBrowser: { tabContainer: { querySelectorAll: () => [existing] } },
+    gBrowser: { tabContainer: { querySelectorAll: () => groupsInTabContainer } },
     addEventListener(name, fn) { events[name] = fn; },
     removeEventListener(name) { delete events[name]; },
     matchMedia() { return { matches: false }; },
@@ -55,6 +56,10 @@ async function main() {
   assert(existing.hasAttribute('data-zsf-collapse-settled'),
     'restored collapsed groups must settle immediately');
   assert(!dynamic.hasAttribute('data-zsf-collapse-settled'));
+  // Simulate real DOM insertion: a dynamic group stays reachable through
+  // gBrowser.tabContainer.querySelectorAll during unload cleanup.
+  groupsInTabContainer.push(dynamic);
+  observer.fn([{ type: 'childList', addedNodes: [dynamic] }]);
 
   dynamic.setAttribute('collapsed', 'true');
   events.TabGroupCollapse({ target: dynamic });
