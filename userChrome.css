@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.1.7 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.1.9 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -100,7 +100,7 @@
 /* Notice rendering uses Zen's built-in .zen-toast rules from zen-popup.css.
    No custom colors, border, padding, height, font, or animation overrides. */
 /* Native/Advanced Tab Groups colour, scoped to our own site groups only. */
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) {
+#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) {
   --tab-group-color: transparent !important;
   --tab-group-stroke: currentColor !important;
   --tab-group-background-color: transparent !important;
@@ -124,7 +124,7 @@
   border: 0 !important;
   box-shadow: none !important;
 }
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container {
+#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container {
   background: transparent !important;
   background-image: none !important;
   border: 0 !important;
@@ -132,16 +132,16 @@
   box-shadow: none !important;
 }
 /* Suppress tinted group rails, but keep Zia's empty/drop placeholders. */
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container::after {
+#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-container::after {
   background-color: transparent !important;
 }
 /* For these groups only, replace Zia/ATG decoration with the cached site icon.
    Do not touch icons on user-created folders, Spaces or Essentials. */
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-folder-icon,
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-icon-container {
+#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-folder-icon,
+#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-icon-container {
   display: none !important;
 }
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .zsf-favicon {
+#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .zsf-favicon {
   width: 16px !important;
   min-width: 16px !important;
   max-width: 16px !important;
@@ -155,7 +155,15 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label {
+#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label {
   margin-inline-start: 0 !important;
   padding-inline-start: 0 !important;
+}
+/* Only our own Zen folders: hide the colored folder icon so the website
+   favicon can occupy the same label space without fighting Zia's styles. */
+#tabbrowser-tabs zen-folder[data-zsf-site] > .tab-group-label-container > .tab-group-folder-icon {
+  display: none !important;
+}
+#tabbrowser-tabs zen-folder[data-zsf-site] > .tab-group-label-container > .zsf-favicon {
+  pointer-events: none !important;
 }
