@@ -92,7 +92,14 @@ const finish = arguments[arguments.length - 1];
     assert(h.tabs[1].getBoundingClientRect().height > 10, 'selected tab in collapsed folder must be visible');
     assert(h.tabs.filter(tab => tab !== h.tabs[1]).every(tab => tab.getBoundingClientRect().height <= 1), 'other rows stay collapsed');
     gBrowser.selectedTab = h.tabs[3]; await idle(h.group);
-    assert(h.tabs[3].getBoundingClientRect().height > 10 && h.tabs[1].getBoundingClientRect().height <= 1, 'selection transfer must reveal only the new row');
+    assert(h.tabs[3].getBoundingClientRect().height > 10 && h.tabs[1].getBoundingClientRect().height <= 1,
+      'selection transfer must reveal only the new row: ' + JSON.stringify(h.tabs.map(t => ({
+        name: t.zsfTestName, selected: t.selected,
+        active: t.hasAttribute('folder-active'),
+        height: t.getBoundingClientRect().height,
+        opacity: getComputedStyle(t).opacity,
+        style: t.getAttribute('style')
+      }))));
     gBrowser.selectedTab = h.prefix; await idle(h.group);
     assert(h.group.groupContainer.getBoundingClientRect().height <= 1, 'leaving active folder must close remaining room');
     assert(!h.group.isZenFolder, 'ordinary group must remain ordinary');
