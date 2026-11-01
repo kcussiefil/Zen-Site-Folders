@@ -1,0 +1,27 @@
+{
+  "id": "zen-site-folders",
+  "name": "Zen Site Folders",
+  "description": "Website folders, cached icons, neutral styling, animated divider and persistent one-click undo. Zia-compatible.",
+  "author": "kcussiefil",
+  "version": "0.1.4",
+  "style": {
+    "chrome": "userChrome.css"
+  },
+  "scripts": {
+    "site-folders.uc.js": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    }
+  },
+  "tags": [
+    "zen",
+    "tabs",
+    "groups",
+    "local"
+  ],
+  "fork": [
+    "zen"
+  ],
+  "homepage": "https://github.com/kcussiefil/Zen-Site-Folders"
+}
