@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.2.9
+// @version      0.3.0
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfMenuV029) return;
+  if (window.__zsfMenuV030) return;
   const TAG = '[ZenSiteFoldersMenu]';
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
   const ARCHIVE_KEY = 'zsf-archived-snapshots-v1';
@@ -126,8 +126,9 @@
     }
     const snapshot = all[spaceId];
     if (!snapshot) return true;
-    if (!promptConfirm(action + '會變更目前整理狀態，原本的「還原」結果可能不再適用。\n' +
-      '是否先完整封存舊快照，再執行此操作？')) return false;
+    // Caller has already shown the single explicit action confirmation.
+    // Archive automatically, verify read-back, and abort on every failure.
+    // Do not ask for a second confirmation here.
     const archives = read(ARCHIVE_KEY);
     if (!archives) {
       alertUser('既有封存資料損毀；為保護分頁已取消操作。');
@@ -276,11 +277,13 @@
   }
 
   function ungroup(group) {
-    if (!promptConfirm('確定解除「' + group.label + '」群組？\n分頁會保留，但排列位置可能改變。')) return;
-    if (!archiveSnapshotForMutation('解除群組')) return;
     const list = members(group);
     const browser = window.gBrowser;
-    if (typeof browser?.ungroupTab !== 'function') { alertUser('目前 Zen 不支援解除群組。'); return; }
+    if (typeof browser?.ungroupTab !== 'function') { alertUser('目前 Zen 不支援解散群組。'); return; }
+    if (!promptConfirm('確定解散「' + group.label + '」群組？\n' +
+      '共 ' + list.length + ' 個分頁會全部保留，但排列可能改變。\n' +
+      '如果有整理快照，會自動先封存備份。')) return;
+    if (!archiveSnapshotForMutation('解散群組')) return;
     let count = 0;
     for (const tab of list) {
       try { browser.ungroupTab(tab); if (tab.isConnected && tab.group !== group) count++; }
@@ -291,13 +294,15 @@
 
   function deleteGroup(group) {
     const list = members(group);
-    if (!promptConfirm('刪除「' + group.label + '」將關閉裡面的 ' +
-      list.length + ' 個分頁。\n這個操作不同於「解除群組」。確定繼續嗎？')) return;
+    if (typeof window.gBrowser?.removeTabGroup !== 'function') {
+      alertUser('目前 Zen 不支援刪除群組。'); return;
+    }
+    if (!promptConfirm('確定刪除「' + group.label + '」？\n' +
+      '這會關閉 ' + list.length + ' 個分頁，並可能導致未儲存內容遺失。\n' +
+      '如果有整理快照，會自動先封存備份。')) return;
     if (!archiveSnapshotForMutation('刪除群組')) return;
     try {
       if (!group.isConnected) return;
-      if (typeof window.gBrowser?.removeTabGroup !== 'function')
-        throw new Error('缺少 removeTabGroup API');
       window.gBrowser.removeTabGroup(group);
     } catch (error) {
       console.error(TAG, 'Delete group failed', error);
@@ -308,13 +313,13 @@
   function convert(group) {
     const list = members(group);
     if (!list.length) return;
-    if (!promptConfirm('將「' + group.label + '」轉為 Zen 原生資料夾，會把 ' +
-      list.length + ' 個普通分頁移到上方釘選區。\n' +
-      '這與目前「普通分頁不釘選」的設定不同。確定轉換嗎？')) return;
-    if (!archiveSnapshotForMutation('轉為 Zen 資料夾')) return;
+    const createFolder = window.gZenFolders?.createFolder;
+    if (typeof createFolder !== 'function') { alertUser('Zen 分頁夾功能目前不可用。'); return; }
+    if (!promptConfirm('確定把「' + group.label + '」轉為 Zen 分頁夾？\n' +
+      list.length + ' 個分頁將移往上方釘選區。\n' +
+      '如果有整理快照，會自動先封存備份。')) return;
+    if (!archiveSnapshotForMutation('轉為 Zen 分頁夾')) return;
     try {
-      const createFolder = window.gZenFolders?.createFolder;
-      if (typeof createFolder !== 'function') throw new Error('Zen folder API unavailable');
       const folder = createFolder.call(window.gZenFolders, list, {
         label: group.label || '資料夾',
         renameFolder: false,
@@ -418,10 +423,10 @@
       }
     });
     menu.appendChild(xul('menuseparator'));
-    menu.appendChild(xul('menuitem', '解除群組', ungroup));
-    menu.appendChild(xul('menuitem', '轉為 Zen 資料夾（會釘選）', convert));
+    menu.appendChild(xul('menuitem', '解散群組', ungroup));
+    menu.appendChild(xul('menuitem', '轉為 Zen 分頁夾（上方釘選）', convert));
     menu.appendChild(xul('menuseparator'));
-    menu.appendChild(xul('menuitem', '刪除群組（關閉分頁）', deleteGroup));
+    menu.appendChild(xul('menuitem', '刪除群組', deleteGroup));
     bind(menu, 'popuphidden', () => { activeGroup = null; });
     (document.getElementById('mainPopupSet') || document.documentElement).appendChild(menu);
     return menu;
@@ -465,8 +470,8 @@
     menu?.remove();
   }
 
-  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.2.9' };
-  window.__zsfMenuV029 = api;
+  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.0' };
+  window.__zsfMenuV030 = api;
   if (document.readyState === 'complete') init();
   else bind(window, 'load', init, { once: true });
   bind(window, 'unload', destroy, { once: true });
