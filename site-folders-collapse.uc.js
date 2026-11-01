@@ -94,7 +94,10 @@
   function scheduleScan() {
     if (queuedScan || dead) return;
     queuedScan = true;
-    window.requestAnimationFrame(() => {
+    // Structural changes must settle before the next native paint and
+    // before a restore/ungroup operation verifies tab visibility. Using
+    // requestAnimationFrame delayed this under headless/background windows.
+    queueMicrotask(() => {
       queuedScan = false;
       if (!dead) scan();
     });
@@ -106,6 +109,13 @@
           record.attributeName === 'collapsed' && ours(record.target)) {
         // Never scan every tab in the whole sidebar for a single folder.
         sync(record.target);
+      } else if (record.type === 'attributes' &&
+                 record.attributeName === 'data-zsf-site' &&
+                 ours(record.target)) {
+        // Set the scroll guard immediately, not one animation frame late.
+        record.target.closest?.('zen-workspace')?.setAttribute(
+          'data-zsf-scroll-stable', 'true');
+        structural = true;
       } else {
         structural = true;
       }
@@ -113,13 +123,14 @@
     if (structural) scheduleScan();
   }
   function onTabSelect(event) {
-    // Selection can only affect the previous and next collapsed groups.
-    // Avoid full document querying for every tab change.
-    const selected = window.gBrowser?.selectedTab || event.target;
-    const previous = lastSelected;
-    lastSelected = selected;
-    for (const group of new Set([previous?.group, selected?.group]))
+    lastSelected = event?.target?.localName === 'tab' ?
+      event.target : window.gBrowser?.selectedTab || null;
+    // The native selected state can move between groups asynchronously.
+    // Querying just the previous/current group missed some real Zen restore
+    // paths. Iterate already-known groups in memory, not the whole DOM.
+    for (const group of states.keys()) {
       if (ours(group) && group.collapsed) sync(group);
+    }
   }
   function start() {
     const tabs = window.gBrowser?.tabContainer;
