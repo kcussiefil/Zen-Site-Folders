@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.4.2
+// @version      0.4.3
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -10,7 +10,9 @@
   const GROUP = 'tab-group[data-zsf-site]:not([split-view-group])';
   const NS = 'http://www.w3.org/1999/xhtml';
   const THRESHOLD = 6;
+  const EDGE_ZONE = 52;
   let pending = null, active = null, ghost = null, guide = null;
+  let nativeBlank = null, autoFrame = 0, autoPointer = null;
   let started = false, destroyed = false;
   const listeners = [];
   const tasks = new Set();
@@ -83,6 +85,110 @@
     const box = document.getElementById('navigator-toolbox')?.getBoundingClientRect?.();
     return !!box && x >= box.left && x <= box.right &&
       y >= box.top && y <= box.bottom;
+  }
+  // The real scrollport is often inside Zen's arrowscrollbox shadow DOM,
+  // not an ancestor in mouseEvent.composedPath().
+  function findScrollPort(subject) {
+    const space = subject?.item?.closest?.('zen-workspace') ||
+      window.gZenWorkspaces?.activeWorkspaceElement;
+    const candidates = [
+      space?.scrollbox?.scrollbox,
+      space?.scrollbox,
+      space?.querySelector?.('.workspace-arrowscrollbox')?.scrollbox,
+      space?.querySelector?.('.workspace-arrowscrollbox'),
+      window.gZenWorkspaces?.activeWorkspaceElement?.scrollbox?.scrollbox
+    ];
+    return candidates.find(node => node?.isConnected !== false &&
+      typeof node.scrollTop === 'number' && node.scrollHeight > node.clientHeight + 3 &&
+      typeof node.getBoundingClientRect === 'function') || null;
+  }
+  function captureScrolls(event, port) {
+    const found = (event.composedPath?.() || []).filter(node =>
+      node?.scrollHeight > node?.clientHeight && typeof node.scrollTop === 'number');
+    if (port && !found.includes(port)) found.push(port);
+    return found.map(node => ({ node, top: node.scrollTop }));
+  }
+  function scrollSpeed(subject, x, y) {
+    const port = subject?.scrollPort;
+    if (!port) return 0;
+    const nav = document.getElementById('navigator-toolbox')?.getBoundingClientRect?.();
+    const box = port.getBoundingClientRect();
+    if (!nav || x < nav.left || x > nav.right ||
+        x < box.left - 8 || x > box.right + 8) return 0;
+    const sep = subject.item?.closest?.('zen-workspace')
+      ?.querySelector?.('.pinned-tabs-container-separator')?.getBoundingClientRect?.();
+    const top = Math.max(box.top, (sep?.bottom || box.top) + 3);
+    const bottom = Math.min(box.bottom, nav.bottom);
+    if (bottom - top < EDGE_ZONE * 2 || y < top - 20 || y > bottom + 20) return 0;
+    const upper = y < top + EDGE_ZONE ? -(top + EDGE_ZONE - y) / EDGE_ZONE : 0;
+    const lower = y > bottom - EDGE_ZONE ? (y - bottom + EDGE_ZONE) / EDGE_ZONE : 0;
+    const edge = Math.max(-1, Math.min(1, upper || lower));
+    return edge ? Math.sign(edge) *
+      Math.max(2, Math.round(2 + 14 * Math.abs(edge) ** 1.5)) : 0;
+  }
+  function autoScrollTick() {
+    autoFrame = 0;
+    if (!active || !autoPointer || !active.scrollPort) return;
+    const { x, y } = autoPointer;
+    const speed = scrollSpeed(active, x, y);
+    if (!speed) return;
+    const port = active.scrollPort;
+    const before = port.scrollTop;
+    const max = Math.max(0, port.scrollHeight - port.clientHeight);
+    port.scrollTop = Math.min(max, Math.max(0, before + speed));
+    if (Math.abs(port.scrollTop - before) <= .1) return;
+    // Recompute against actual scrollTop; never move any tab in this loop.
+    update({ clientX: x, clientY: y }, false);
+    autoFrame = window.requestAnimationFrame?.(autoScrollTick) || 0;
+  }
+  function scheduleAutoScroll(x, y) {
+    autoPointer = { x, y };
+    if (!autoFrame && active?.scrollPort && scrollSpeed(active, x, y))
+      autoFrame = window.requestAnimationFrame?.(autoScrollTick) || 0;
+  }
+  function captureAvoidRows(subject) {
+    if (subject.kind !== 'group') return [];
+    return [...(subject.parent?.children || [])].filter(node =>
+      node === subject.item ||
+      (node.localName === 'tab-group' && !node.hasAttribute?.('split-view-group')) ||
+      (isPlainTab(node) && !node.group));
+  }
+  function beginAvoidance(subject) {
+    if (subject.kind !== 'group') return;
+    subject.avoidRows = captureAvoidRows(subject);
+    subject.avoidOffsets = new Map();
+    for (const node of subject.avoidRows) {
+      if (node === subject.item) continue;
+      node.setAttribute('data-zsf-drag-avoid', 'true');
+      node.style?.setProperty?.('--zsf-drag-avoid-y', '0px');
+    }
+  }
+  function updateAvoidance(subject, slot) {
+    if (subject?.kind !== 'group' || !subject.avoidRows) return;
+    const rows = subject.avoidRows;
+    const from = rows.indexOf(subject.item), target = rows.indexOf(slot?.target);
+    const insert = target < 0 ? from : target + (slot.before ? 0 : 1);
+    const height = Math.min(96, Math.max(34,
+      subject.item.getBoundingClientRect?.().height || rectOf(subject.item)?.height || 34));
+    for (let i = 0; i < rows.length; i++) {
+      const node = rows[i];
+      if (node === subject.item || !node?.isConnected) continue;
+      let dy = 0;
+      if (from >= 0 && target >= 0) {
+        if (insert < from && i >= insert && i < from) dy = height;
+        else if (insert > from + 1 && i > from && i < insert) dy = -height;
+      }
+      if (subject.avoidOffsets.get(node) === dy) continue;
+      subject.avoidOffsets.set(node, dy);
+      node.style?.setProperty?.('--zsf-drag-avoid-y', dy + 'px');
+    }
+  }
+  function clearAvoidance(subject) {
+    for (const node of subject?.avoidRows || []) {
+      node.removeAttribute?.('data-zsf-drag-avoid');
+      node.style?.removeProperty?.('--zsf-drag-avoid-y');
+    }
+    subject?.avoidOffsets?.clear();
   }
   function slotForGroup(source, x, y, layout) {
     if (!ownGroup(source) || !withinSidebar(x, y)) return null;
@@ -224,9 +330,10 @@
     ghost.querySelector('.zsf-drag-hint').textContent = '拖曳以調整順序';
     ghost.removeAttribute('data-invalid');
     ghost.hidden = false;
+    if (subject.kind === 'group') beginAvoidance(subject);
     update(event);
   }
-  function update(event) {
+  function update(event, scheduleScroll = true) {
     if (!active?.item?.isConnected || !ghost) return;
     const { x, y } = point(event);
     const width = ghost.offsetWidth || 178;
@@ -236,6 +343,8 @@
     ghost.style.top = Math.round(Math.max(6,
       Math.min(y + 12, (window.innerHeight || 800) - height - 6))) + 'px';
     const slot = chooseSlot(active, x, y);
+    updateAvoidance(active, slot);
+    if (scheduleScroll) scheduleAutoScroll(x, y);
     if (!slot) {
       guide.hidden = true;
       ghost.setAttribute('data-invalid', 'true');
@@ -305,6 +414,10 @@
     return true;
   }
   function reset() {
+    if (autoFrame) window.cancelAnimationFrame?.(autoFrame);
+    autoFrame = 0;
+    autoPointer = null;
+    clearAvoidance(active);
     if (active?.kind === 'group')
       active.item?.removeAttribute?.('data-zsf-drag-source');
     if (active?.kind === 'tab')
@@ -334,10 +447,10 @@
     if (event.button !== 0) return;
     const source = sourceFromEvent(event);
     generation++;
+    const port = source ? findScrollPort(source) : null;
     pending = source ? { ...source, x: event.clientX, y: event.clientY,
       workspace: window.gZenWorkspaces?.activeWorkspace,
-      scrolls: (event.composedPath?.() || []).filter(node => node?.scrollHeight > node?.clientHeight && typeof node.scrollTop === 'number')
-        .map(node => ({ node, top: node.scrollTop })),
+      scrollPort: port, scrolls: captureScrolls(event, port),
       layout: captureLayout(source), root: source.parent.parentElement,
       collapsed: source.parent.collapsed } : null;
   }
@@ -354,6 +467,10 @@
     if (source && !source.layout) {
       source.layout = captureLayout(source);
       source.workspace = window.gZenWorkspaces?.activeWorkspace;
+      source.scrollPort = findScrollPort(source);
+      source.scrolls = captureScrolls(event, source.scrollPort);
+      source.root = source.parent?.parentElement;
+      source.collapsed = source.parent?.collapsed;
     }
     if (source) {
       activate(source, event);
@@ -362,6 +479,25 @@
   }
   function onOver(event) {
     if (active) update(event);
+  }
+  function hideNativeDragImage(event) {
+    // Window bubble phase runs after native dragstart handlers. Keep the
+    // real DataTransfer/drop events; suppress only the OS ghost picture.
+    if (!active?.item?.isConnected || !event.dataTransfer?.setDragImage)
+      return;
+    const fromEvent = sourceFromEvent(event);
+    if (fromEvent && fromEvent.item !== active.item) return;
+    try {
+      if (!nativeBlank) {
+        nativeBlank = create('div', 'zsf-native-blank-drag');
+        nativeBlank.style.cssText =
+          'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+        document.documentElement.appendChild(nativeBlank);
+      }
+      event.dataTransfer.setDragImage(nativeBlank, 0, 0);
+    } catch (error) {
+      console.warn('[ZenSiteFoldersDrag] Native preview unavailable:', error);
+    }
   }
   function onKey(event) {
     if (event.key === 'Escape') { generation++; reset(); }
@@ -374,6 +510,7 @@
     bind(tabs, 'mousedown', onDown, true);
     bind(window, 'mousemove', onMove, true);
     bind(window, 'dragstart', onStart, true);
+    bind(window, 'dragstart', hideNativeDragImage, false);
     bind(window, 'dragover', onOver, true);
     bind(window, 'drop', finish, true);
     bind(window, 'mouseup', () => { if (!active?.native) reset(); }, true);
@@ -394,13 +531,15 @@
     if (destroyed) return;
     destroyed = true;
     reset();
+    nativeBlank?.remove();
+    nativeBlank = null;
     generation++;
     for (const [node, name, fn, opts] of listeners)
       try { node.removeEventListener(name, fn, opts); } catch (_) {}
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.4.1', chooseSlot, commit, beforeMutation, nativeIdle };
+  const api = { start, destroy, version: '0.4.3', chooseSlot, commit, beforeMutation, nativeIdle };
   window.__zsfDragV037 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
