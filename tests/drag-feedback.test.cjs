@@ -8,8 +8,8 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8'
 new vm.Script(src);
 assert(!/\bpreventDefault\(|\bstopPropagation\(|\bsetDragImage\(|dropEffect\s*=/.test(src),
   'must never interrupt native Zen/Zia events');
-assert(!/\.(?:pinTab|unpinTab|removeTab|moveTabToExistingGroup)\s*\(/.test(src),
-  'drag must not pin, close or alter tab group membership');
+assert(!/\.(?:pinTab|unpinTab|removeTab)\s*\(/.test(src),
+  'drag must not pin or close tabs');
 assert(!core.includes("window.addEventListener('TabGrouped'"),
   'user manual drag must not get silently undone by newest-first on TabGrouped');
 assert(css.includes('.zsf-drag-ghost') && css.includes('.zsf-drop-guide'));
@@ -119,7 +119,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.3.7');
+assert(api&&api.version==='0.3.8');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -194,6 +194,17 @@ async function main(){
     'native fallback must support member moving to group start');
   assert(!memberGhost.isConnected,'member ghost removed on drop');
   assert(!src.includes("window.addEventListener('TabGrouped'"));
+  // A normal Zen workspace switch need not emit ZenWorkspacesUIUpdate.
+  // The pending transaction must check the actual workspace identity too.
+  window.gZenWorkspaces = { activeWorkspace: 'space1' };
+  const beforeSwitch = container.children.slice();
+  emit(strip, 'mousedown', tabEvent(100,210,B));
+  emit(window, 'mousemove', tabEvent(100,180,B));
+  emit(window, 'drop', tabEvent(100,180,B));
+  window.gZenWorkspaces.activeWorkspace = 'space2';
+  await waitNative();
+  assert(container.children.every((tab, i) => tab === beforeSwitch[i]),
+    'a workspace switch without UI notification must invalidate pending correction');
   api.destroy();
   assert.equal((events.get('window:mousemove')||[]).length,0,'no leaked listeners');
   console.log('PASS: group-to-first actual move, member reorder and persistence, native-only API, invalid drop, visual cleanup');

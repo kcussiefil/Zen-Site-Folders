@@ -1,4 +1,4 @@
-# Zen Site Folders 0.3.7 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.3.8 — 一般分頁區域群組（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內依記錄的開啟時間由新到舊排序（沒有開啟時間的歷史分頁依原位置估算），圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,14 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.3.8 收合、拖放與保序解散修復（2026-11-01）
+
+- 補齊一般網站群組的原生垂直動畫入口，讓 Zen／Zia 負責收合、展開及目前分頁的過渡。
+- 修正切換分頁時的焦點移交誤清除拖曳來源；以拖曳前排列計算落點，等原生落地完成再校正一次，取代固定 38ms。
+- 解散、安全拆分與還原先等待未完成的拖放，再擷取真正 DOM 順序；等待非同步移出與空群組移除後驗證，保留快照及還原箭頭。
+- 六套 Node 測試及 Linux／macOS 各十項真實 Zen 回歸測試納入 Actions，包含原始 v0.3.7 的失敗對照。
+- 依使用者發布指示準備 Pre-release；**實體觸控板與動畫觀感仍未驗證**，不以無視窗測試代替實機驗收。
 
 ## v0.3.7 原生 Zia 開合、手動拖曳與無確認安全拆分（2026-11-01）
 
@@ -238,3 +246,9 @@
 ## 測試範圍
 
 完成靜態衝突檢查、JavaScript 語法檢查、模擬整理／反覆整理／還原舊群組／不關閉新分頁／備份寫入失敗就停止的測試，以及與 Zia 2.114.1 CSS/JS 的選擇器及事件設計比對。**未在你的 Zen + Zia + Advanced Tab Groups 實際安裝環境做端到端測試，無法保證視覺或分組行為 100% 無衝突。**
+### Work-mode regression repair
+
+The v0.3.8 repair was prepared on `fix/native-folder-order-regressions` from v0.3.7.
+See [source and timing audit](docs/regression-audit.md) and
+[macOS Zen + Zia acceptance steps](docs/macOS-acceptance.md).
+Publication is explicitly user-authorized; physical trackpad and animation acceptance remain unverified.

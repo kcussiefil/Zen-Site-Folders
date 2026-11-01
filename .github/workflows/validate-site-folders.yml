@@ -30,7 +30,7 @@ jobs:
           node --check site-folders-drag.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.3.7' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.3.8' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -39,3 +39,60 @@ jobs:
           node tests/undo-secondary-click.test.cjs
           node tests/drag-feedback.test.cjs
           node tests/ordered-rescue.test.cjs
+
+  native-browser:
+    name: Native Zen + Zia (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: z1n-k/zia
+          ref: 4bbd6c57338970765b18eb54de162267ae115dfa
+          path: .runtime/zia
+          persist-credentials: false
+      - name: Install pinned Zen 1.24b
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .runtime/browser
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            curl --fail --location --retry 2 https://github.com/zen-browser/desktop/releases/download/1.24b/zen.linux-x86_64.tar.xz -o .runtime/zen.tar.xz
+            echo '323f2682e73e38247a51fbcc75e5628ed2bb9b404db00cf9cf16af329a916fae  .runtime/zen.tar.xz' | sha256sum --check
+            tar -xJf .runtime/zen.tar.xz -C .runtime/browser
+            echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/zen/zen" >> "$GITHUB_ENV"
+          else
+            curl --fail --location --retry 2 https://github.com/zen-browser/desktop/releases/download/1.24b/zen.macos-universal.dmg -o .runtime/zen.dmg
+            echo '22915ea7e4f0c97a817b85b6ceba9b878317b8e1059390fcfe70dabaac8db86b  .runtime/zen.dmg' | shasum -a 256 --check
+            hdiutil attach .runtime/zen.dmg -mountpoint "$RUNNER_TEMP/zen-volume" -nobrowse -readonly
+            trap 'hdiutil detach "$RUNNER_TEMP/zen-volume" >/dev/null || true' EXIT
+            zen_apps=( "$RUNNER_TEMP/zen-volume/"*.app )
+            [[ ${#zen_apps[@]} == 1 && -d "${zen_apps[0]}" ]]
+            ditto "${zen_apps[0]}" .runtime/browser/Zen.app
+            test -x .runtime/browser/Zen.app/Contents/MacOS/zen
+            hdiutil detach "$RUNNER_TEMP/zen-volume"
+            trap - EXIT
+            echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/Zen.app/Contents/MacOS/zen" >> "$GITHUB_ENV"
+          fi
+      - name: Prove regressions fail on v0.3.7
+        shell: bash
+        run: |
+          mkdir -p .runtime/baseline
+          git archive 5a3fe4a3d8d6cb33b69127238159feefefa30fad | tar -x -C .runtime/baseline
+          python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --repo .runtime/baseline --output native-results/baseline && exit 1 || test -f native-results/baseline/results.json
+          python3 tests/browser/check-baseline.py native-results/baseline/results.json
+      - name: Verify candidate against native tab objects, events and layout
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --output native-results/candidate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-zen-${{ matrix.os }}
+          path: native-results/

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.3.7
+// @version      0.3.8
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -280,7 +280,7 @@
     }
   }
 
-  function ungroup(group) {
+  async function ungroup(group) {
     const list = members(group);
     const helper = window.__zenSiteFoldersV037?.ungroupInDisplayOrder;
     if (typeof helper !== 'function') {
@@ -292,7 +292,7 @@
     // itself is explicit consent; archive and perform it without a modal.
     // Deleting a group or converting to pinned remains confirmed separately.
     if (!archiveSnapshotForMutation('解散群組', true)) return;
-    const result = helper(group, list);
+    const result = await helper(group, list);
     if (result.errors || result.moved !== list.length || !result.ordered) {
       alertUser('部分解散或順序驗證失敗：已解散 ' + result.moved +
         ' 個分頁，請核對。快照及還原箭頭仍保留。');
@@ -391,12 +391,12 @@
   function xul(name, label, handler) {
     const element = document.createXULElement(name);
     if (label != null) element.setAttribute('label', label);
-    if (handler) bind(element, 'command', () => {
+    if (handler) bind(element, 'command', async () => {
       // XUL may fire popuphidden before command. Persist the target on the
       // menu itself so the first click does not silently lose its group.
       const group = activeGroup || menu?.zsfTargetGroup;
       if (!validGroup(group)) return;
-      try { handler(group); }
+      try { await handler(group); }
       catch (error) { console.error(TAG, 'Menu action failed', error); alertUser('群組操作失敗，未進行後續動作。'); }
     });
     return element;
@@ -485,7 +485,7 @@
     menu?.remove();
   }
 
-  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.7' };
+  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.8' };
   window.__zsfMenuV037 = api;
   if (document.readyState === 'complete') init();
   else bind(window, 'load', init, { once: true });

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.3.7
+// @version      0.3.8
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -494,15 +494,33 @@
   // visible order. Capture the original top-to-bottom tab objects FIRST and
   // use only Firefox tab-moving APIs after every member is safely ungrouped.
   // Never close, recreate, pin, reload, or rewrite any tab identity.
-  function ungroupInDisplayOrder(group, orderedTabs = null) {
+  const ungrouping = new WeakSet();
+  async function ungroupInDisplayOrder(group, orderedTabs = null) {
+    const failure = { moved: 0, errors: 1, ordered: false };
+    if (!group || ungrouping.has(group)) return failure;
+    ungrouping.add(group);
+    try {
+      const drag = window.__zsfDragV037;
+      if (drag?.beforeMutation && !await drag.beforeMutation(group)) return failure;
+      return await detachInDisplayOrder(group, orderedTabs);
+    } finally {
+      ungrouping.delete(group);
+    }
+  }
+
+  async function detachInDisplayOrder(group, expectedTabs) {
     const browser = window.gBrowser;
-    const list = orderedTabs || [...(group?.querySelectorAll?.('tab') || [])]
+    // Snapshot actual DOM order only AFTER the accepted drop has settled.
+    // A caller's earlier list is an identity guard, never the source of order.
+    const list = [...(group?.querySelectorAll?.('tab') || [])]
       .filter(tab => tab.group === group);
     const result = { moved: 0, errors: 0, ordered: false };
     if (!group?.isConnected || group.isZenFolder || !list.length ||
         typeof browser?.ungroupTab !== 'function' ||
         (list.length > 1 && typeof browser?.moveTabBefore !== 'function') ||
-        list.some(tab => !eligible(tab) || tab.group !== group)) {
+        list.some(tab => !eligible(tab) || tab.group !== group) ||
+        (expectedTabs && (expectedTabs.length !== list.length ||
+          list.some(tab => !expectedTabs.includes(tab))))) {
       result.errors = Math.max(list.length, 1);
       return result;
     }
@@ -520,7 +538,7 @@
         continue;
       }
       try {
-        browser.ungroupTab(tab);
+        await browser.ungroupTab(tab);
         if (tab.isConnected && tab.group !== group && !tab.pinned) result.moved++;
         else result.errors++;
       } catch (error) {
@@ -534,26 +552,37 @@
       // sibling anchor survives; otherwise sort the newly ungrouped members
       // against one another. Reverse traversal guarantees A,B,C (not C,B,A).
       if (next?.isConnected && next.parentElement === originalParent) {
-        for (const tab of list) browser.moveTabBefore(tab, next);
+        for (const tab of list) await browser.moveTabBefore(tab, next);
       } else if (previous?.isConnected && previous.parentElement === originalParent &&
                  typeof browser.moveTabAfter === 'function') {
         let anchor = previous;
         for (const tab of list) {
-          browser.moveTabAfter(tab, anchor);
+          await browser.moveTabAfter(tab, anchor);
           anchor = tab;
         }
       } else {
         for (let i = list.length - 2; i >= 0; i--)
-          browser.moveTabBefore(list[i], list[i + 1]);
+          await browser.moveTabBefore(list[i], list[i + 1]);
       }
     } catch (error) {
       result.errors++;
       console.warn(TAG, 'Post-ungroup order restoration failed:', error);
       return result;
     }
-    const current = workspace();
-    const flat = current ? allWorkspaceTabs(current.node, current.id) :
-      [...(browser.tabs || [])];
+    if (window.__zsfDragV037?.nativeIdle &&
+        !await window.__zsfDragV037.nativeIdle(group)) {
+      result.errors++;
+      return result;
+    }
+    if (window.__zsfDragV037?.nativeIdle && group.isConnected && !group.tabs.length) {
+      // Empty group removal is queued by the native MutationObserver and may
+      // outlive its tab animations. Wait for removal before rescue inventory.
+      const deadline = Date.now() + 4000;
+      while (group.isConnected && Date.now() < deadline)
+        await new Promise(resolve => setTimeout(resolve, 16));
+      if (group.isConnected) { result.errors++; return result; }
+    }
+    const flat = [...(originalParent?.querySelectorAll?.('tab') || browser.tabs || [])];
     const positions = list.map(tab => flat.indexOf(tab));
     result.ordered = positions.every((n, i) => n >= 0 &&
       (!i || n === positions[i - 1] + 1));
@@ -594,6 +623,12 @@
   }
 
   async function rescueSiteGroups() {
+    if (running) return;
+    if (window.__zsfDragV037?.beforeMutation &&
+        !await window.__zsfDragV037.beforeMutation()) {
+      toast('分頁仍在移動中，請等待拖放完成後再操作；快照保留', true);
+      return;
+    }
     if (running) return;
     const current = workspace();
     const stored = readSnapshots();
@@ -692,7 +727,7 @@
       for (const { group, tabs } of candidates) {
         if (!group.isConnected) { errors++; continue; }
         if (tabs.length) {
-          const result = ungroupInDisplayOrder(group, tabs);
+          const result = await ungroupInDisplayOrder(group, tabs);
           moved += result.moved;
           errors += result.errors;
         }
@@ -737,6 +772,12 @@
   // Undo restores only identities in the snapshot. Tabs opened afterwards are
   // not closed or reloaded; closed tabs are never re-opened behind the user's back.
   async function undo() {
+    if (running) return;
+    if (window.__zsfDragV037?.beforeMutation &&
+        !await window.__zsfDragV037.beforeMutation()) {
+      toast('分頁仍在移動中，請等待拖放完成後再操作；快照保留', true);
+      return;
+    }
     if (running) return;
     const current = workspace();
     const stored = readSnapshots();
@@ -822,8 +863,7 @@
       for (const item of snapshot.elements.filter(x => x.type === 'group')) {
         const group = findGroupByID(current, item.id);
         if (!group) continue;
-        if (item.collapsed) group.setAttribute('collapsed', 'true');
-        else group.removeAttribute('collapsed');
+        group.collapsed = !!item.collapsed;
       }
       // Empty ordinary site groups are removed automatically by Firefox.
       const pendingFolders = 0;
@@ -1043,6 +1083,12 @@
   }
 
   async function organize() {
+    if (running) return;
+    if (window.__zsfDragV037?.beforeMutation &&
+        !await window.__zsfDragV037.beforeMutation()) {
+      toast('分頁仍在移動中，請等待拖放完成後再操作；快照保留', true);
+      return;
+    }
     if (running) return;
     const current = workspace();
     if (!current) { toast('無法取得目前 Zen Space', true); return; }

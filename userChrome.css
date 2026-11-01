@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.7 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.3.8 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,

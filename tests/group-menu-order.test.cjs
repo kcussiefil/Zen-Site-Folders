@@ -121,7 +121,7 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
   const api = window.__zsfMenuV037;
-  assert.equal(api.version, '0.3.7');
+  assert.equal(api.version, '0.3.8');
   const event = { target: label, screenX: 30, screenY: 40, prevented: false,
     composedPath: () => [label, group],
     preventDefault() { this.prevented = true; }, stopPropagation() {}, stopImmediatePropagation() {} };
@@ -143,7 +143,7 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   const command = (menu, label) => {
     const item = find(menu, label);
     assert(item, 'missing menu option: ' + label);
-    for (const fn of item.events.command || []) fn({});
+    return Promise.all((item.events.command || []).map(fn => fn({})));
   };
   return { api, window, group, label, favicon, tabs, saved, context, command, alerts,
     stats: () => ({ ungroupCount, removeCount, convertCount, confirmCount }), find };
@@ -180,19 +180,19 @@ async function testMenu() {
   const firstClick = makeHarness({ prompts: [false] });
   const firstPopup = firstClick.context();
   for (const listener of firstPopup.events.popuphidden || []) listener({});
-  firstClick.command(firstPopup, '解散群組');
+  await firstClick.command(firstPopup, '解散群組');
   assert.equal(firstClick.stats().confirmCount, 0, 'ungroup directly without modal');
   assert.equal(firstClick.stats().ungroupCount, 2, 'first click must ungroup both tabs');
   assert(JSON.parse(firstClick.saved['zsf-before-sort-v1']).space1,
     'archive and keep live snapshot for later safe cleanup');
 
   const corrupt = makeHarness({ archiveCorrupt: true, prompts: [true] });
-  corrupt.command(corrupt.context(), '解散群組');
+  await corrupt.command(corrupt.context(), '解散群組');
   assert.equal(corrupt.stats().ungroupCount, 0);
   assert(JSON.parse(corrupt.saved['zsf-before-sort-v1']).space1);
 
   const yes = makeHarness({ prompts: [true] });
-  yes.command(yes.context(), '解散群組');
+  await yes.command(yes.context(), '解散群組');
   assert.equal(yes.stats().ungroupCount, 2);
   assert.equal(yes.stats().confirmCount, 0, 'ungroup never prompts; only delete and pin conversion confirm');
   assert(yes.tabs.every(t => t.isConnected && !t.pinned && t.group === null));
