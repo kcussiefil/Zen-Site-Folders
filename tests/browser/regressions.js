@@ -595,7 +595,11 @@ const finish = arguments[arguments.length - 1];
       JSON.stringify({topLevel:topLevel.map(n=>({id:n.id,kind:n.localName,
         label:n.getAttribute('label'),site:n.getAttribute('data-zsf-site')})),
         gIndex:topLevel.indexOf(g),prefixIndex:topLevel.indexOf(prefix),
-        groupParent:g.parentElement?.localName,folder:g.isZenFolder,
+        groupParent:g.parentElement?.localName,
+        groupParentClass:g.parentElement?.className,
+        groupParentParent:g.parentElement?.parentElement?.id,
+        groupPrev:g.previousElementSibling?.id, groupNext:g.nextElementSibling?.id,
+        folder:g.isZenFolder,
         rootZia:document.documentElement.hasAttribute('zia-dragging-tab'),
         prefixShift:prefix.style.getPropertyValue('transform'),
         sourceTransform:g.style.getPropertyValue('transform')}));
