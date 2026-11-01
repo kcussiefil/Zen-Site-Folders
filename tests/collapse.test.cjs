@@ -14,12 +14,13 @@ console.log('PASS: motion bridge safety; native layout behavior covered by brows
 const calls = [];
 const cleaned = [];
 const oldActive = new Set(['folder-active']);
+const retiredStyles = [];
 const first = {
   selected: true, multiselected: false, isConnected: true,
   getAttribute: name => oldActive.has(name) ? 'true' : null,
   hasAttribute: name => oldActive.has(name),
   removeAttribute: name => oldActive.delete(name),
-  style: { removeProperty() {} }
+  style: { removeProperty() {}, setProperty(name, value) { retiredStyles.push([name, value]); } }
 };
 const second = { selected: false, multiselected: false, isConnected: true, getAttribute: () => null };
 const group = {
@@ -59,4 +60,6 @@ bridge.sync(group);
 assert.deepEqual(calls, ['expand', 'collapse', 'collapse'], 'selection change never expands while closed');
 assert.deepEqual(cleaned, [second], 'only newly selected hidden tab gets native style cleanup');
 assert(!oldActive.has('folder-active'), 'former selected tab must not remain active in native group');
+assert.deepEqual(retiredStyles, [['height', '0px'], ['min-height', '0px'], ['opacity', '0']],
+  'former selected tab must release its layout box');
 console.log('PASS: single-path audio/selection motion and native row cleanup');
