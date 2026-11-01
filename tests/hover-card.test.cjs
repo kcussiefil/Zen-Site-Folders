@@ -34,7 +34,7 @@ class FakeNode {
     return null;
   }
   querySelector(selector) {
-    if (selector === '.zsf-hover-list') return this.children.find(node => node.className === 'zsf-hover-list') || null;
+    if (selector === '.zsf-hover-list') return this.children.find(node => node.className.includes('zsf-hover-list')) || null;
     if (selector === '.zsf-hover-row') return this.querySelector('.zsf-hover-list')?.children[0] || null;
     return null;
   }
@@ -51,6 +51,9 @@ async function main() {
   assert(!/SNAPSHOT_KEY|writeSnapshots|captureSnapshot/.test(source));
   assert(css.includes('tab-group[data-zsf-site][collapsed]'));
   assert(css.includes('#zsf-folder-hover-card'));
+  assert(css.includes('@media -moz-pref("zia.cards.blur")'), 'Zia glass preference is honored');
+  assert(css.includes('blur(24px) saturate(1.6)'), 'Zia glass blur matches');
+  assert(!css.includes('display: none !important;\n  max-height: 0 !important;\n  margin: 0 !important;\n  padding: 0 !important;'), 'no hard collapsed display:none that cancels Zia spring');
   assert(!css.includes('zsf-rescue-button'));
   new vm.Script(source);
   new vm.Script(core);
@@ -109,8 +112,8 @@ async function main() {
     createElementNS: (_ns, type) => new FakeNode(type),
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
-  const api = window.__zsfGroupHoverV029;
-  assert.equal(api.version, '0.2.9');
+  const api = window.__zsfGroupHoverV030;
+  assert.equal(api.version, '0.3.0');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
@@ -121,12 +124,24 @@ async function main() {
   assert.equal(rows[0].zsfTab, first);
   assert.equal(rows[1].zsfTab, second);
   assert.equal(rows[2].dataset.action, 'new');
+  assert.equal(rows[0].getAttribute('zia-selected'), 'true', 'selected row uses Zia highlight');
+  assert(rows[0].className.includes('zia-folder-card-row'), 'Zia list styling is inherited');
   assert.equal(first.group, group, 'hover may not move or pin a tab');
   assert.equal(created, 0, 'hover may not create a tab');
 
   popup.events.click({ target: rows[1], stopPropagation() {} });
   assert.equal(browser.selectedTab, second, 'click must select correct tab');
   assert(popup.hidden, 'popup should hide after selection');
+  // Updating the selection should not reset a long card to its first row.
+  host.events.mouseover({ target });
+  await new Promise(resolve => setTimeout(resolve, 260));
+  const scroller = popup.querySelector('.zsf-hover-list');
+  scroller.scrollTop = 97;
+  const tabSelectHandler = window.events.TabSelect;
+  assert(tabSelectHandler, 'TabSelect refresh listener registered');
+  tabSelectHandler();
+  assert.equal(popup.querySelector('.zsf-hover-list').scrollTop, 97, 'scroll preserved across selected-tab refresh');
+  api.closeNow();
 
   // Only our own groups trigger a preview, never Zia native folders.
   const other = { ...group, matches: () => false };

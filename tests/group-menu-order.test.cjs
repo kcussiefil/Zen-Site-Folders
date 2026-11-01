@@ -50,6 +50,7 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   const listeners = {};
   const alerts = [];
   let removeCount = 0, ungroupCount = 0, convertCount = 0;
+  let confirmCount = 0;
   const saved = {};
   if (savedSnapshot) saved['zsf-before-sort-v1'] = JSON.stringify({
     space1: { version: 4, capturedAt: 1234, createdFolders: ['zsf-owned'],
@@ -102,15 +103,15 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
     querySelectorAll: selector => selector === 'tab-group[data-zsf-site]:not([split-view-group])' ? [group] : [],
   };
   const prompt = {
-    confirm() { return prompts.length ? prompts.shift() : true; },
+    confirm() { confirmCount++; return prompts.length ? prompts.shift() : true; },
     prompt(_win, _title, _label, answer) { answer.value = '新的名稱'; return true; },
     alert(_win, _title, msg) { alerts.push(msg); }
   };
   class FakeMutationObserver { observe() {} disconnect() {} }
   vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
-  const api = window.__zsfMenuV029;
-  assert.equal(api.version, '0.2.9');
+  const api = window.__zsfMenuV030;
+  assert.equal(api.version, '0.3.0');
   const event = { target: label, screenX: 30, screenY: 40, prevented: false,
     composedPath: () => [label, group],
     preventDefault() { this.prevented = true; }, stopPropagation() {}, stopImmediatePropagation() {} };
@@ -135,14 +136,14 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
     for (const fn of item.events.command || []) fn({});
   };
   return { api, window, group, label, favicon, tabs, saved, context, command, alerts,
-    stats: () => ({ ungroupCount, removeCount, convertCount }), find };
+    stats: () => ({ ungroupCount, removeCount, convertCount, confirmCount }), find };
 }
 
 async function testMenu() {
   const a = makeHarness();
   const menu = a.context();
   for (const label of ['變更顏色', '重新命名', '變更圖示', '移除圖示',
-    '移到工作區', '解除群組', '轉為 Zen 資料夾（會釘選）', '刪除群組（關閉分頁）']) {
+    '移到工作區', '解散群組', '轉為 Zen 分頁夾（上方釘選）', '刪除群組']) {
     assert(a.find(menu, label), 'missing translated item ' + label);
   }
   a.command(menu, '重新命名');
@@ -165,18 +166,19 @@ async function testMenu() {
   a.api.destroy();
 
   const cancel = makeHarness({ prompts: [false] });
-  cancel.command(cancel.context(), '解除群組');
+  cancel.command(cancel.context(), '解散群組');
   assert.equal(cancel.stats().ungroupCount, 0);
   assert(JSON.parse(cancel.saved['zsf-before-sort-v1']).space1);
 
-  const corrupt = makeHarness({ archiveCorrupt: true, prompts: [true, true] });
-  corrupt.command(corrupt.context(), '解除群組');
+  const corrupt = makeHarness({ archiveCorrupt: true, prompts: [true] });
+  corrupt.command(corrupt.context(), '解散群組');
   assert.equal(corrupt.stats().ungroupCount, 0);
   assert(JSON.parse(corrupt.saved['zsf-before-sort-v1']).space1);
 
-  const yes = makeHarness({ prompts: [true, true] });
-  yes.command(yes.context(), '解除群組');
+  const yes = makeHarness({ prompts: [true] });
+  yes.command(yes.context(), '解散群組');
   assert.equal(yes.stats().ungroupCount, 2);
+  assert.equal(yes.stats().confirmCount, 1, 'one confirmation must cover both action and automatic snapshot archive');
   assert(yes.tabs.every(t => t.isConnected && !t.pinned && t.group === null));
   assert(!JSON.parse(yes.saved['zsf-before-sort-v1']).space1);
   const archived = JSON.parse(yes.saved['zsf-archived-snapshots-v1']).space1;
@@ -184,11 +186,11 @@ async function testMenu() {
   assert.equal(archived[0].snapshot.tabs.length, 1);
 
   const deleteCancelled = makeHarness({ prompts: [false] });
-  deleteCancelled.command(deleteCancelled.context(), '刪除群組（關閉分頁）');
+  deleteCancelled.command(deleteCancelled.context(), '刪除群組');
   assert.equal(deleteCancelled.stats().removeCount, 0);
 
   const convertCancelled = makeHarness({ prompts: [false] });
-  convertCancelled.command(convertCancelled.context(), '轉為 Zen 資料夾（會釘選）');
+  convertCancelled.command(convertCancelled.context(), '轉為 Zen 分頁夾（上方釘選）');
   assert(convertCancelled.tabs.every(t => !t.pinned));
   console.log('PASS: Traditional Chinese menu, localized commands, picker, color, archival guards, ungroup, cancel, isolation');
 }
