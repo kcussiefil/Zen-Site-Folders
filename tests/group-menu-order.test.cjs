@@ -110,8 +110,8 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   class FakeMutationObserver { observe() {} disconnect() {} }
   vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
-  const api = window.__zsfMenuV031;
-  assert.equal(api.version, '0.3.1');
+  const api = window.__zsfMenuV032;
+  assert.equal(api.version, '0.3.2');
   const event = { target: label, screenX: 30, screenY: 40, prevented: false,
     composedPath: () => [label, group],
     preventDefault() { this.prevented = true; }, stopPropagation() {}, stopImmediatePropagation() {} };
@@ -164,6 +164,15 @@ async function testMenu() {
   unrelated.matches = () => false;
   assert.equal(a.api.validGroup(unrelated), false, 'non-ZSF group excluded');
   a.api.destroy();
+
+  // Native XUL may send popuphidden BEFORE command. The first click must
+  // still resolve its original group and show the single confirmation.
+  const firstClick = makeHarness({ prompts: [false] });
+  const firstPopup = firstClick.context();
+  for (const listener of firstPopup.events.popuphidden || []) listener({});
+  firstClick.command(firstPopup, '解散群組');
+  assert.equal(firstClick.stats().confirmCount, 1, 'first click must not be lost after popuphidden');
+  assert.equal(firstClick.stats().ungroupCount, 0, 'cancel preserves every tab');
 
   const cancel = makeHarness({ prompts: [false] });
   cancel.command(cancel.context(), '解散群組');
