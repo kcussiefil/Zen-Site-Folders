@@ -227,6 +227,69 @@ const finish = arguments[arguments.length - 1];
     const arrow = gZenWorkspaces.activeWorkspaceElement.querySelector('.zsf-undo-button');
     assert(arrow && !arrow.hidden, 'actual restore arrow must remain visible');
   });
+  await test('simultaneous collapsed groups keep headers as actual hit targets', async h => {
+    const [A,B,C,D] = h.tabs;
+    gBrowser.ungroupTab(C); gBrowser.ungroupTab(D);
+    const second = gBrowser.addTabGroup([C], {id:'zsf-hit-second',label:'Second',insertBefore:h.suffix,showCreateUI:false});
+    const third = gBrowser.addTabGroup([D], {id:'zsf-hit-third',label:'Third',insertBefore:h.suffix,showCreateUI:false});
+    for (const group of [second,third]) group.setAttribute('data-zsf-site','github.com');
+    await delay(500);
+    gBrowser.selectedTab = A;
+    second.collapsed = true; third.collapsed = true; h.group.collapsed = true;
+    await Promise.all([idle(second),idle(third),idle(h.group)]);
+    const state = [second,third].map(group=>({id:group.id,hidden:group.groupContainer.hidden,
+      height:group.groupContainer.getBoundingClientRect().height,overflow:getComputedStyle(group.groupContainer).overflowY}));
+    assert(state.every(item=>item.hidden && item.height<=1), 'every inactive group must settle independently; '+JSON.stringify(state));
+    function deepest(x,y) {
+      let node=document.elementFromPoint(x,y);
+      for(let i=0;i<12 && node?.shadowRoot;i++) {
+        const next=node.shadowRoot.elementFromPoint(x,y);
+        if(!next || next===node) break;
+        node=next;
+      }
+      return node;
+    }
+    for(const group of [h.group,second,third]) {
+      group.scrollIntoView({block:'nearest'});
+      const header=group.querySelector(':scope > .tab-group-label-container');
+      const box=header.getBoundingClientRect();
+      const hit=deepest(box.left+box.width*.6,box.top+box.height*.5);
+      assert(header.contains(hit), 'click point for '+group.id+' must hit its own header, got '+hit?.localName+' in '+hit?.closest?.('tab-group')?.id);
+    }
+  });
+  await test('manual ungroup of collapsed selected group restores every row visibly', async h => {
+    snapshot(h); gBrowser.selectedTab=h.tabs[1]; h.group.collapsed=true; await idle(h.group);
+    const result=await core.ungroupInDisplayOrder(h.group);
+    await delay(650);
+    assert(!result.errors && result.ordered, 'ungroup must finish successfully');
+    const states=h.tabs.map(tab=>({name:tab.zsfTestName,height:tab.getBoundingClientRect().height,opacity:getComputedStyle(tab).opacity}));
+    assert(states.every(row=>row.height>10 && Number(row.opacity)>.9), 'ungrouped rows must actually be visible; '+JSON.stringify(states));
+  });
+  await test('safe split of collapsed selected group restores every row visibly', async h => {
+    snapshot(h); gBrowser.selectedTab=h.tabs[1]; h.group.collapsed=true; await idle(h.group);
+    await core.rescueSiteGroups(); await delay(650);
+    const states=h.tabs.map(tab=>({name:tab.zsfTestName,height:tab.getBoundingClientRect().height,opacity:getComputedStyle(tab).opacity}));
+    assert(h.tabs.every(tab=>!tab.group), 'safe split must detach original tabs');
+    assert(states.every(row=>row.height>10 && Number(row.opacity)>.9), 'split rows must actually be visible; '+JSON.stringify(states));
+  });
+  await test('undo from collapsed selected group restores every row visibly', async h => {
+    const stored = snapshot(h);
+    gBrowser.selectedTab = h.tabs[1];
+    h.group.collapsed = true;
+    await idle(h.group);
+    const before = h.tabs.map(tab => ({ name:tab.zsfTestName, height:tab.getBoundingClientRect().height,
+      opacity:getComputedStyle(tab).opacity, inline:tab.getAttribute('style') }));
+    assert(before.some(row => row.height <= 1), 'fixture must contain genuinely collapsed rows');
+    await core.undo();
+    await delay(650);
+    const after = h.tabs.map(tab => ({ name:tab.zsfTestName, height:tab.getBoundingClientRect().height,
+      opacity:getComputedStyle(tab).opacity, inline:tab.getAttribute('style'), hidden:tab.hidden }));
+    assert(h.tabs.every(tab => !tab.group), 'undo must detach the original tab objects');
+    assert(same([...root().querySelectorAll('tab')].filter(tab => h.tabs.includes(tab)),h.tabs), 'undo must retain original order');
+    assert(after.every(row => row.height > 10 && Number(row.opacity) > .9 && !row.hidden),
+      'every restored standalone row must actually be visible; before='+JSON.stringify(before)+'; after='+JSON.stringify(after));
+    assert(!core.readSnapshots()[stored.workspaceId], 'only fully verified undo may clear snapshot');
+  });
   await test('SessionStore undo restores original standalone sequence without replacing tabs', async h => {
     const stored = snapshot(h);
     gBrowser.moveTabBefore(h.tabs[3], h.tabs[0]);

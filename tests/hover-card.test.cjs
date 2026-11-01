@@ -131,7 +131,7 @@ async function main() {
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
   const api = window.__zsfGroupHoverV037;
-  assert.equal(api.version, '0.3.8');
+  assert.equal(api.version, '0.3.9');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));

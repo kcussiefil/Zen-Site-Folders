@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.3.8
+// @version      0.3.9
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -494,6 +494,16 @@
   // visible order. Capture the original top-to-bottom tab objects FIRST and
   // use only Firefox tab-moving APIs after every member is safely ungrouped.
   // Never close, recreate, pin, reload, or rewrite any tab identity.
+  async function prepareGroupsForTabMoves(groups) {
+    const owned = [...new Set(groups)].filter(group => group?.isConnected &&
+      !group.isZenFolder && !group.pinned && siteOfGroup(group));
+    if (!owned.length) return true;
+    const motion = window.__zsfCollapseV037;
+    if (!motion) return true; // No bridge has written native inline states.
+    if (typeof motion.prepareToMoveTabs !== 'function') return false;
+    return motion.prepareToMoveTabs(owned);
+  }
+
   const ungrouping = new WeakSet();
   async function ungroupInDisplayOrder(group, orderedTabs = null) {
     const failure = { moved: 0, errors: 1, ordered: false };
@@ -522,6 +532,10 @@
         (expectedTabs && (expectedTabs.length !== list.length ||
           list.some(tab => !expectedTabs.includes(tab))))) {
       result.errors = Math.max(list.length, 1);
+      return result;
+    }
+    if (!await prepareGroupsForTabMoves([group])) {
+      result.errors = list.length;
       return result;
     }
     const originalParent = group.parentElement;
@@ -806,6 +820,10 @@
         toast('還原暫停：仍有 ' + missing + ' 個分頁無法辨識。未移動分頁、備份保留；可右鍵還原箭頭執行安全拆分', true);
         return;
       }
+      if (!await prepareGroupsForTabMoves([...tabMap.values()].map(tab => tab.group))) {
+        toast('還原暫停：分頁的收合狀態尚未清理完成；原快照保留，未移動分頁', true);
+        return;
+      }
       // v3 modifies only ordinary groups; never unpin or delete a Zen folder.
 
       // 1) Re-create lost manual groups with their original stable ID, label,
@@ -868,6 +886,14 @@
       // Empty ordinary site groups are removed automatically by Firefox.
       const pendingFolders = 0;
 
+      if (window.__zsfDragV037?.nativeIdle && !await window.__zsfDragV037.nativeIdle()) errors++;
+      const invisible = snapshot.tabs.filter(item => {
+        const tab = tabMap.get(item.id);
+        if (item.group !== null || item.pinned || !tab?.isConnected) return false;
+        const style = window.getComputedStyle(tab);
+        return tab.hidden || tab.getBoundingClientRect().height <= 0 ||
+          Number(style.opacity) <= 0 || style.visibility === 'hidden';
+      }).length;
       // 5) Verify original pin status, membership and order before discarding backup.
       const wrong = snapshot.tabs.filter(item => {
         const tab = tabMap.get(item.id);
@@ -898,9 +924,9 @@
         .filter(id => topLevel.includes(id));
       const actual = topLevel.filter(id => intended.includes(id));
       const wrongTopLevel = intended.join('|') !== actual.join('|');
-      if (errors || missing || wrong || wrongSequence || wrongTopLevel || pendingFolders) {
-        toast(`部分還原：遺失 ${missing}、分組／釘選不符 ${wrong}、順序不符 ${wrongSequence + Number(wrongTopLevel)}、空資料夾未清除 ${pendingFolders}；保留備份`, true);
-        console.warn(TAG, 'Undo incomplete', { errors, missing, wrong, wrongSequence, wrongTopLevel, pendingFolders });
+      if (errors || missing || wrong || wrongSequence || wrongTopLevel || pendingFolders || invisible) {
+        toast(`部分還原：遺失 ${missing}、分組／釘選不符 ${wrong}、順序不符 ${wrongSequence + Number(wrongTopLevel)}、空資料夾未清除 ${pendingFolders}、不可見分頁 ${invisible}；保留備份`, true);
+        console.warn(TAG, 'Undo incomplete', { errors, missing, wrong, wrongSequence, wrongTopLevel, pendingFolders, invisible });
       } else {
         delete stored[current.id];
         if (!writeSnapshots(stored)) {

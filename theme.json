@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Native collapse bridge, settled drag placement and ordered ungroup with SessionStore protection.",
+  "description": "Restore visible tabs after collapsed-group undo; isolate folder hit targets and selected-tab paint.",
   "author": "kcussiefil",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T14:40:11Z"
+  "updatedAt": "2026-11-01T15:01:55.981345Z"
 }

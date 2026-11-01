@@ -121,7 +121,7 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
   const api = window.__zsfMenuV037;
-  assert.equal(api.version, '0.3.8');
+  assert.equal(api.version, '0.3.9');
   const event = { target: label, screenX: 30, screenY: 40, prevented: false,
     composedPath: () => [label, group],
     preventDefault() { this.prevented = true; }, stopPropagation() {}, stopImmediatePropagation() {} };

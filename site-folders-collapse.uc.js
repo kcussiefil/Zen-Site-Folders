@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.3.8
+// @version      0.3.9
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -58,6 +58,14 @@
     if (!collapsed || prior?.collapsed) jobs.push(zen.animateExpand(group));
     if (collapsed) jobs.push(zen.animateCollapse(group));
     state.done = Promise.all(jobs).then(() => {
+      if (dead || !ours(group) || states.get(group) !== state) return;
+      // Zen's shared animation counter skips finalization for all but the
+      // last concurrently animated group. Finish this group's native state
+      // only after its own latest native animations have actually finished.
+      const shown = [...group.tabs].some(tab => tab.selected || tab.multiselected ||
+        tab.getAttribute('folder-active') === 'true');
+      if (group.collapsed && !shown) group.groupContainer.hidden = true;
+      else group.groupContainer.hidden = false;
       window.gBrowser?.tabContainer?._invalidateCachedVisibleTabs?.();
     }).catch(error => console.warn('[ZenSiteFoldersMotion]', error));
   }
@@ -89,6 +97,21 @@
       if (states.get(group) === state) return;
     }
   }
+  async function prepareToMoveTabs(groups) {
+    const owned = [...new Set(groups)].filter(ours);
+    // Native collapse writes height/opacity onto the actual tab elements.
+    // Finish a native expansion BEFORE reparenting, while those elements
+    // are still available to the native animation registry for cleanup.
+    for (const group of owned) {
+      group.collapsed = false;
+      sync(group, true);
+    }
+    await Promise.all(owned.map(whenIdle));
+    return owned.every(group => !group.collapsed && [...group.tabs].every(tab => {
+      const style = window.getComputedStyle(tab);
+      return tab.getBoundingClientRect().height > 0 && Number(style.opacity) > 0;
+    }));
+  }
   function destroy() {
     dead = true;
     observer?.disconnect();
@@ -96,7 +119,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.3.8', start, sync, whenIdle, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.3.9', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });
