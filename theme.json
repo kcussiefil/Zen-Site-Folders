@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Single native Zen/Zia spring path for audio-playing tabs, reduced sidebar repaint and scoped selection updates.",
+  "description": "Native drag preview suppression, whole-group avoidance animation and sidebar drag-edge scrolling.",
   "author": "kcussiefil",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T16:09:00.000Z"
+  "updatedAt": "2026-11-01T16:53:00.000Z"
 }

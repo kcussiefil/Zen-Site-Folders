@@ -1,4 +1,4 @@
-# Zen Site Folders 0.4.2 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.4.3 — 一般分頁區域群組（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內依記錄的開啟時間由新到舊排序（沒有開啟時間的歷史分頁依原位置估算），圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,14 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.4.3 拖曳灰色橫條、整組讓位動畫與自動捲動
+
+- 單獨分頁及整個網站群組：拖曳時隱藏原生灰色拖曳縮圖和來源橫條，保留 ZSF 浮動資訊卡與落點插入線；限制在本 Mod 的群組及其成員，其他普通分頁、Zen 資料夾、Essentials、Library 的原生行為不變。
+- 拖動整組資料夾時，原位置和目標位置之間的相鄰群組／一般分頁以 `translate` 動畫讓位，不提前移動 DOM、不釘選、不影響手動排序。
+- 靠近目前 Space 普通分頁捲動容器上下約 52px 時，透過 `requestAnimationFrame` 持續捲動；游標移開、到達端點、Esc、失焦、切換 Space 或放開即停止，並依實際 scrollTop 修正落點。
+- 安全：不攔截 Zen／Zia 原生拖放事件；不新增、關閉、重建分頁；SessionStore 快照和還原規則不變。
+- macOS 系統拖曳縮圖的實際呈現及影片播放時的觸控板流暢度仍需實機驗收。
 
 ## v0.4.2 影片播放時的開合動畫修正（待實機驗收）
 
