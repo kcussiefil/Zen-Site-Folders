@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.2.1
+// @version      0.2.2
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV021) return;
-  window.__zenSiteFoldersV020 = true;
+  if (window.__zenSiteFoldersV022) return;
+  window.__zenSiteFoldersV022 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -75,8 +75,9 @@
     const tabs = new Set();
     for (const holder of [node.pinnedTabsContainer, node.tabsContainer]) {
       holder?.querySelectorAll('tab').forEach(tab => {
-        if (tab?.isConnected && !tab.hasAttribute('cloned') &&
-            tab.getAttribute('zen-workspace-id') === id) tabs.add(tab);
+        // The group wrapper belongs to this workspace; Zen may omit the
+        // workspace attribute on member tabs after native grouping.
+        if (tab?.isConnected && !tab.hasAttribute('cloned')) tabs.add(tab);
       });
     }
     // Native fallback for Zen builds with different workspace wrappers.
@@ -399,9 +400,19 @@
 
   function findTabMap(current) {
     const map = new Map();
-    for (const tab of allWorkspaceTabs(current.node, current.id)) {
-      const id = tabUID(tab);
-      if (id) map.set(id, tab);
+    // Read existing IDs without assigning new ones during recovery. A newly
+    // generated ID cannot match the snapshot and obscures the diagnosis.
+    const tabs = allWorkspaceTabs(current.node, current.id);
+    for (const tab of tabs) {
+      let id = null;
+      for (const store of sessionStores()) {
+        try {
+          const saved = store?.getCustomTabValue?.(tab, TAB_UID_KEY);
+          if (typeof saved === 'string' && saved) { id = saved; break; }
+        } catch (_) {}
+      }
+      if (id && !map.has(id)) map.set(id, tab);
+      else if (id) console.warn(TAG, 'Duplicate tab identity during restore', id);
     }
     return map;
   }
@@ -429,6 +440,13 @@
     try {
       const tabMap = findTabMap(current);
       missing = snapshot.tabs.filter(x => !tabMap.has(x.id)).length;
+      if (missing) {
+        console.warn(TAG, 'Restore blocked before modification: missing tab IDs', {
+          missing, snapshotTotal: snapshot.tabs.length, found: tabMap.size
+        });
+        toast('還原暫停：有 ' + missing + ' 個分頁無法辨識；未繼續移動分頁，備份保留。請重新啟動 Zen 後再檢查', true);
+        return;
+      }
       // v3 modifies only ordinary groups; never unpin or delete a Zen folder.
 
       // 1) Re-create lost manual groups with their original stable ID, label,
