@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.2.5
+// @version      0.2.6
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV025) return;
-  window.__zenSiteFoldersV025 = true;
+  if (window.__zenSiteFoldersV026) return;
+  window.__zenSiteFoldersV026 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -481,6 +481,24 @@
   // exist. Never closes, recreates, reloads, pins or guesses tab identities.
   // All tabs in this mod's generated ordinary groups are left in their current
   // relative location; full historical order cannot be established from v3.
+  function confirmRescue(message) {
+    try {
+      if (typeof Services.prompt?.confirm === 'function') {
+        return Services.prompt.confirm(window, 'Zen Site Folders', message);
+      }
+    } catch (error) {
+      console.warn(TAG, 'Native confirmation unavailable:', error);
+    }
+    try {
+      return typeof window.confirm === 'function'
+        ? window.confirm(message) : false;
+    } catch (error) {
+      console.warn(TAG, 'Confirmation failed; rescue cancelled:', error);
+      toast('無法開啟安全拆分確認視窗；沒有移動任何分頁', true);
+      return false;
+    }
+  }
+
   async function rescueSiteGroups() {
     if (running) return;
     const current = workspace();
@@ -503,7 +521,7 @@
         toast('仍有本工具建立的群組包含分頁；拒絕清除快照', true);
         return;
       }
-      if (!window.confirm('已核對所有分頁都還存在，且接受無法保證恢復舊有順序嗎？\n確定後只清除本工作區的舊版整理快照（不可復原），不會關閉任何分頁。')) return;
+      if (!confirmRescue('已核對所有分頁都還存在，且接受無法保證恢復舊有順序嗎？\n確定後只清除本工作區的舊版整理快照（不可復原），不會關閉任何分頁。')) return;
       const next = { ...stored };
       delete next[current.id];
       if (writeSnapshots(next)) {
@@ -534,7 +552,7 @@
       toast('這次整理建立的群組沒有一般分頁；未變更任何分頁', true);
       return;
     }
-    if (!window.confirm('安全拆分將解除本工具建立的 ' + groups.length +
+    if (!confirmRescue('安全拆分將解除本工具建立的 ' + groups.length +
       ' 個網站群組中的 ' + candidates.length + ' 個分頁，不關閉或重新載入網頁。\n' +
       '也可能解除整理後才加入群組的分頁，且無法保證回到原本的確切排序。\n' +
       '目前快照會保留。確定執行嗎？')) return;
@@ -568,7 +586,7 @@
         if (!writeSnapshots(stored)) {
           toast('分頁已拆分，但無法儲存救援進度；舊快照尚在', true);
         } else {
-          toast('已安全拆分 ' + moved + ' 個分頁；未關閉分頁。請核對後右鍵箭頭完成備份清理');
+          toast('已安全拆分 ' + moved + ' 個分頁；未關閉分頁。請核對後按「拆」按鈕確認清除舊快照');
         }
       } else {
         toast('救援部分完成：已拆分 ' + moved + ' 個；仍有 ' +
@@ -817,10 +835,21 @@
         node.querySelector('.pinned-tabs-container-separator');
       if (!separator) continue;
       const undoButton = separator.querySelector('.zsf-undo-button');
+      const rescueButton = separator.querySelector('.zsf-rescue-button');
       const sortButton = separator.querySelector('.zsf-sort-button');
+      const snapshot = snapshots[node.id];
       if (undoButton) {
-        undoButton.hidden = !Boolean(snapshots[node.id]);
+        undoButton.hidden = !Boolean(snapshot);
         undoButton.disabled = running;
+      }
+      if (rescueButton) {
+        const available = Boolean(snapshot && [3, 4].includes(snapshot.version) &&
+          (snapshot.rescueCompleted || snapshot.createdFolders?.length));
+        rescueButton.hidden = !available;
+        rescueButton.disabled = running;
+        rescueButton.setAttribute('tooltiptext', snapshot?.rescueCompleted
+          ? '安全拆分已完成：核對分頁後，左鍵確認清除舊快照'
+          : '安全拆分：左鍵拆開本工具建立的群組，不會關閉分頁');
       }
       if (sortButton) sortButton.disabled = running;
     }
@@ -1012,15 +1041,26 @@
       if (!undoButton) {
         undoButton = document.createXULElement('toolbarbutton');
         undoButton.classList.add('zsf-undo-button');
-        undoButton.setAttribute('tooltiptext', '左鍵還原；右鍵救援拆分／確認清除已核對快照（不關閉分頁）');
+        undoButton.setAttribute('tooltiptext', '還原整理前的分頁順序及群組（不關閉分頁）');
         undoButton.setAttribute('aria-label', '還原整理前的分頁');
         undoButton.addEventListener('command', () => undo().catch(e => console.error(TAG, e)));
-        undoButton.addEventListener('contextmenu', event => {
-          event.preventDefault();
-          event.stopPropagation();
-          rescueSiteGroups().catch(e => console.error(TAG, 'Safe rescue failed:', e));
-        });
         separator.insertBefore(undoButton, line);
+      }
+
+      // Dedicated left-click rescue control: Zen/Zia can intercept native
+      // contextmenu on toolbarbuttons, so recovery must not depend on it.
+      let rescueButton = separator.querySelector('.zsf-rescue-button');
+      if (!rescueButton) {
+        rescueButton = document.createXULElement('toolbarbutton');
+        rescueButton.classList.add('zsf-rescue-button');
+        rescueButton.setAttribute('label', '拆');
+        rescueButton.setAttribute('aria-label', '安全拆分網站群組');
+        rescueButton.addEventListener('command', () =>
+          rescueSiteGroups().catch(e => {
+            console.error(TAG, 'Safe rescue failed:', e);
+            toast('安全拆分操作失敗，已保留備份', true);
+          }));
+        separator.insertBefore(rescueButton, line);
       }
 
       // Remove the v0.1.4 extra spacer if a live-reload preserved it.
@@ -1057,7 +1097,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV025 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV026 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
