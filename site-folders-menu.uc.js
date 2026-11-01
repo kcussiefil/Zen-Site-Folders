@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.3.9
+// @version      0.4.0
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -485,7 +485,7 @@
     menu?.remove();
   }
 
-  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.9' };
+  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.4.0' };
   window.__zsfMenuV037 = api;
   if (document.readyState === 'complete') init();
   else bind(window, 'load', init, { once: true });

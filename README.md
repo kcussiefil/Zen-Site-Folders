@@ -1,4 +1,4 @@
-# Zen Site Folders 0.3.9 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.4.0 — 一般分頁區域群組（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內依記錄的開啟時間由新到舊排序（沒有開啟時間的歷史分頁依原位置估算），圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,10 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.4.0 開啟資料夾光暈修復
+
+只延伸目前分頁的原生光暈繪製範圍，讓開啟資料夾期間不因移除 collapsed 狀態而突然改用硬裁切。保留 Zia 自己控制高度時的裁切例外，未變更任何分頁、排序、收合 JavaScript 或快照行為。
 
 ## v0.3.9 還原可見性與資料夾點擊修復
 
