@@ -183,7 +183,8 @@ async function main(){
   emit(window,'mousemove',gEvent(160,135));
   emit(window,'drop',gEvent(800,300));
   await waitNative();
-  assert.deepEqual(strip.children,[source,first,last]);
+  assert.deepEqual(strip.children.map(n=>n===source?'source':n===first?'first':'last'),
+    ['source','first','last'], 'cancelled out-of-sidebar live drag must restore source before first');
 
   // Member order: native TabGrouped had been re-sorting the dragged tab after
   // 80ms. Now user-directed A,B,C -> B,A,C must remain stable.
