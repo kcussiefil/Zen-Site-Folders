@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.1.6
+// @version      0.1.7
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV016) return;
-  window.__zenSiteFoldersV016 = true;
+  if (window.__zenSiteFoldersV017) return;
+  window.__zenSiteFoldersV017 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -587,7 +587,8 @@
     }
     box.querySelector('.zsf-notification-text').setAttribute('value', text);
     box.setAttribute('tooltiptext', text);
-    box.toggleAttribute('zsf-error', isError);
+    // Use Zen's native toast markup and theme for both success and errors.
+    // Alert semantics do not need a custom-colored border.
     box.setAttribute('aria-live', isError ? 'assertive' : 'polite');
     container.appendChild(box);
     container.removeAttribute('hidden');
@@ -755,7 +756,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV016 = { organize, undo, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV017 = { organize, undo, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
