@@ -1,4 +1,4 @@
-# Zen Site Folders 0.1.4 — Sine / Zia 相容版（測試）
+# Zen Site Folders 0.1.5 — Sine / Zia 相容版（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內盡可能依新到舊排序，圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,13 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.1.5 修正（2026-11-01）
+- 對每一個 Space 的原生分隔線建立整理／還原按鈕。修正切換 Space 後沒有按鈕的問題，也支援新建的 Space。
+- 按鈕寬高固定 20px、圖示 15px，明確覆蓋 Zen 原生 toolbarbutton 在分隔區的背景、內距、圖示透明度及 pointer-events 規則，避免被撐成大方塊。
+- 不再插入額外 spacer；直接使用 Zen 原生 flex=1 分隔線維持「左側整理／還原、中間分隔線、右側清除」。
+- 波浪長度與位置由原生分隔線尺寸計算，支援側邊欄寬度和還原按鈕的變動。
+- 這是靜態結構驗證版本，仍需要 Zen + Zia 實機測試。
 
 ## 安裝（不需要終端機）
 
