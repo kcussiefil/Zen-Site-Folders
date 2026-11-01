@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.2.9
+// @version      0.3.0
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfGroupHoverV029) return;
-  window.__zsfGroupHoverV029 = true;
+  if (window.__zsfGroupHoverV030) return;
+  window.__zsfGroupHoverV030 = true;
 
   const TAG = '[ZenSiteFoldersHover]';
   const XHTML_NS = 'http://www.w3.org/1999/xhtml';
@@ -72,7 +72,7 @@
     card.hidden = true;
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-label', '資料夾分頁快速預覽');
-    const list = el('div', 'zsf-hover-list');
+    const list = el('div', 'zia-folder-card-list zsf-hover-list');
     list.setAttribute('role', 'list');
     card.appendChild(list);
     card.addEventListener('mouseenter', clearClose);
@@ -90,12 +90,12 @@
   }
 
   function makeRow(tab) {
-    const row = el('div', 'zsf-hover-row');
+    const row = el('div', 'zia-folder-card-row zsf-hover-row');
     row.setAttribute('role', 'button');
     row.setAttribute('tabindex', '0');
     row.zsfTab = tab;
-    if (tab.selected) row.setAttribute('data-selected', 'true');
-    const icon = el('img', 'zsf-hover-icon');
+    if (tab.selected) { row.setAttribute('zia-selected', 'true'); row.setAttribute('data-selected', 'true'); }
+    const icon = el('img', 'zia-folder-card-icon zsf-hover-icon');
     try {
       icon.src = window.gBrowser?.getIcon?.(tab) ||
         tab.querySelector('.tab-icon-image')?.getAttribute('src') ||
@@ -104,9 +104,23 @@
       icon.src = 'chrome://global/skin/icons/defaultFavicon.svg';
     }
     icon.setAttribute('aria-hidden', 'true');
-    const title = el('span', 'zsf-hover-title', tab.label || '新分頁');
+    const title = el('span', 'zia-folder-card-label zsf-hover-title', tab.label || '新分頁');
     row.setAttribute('aria-label', title.textContent);
-    row.append(icon, title);
+    row.append(icon);
+    if (tab.hasAttribute('soundplaying') || tab.hasAttribute('muted')) {
+      const muted = tab.hasAttribute('muted');
+      const mute = el('img', 'zia-folder-card-sound zia-folder-card-act zsf-hover-action');
+      mute.src = 'chrome://sine/content/zia/icons/ui/' + (muted ? 'volume-off' : 'volume') + '.svg';
+      mute.setAttribute('zia-act', 'mute');
+      mute.setAttribute('title', muted ? '取消靜音' : '靜音');
+      row.appendChild(mute);
+    }
+    row.appendChild(title);
+    const close = el('img', 'zia-folder-card-act zsf-hover-action');
+    close.src = 'chrome://sine/content/zia/icons/ui/x.svg';
+    close.setAttribute('zia-act', 'close');
+    close.setAttribute('title', '關閉分頁');
+    row.appendChild(close);
     return row;
   }
 
@@ -116,16 +130,21 @@
     if (!list) return false;
     const tabs = members(group);
     if (!tabs.length) return false;
+    const scrollTop = list.scrollTop || 0;
     const rows = tabs.map(makeRow);
-    // Include the same explicit new-tab affordance as Zia's folder card,
-    // but never create anything until the user selects it.
-    const add = el('div', 'zsf-hover-row zsf-hover-new', '＋  開啟新分頁');
+    const add = el('div', 'zia-folder-card-row zsf-hover-row zsf-hover-new');
+    add.setAttribute('zia-new-tab', 'true');
     add.setAttribute('role', 'button');
     add.setAttribute('tabindex', '0');
     add.setAttribute('aria-label', '在資料夾內開啟新分頁');
     add.dataset.action = 'new';
+    const plus = el('img', 'zia-folder-card-icon zsf-hover-icon');
+    plus.src = 'chrome://sine/content/zia/icons/ui/plus.svg';
+    plus.setAttribute('aria-hidden', 'true');
+    add.append(plus, el('span', 'zia-folder-card-label zsf-hover-title', '開啟新分頁'));
     rows.push(add);
     list.replaceChildren(...rows);
+    list.scrollTop = scrollTop;
     return true;
   }
 
@@ -181,6 +200,29 @@
     const group = activeGroup;
     if (!row || !group?.isConnected) return;
     event.stopPropagation();
+    const action = event.target?.closest?.('.zsf-hover-action')?.getAttribute?.('zia-act');
+    if (action) {
+      const tab = row.zsfTab;
+      if (!tab?.isConnected || tab.group !== group) return;
+      try {
+        if (action === 'mute') {
+          tab.toggleMuteAudio?.();
+        } else if (action === 'close') {
+          window.gBrowser?.removeTab?.(tab, { animate: true });
+        } else {
+          return;
+        }
+      } catch (error) {
+        console.warn(TAG, 'Explicit card action failed:', action, error);
+      }
+      // Preserve list scroll position across explicit close/mute actions.
+      setTimeout(() => {
+        if (!activeGroup?.isConnected || !card || card.hidden) return;
+        if (render(activeGroup)) position(activeLabel);
+        else closeNow();
+      }, 80);
+      return;
+    }
     if (row.dataset.action === 'new') {
       // A deliberate click only. Do not pin a newly created tab.
       try {
@@ -248,6 +290,12 @@
     bind(toolbox, 'wheel', closeNow, { passive: true, capture: true });
     bind(toolbox, 'mousedown', closeNow, true);
     bind(tabContainer, 'TabGroupExpand', closeNow);
+    bind(window, 'TabSelect', () => {
+      if (activeGroup?.isConnected && activeLabel?.isConnected && card && !card.hidden) {
+        if (render(activeGroup)) position(activeLabel);
+        else closeNow();
+      }
+    });
     bind(tabContainer, 'TabClose', () => {
       if (activeGroup?.isConnected && activeLabel?.isConnected) {
         if (render(activeGroup)) position(activeLabel);
@@ -270,10 +318,10 @@
     handlers.length = 0;
     card?.remove();
     card = null;
-    if (window.__zsfGroupHoverV029 === api) delete window.__zsfGroupHoverV029;
+    if (window.__zsfGroupHoverV030 === api) delete window.__zsfGroupHoverV030;
   }
-  const api = { start, destroy, closeNow, version: '0.2.9' };
-  window.__zsfGroupHoverV029 = api;
+  const api = { start, destroy, closeNow, version: '0.3.0' };
+  window.__zsfGroupHoverV030 = api;
   if (document.readyState === 'complete') {
     if (!start()) window.addEventListener('load', start, { once: true });
   } else {
