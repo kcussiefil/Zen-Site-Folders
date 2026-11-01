@@ -527,3 +527,12 @@ tab-group[data-zsf-site][data-zsf-drag-source]
   transform: none !important;
   transition: none !important;
 }
+
+/* v0.5.0: suppress Zen's grey drag bar with circular endcap. This is
+   a DOM indicator (#zen-drag-indicator), not a DataTransfer ghost image.
+   Keep its native DOM and event logic intact; show our ZSF insertion line. */
+:root[data-zsf-hide-native-indicator] #zen-drag-indicator,
+:root[data-zsf-hide-native-indicator] .tab-drop-indicator {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}

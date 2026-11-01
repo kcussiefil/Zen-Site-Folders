@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.4.3
+// @version      0.5.0
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==

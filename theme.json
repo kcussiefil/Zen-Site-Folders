@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Native drag preview suppression, whole-group avoidance animation and sidebar drag-edge scrolling.",
+  "description": "Hide Zen's circular drag indicator and make group/member drops immediate, preserving native settle reconciliation.",
   "author": "kcussiefil",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T16:53:00.000Z"
+  "updatedAt": "2026-11-01T17:16:00.000Z"
 }
