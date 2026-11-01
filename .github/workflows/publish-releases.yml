@@ -51,8 +51,7 @@ jobs:
               --repo "$GH_REPO" \
               --target "$target" \
               --title "Zen Site Folders $tag" \
-              --notes-file "$notes" \
-              --prerelease
+              --notes-file "$notes"
             echo "Published $tag from $target"
           }
 
