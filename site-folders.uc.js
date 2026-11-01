@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.2.2
+// @version      0.2.3
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV022) return;
-  window.__zenSiteFoldersV022 = true;
+  if (window.__zenSiteFoldersV023) return;
+  window.__zenSiteFoldersV023 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -27,7 +27,8 @@
     'mail.google.com': 'Gmail', 'gmail.com': 'Gmail',
     'claude.ai': 'Claude', 'claude.com': 'Claude',
     'zen-browser.app': 'Zen', 'twitch.tv': 'Twitch',
-    'discord.com': 'Discord', 'notion.so': 'Notion'
+    'discord.com': 'Discord', 'notion.so': 'Notion',
+    'internal:about': 'About'
   };
   const SEPARATE_HOSTS = new Set([
     'drive.google.com','docs.google.com','maps.google.com','mail.google.com',
@@ -90,12 +91,13 @@
   }
 
   function tabURL(tab) {
+    const valid = raw => typeof raw === 'string' && /^(?:https?:\/\/|about:)/i.test(raw);
     for (const raw of [
       tab?.linkedBrowser?.currentURI?.spec,
       tab?.getAttribute('linkedpanel-url'),
       tab?.getAttribute('url')
     ]) {
-      if (typeof raw === 'string' && /^https?:\/\//i.test(raw)) return raw;
+      if (valid(raw)) return raw;
     }
     // Restored/sleeping tabs may only carry their URL in SessionStore.
     try {
@@ -103,13 +105,17 @@
       if (json) {
         const state = JSON.parse(json);
         const entry = state.entries?.[(state.index || state.entries?.length || 1) - 1];
-        if (/^https?:\/\//i.test(entry?.url || '')) return entry.url;
+        if (valid(entry?.url)) return entry.url;
       }
     } catch (_) {}
     return null;
   }
 
   function siteFor(raw) {
+    // All real about: pages share a single non-network site group. Exclude
+    // new-tab/home placeholders which Zen can create synthetically.
+    if (/^about:(?:newtab|home|blank)(?:[?#]|$)/i.test(raw || '')) return null;
+    if (/^about:[a-z0-9_-]+(?:[?#].*)?$/i.test(raw || '')) return 'internal:about';
     try {
       const url = new URL(raw);
       if (!['http:', 'https:'].includes(url.protocol)) return null;
@@ -228,6 +234,7 @@
   function sourceFaviconURL(tab) {
     const raw = tabURL(tab);
     if (!raw) return null;
+    if (/^about:/i.test(raw)) return 'chrome://global/skin/icons/settings.svg';
     // page-icon resolves through Firefox's own favicon cache, not a third-party API.
     return 'page-icon:' + raw;
   }
@@ -880,7 +887,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV022 = { organize, undo, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV023 = { organize, undo, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
