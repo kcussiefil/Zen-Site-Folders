@@ -16,7 +16,7 @@ class FakeNode {
     this.isConnected = true;
     this.hidden = false;
     this.offsetTop = 7;
-    this.offsetHeight = 32;
+    // offsetHeight is a layout getter below, not a writable property.
     this.textContent = '';
   }
   append(...children) { for (const child of children) { this.children.push(child); child.parentElement = this; } }
