@@ -129,8 +129,8 @@ async function main() {
     createElementNS: (_ns, type) => new FakeNode(type),
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
-  const api = window.__zsfGroupHoverV036;
-  assert.equal(api.version, '0.3.6');
+  const api = window.__zsfGroupHoverV037;
+  assert.equal(api.version, '0.3.7');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
