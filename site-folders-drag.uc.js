@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.5.4
+// @version      0.5.5
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -18,6 +18,85 @@
   const tasks = new Set();
   let generation = 0;
   let lastWorkspace = window.gZenWorkspaces?.activeWorkspace;
+  let ziaShim = null, ziaDelegate = null, ziaFallbackFrame = 0, ziaCleanupTimer = 0;
+
+  // Zia detects a whole native folder by isZenFolder in its tabFromEvent()
+  // and begin() functions. That flag must NEVER be stored on our normal
+  // group outside a gesture: Zen's folder lifecycle also checks it.
+  function restoreZiaShim() {
+    if (ziaCleanupTimer) { clearTimeout(ziaCleanupTimer); ziaCleanupTimer = 0; }
+    if (ziaFallbackFrame) {
+      window.cancelAnimationFrame?.(ziaFallbackFrame);
+      ziaFallbackFrame = 0;
+    }
+    const shim = ziaShim;
+    ziaShim = null;
+    if (shim?.group) {
+      try {
+        if (shim.ownDescriptor)
+          Object.defineProperty(shim.group, 'isZenFolder', shim.ownDescriptor);
+        else delete shim.group.isZenFolder;
+      } catch (error) {
+        console.warn('[ZenSiteFoldersDrag] Failed to restore folder identity:', error);
+      }
+    }
+    if (shim?.folders && shim.originalCanDrop) {
+      try {
+        if (shim.folders.canDropElement === shim.wrappedCanDrop)
+          shim.folders.canDropElement = shim.originalCanDrop;
+      } catch (_) {}
+    }
+  }
+  function primeZiaShim(subject) {
+    if (window.__ziaLoaded !== true || subject?.kind !== 'group' ||
+        !ownGroup(subject.item)) return false;
+    restoreZiaShim();
+    const group = subject.item;
+    const ownDescriptor = Object.getOwnPropertyDescriptor(group, 'isZenFolder');
+    if (ownDescriptor && !ownDescriptor.configurable) return false;
+    const shim = { group, ownDescriptor, folders: null,
+      originalCanDrop: null, wrappedCanDrop: null };
+    try {
+      Object.defineProperty(group, 'isZenFolder', { configurable: true, value: true });
+      // Zia's canNest() consults this one Zen method. Do not allow owned
+      // website folders to become children of another folder: only
+      // existing same-level ordering is supported by our snapshots.
+      const folders = window.gZenFolders;
+      if (folders && typeof folders.canDropElement === 'function') {
+        const original = folders.canDropElement;
+        const wrapped = function(element, target) {
+          if (element === group &&
+              target?.closest?.('tab-group:not([split-view-group]), zen-folder'))
+            return false;
+          return original.call(this, element, target);
+        };
+        folders.canDropElement = wrapped;
+        shim.folders = folders;
+        shim.originalCanDrop = original;
+        shim.wrappedCanDrop = wrapped;
+      }
+      ziaShim = shim;
+      return true;
+    } catch (error) {
+      ziaShim = shim;
+      restoreZiaShim();
+      console.warn('[ZenSiteFoldersDrag] Zia adapter unavailable:', error);
+      return false;
+    }
+  }
+  function ziaIsDragging() {
+    return document.documentElement.hasAttribute?.('zia-dragging-tab') === true;
+  }
+  function releaseZiaAfterDrop() {
+    ziaDelegate = null;
+    if (ziaCleanupTimer) clearTimeout(ziaCleanupTimer);
+    // Zia's finishFolderDrop is queued via setTimeout(0). Restore native
+    // identities after that callback, never inside the drop dispatch.
+    ziaCleanupTimer = setTimeout(() => {
+      ziaCleanupTimer = 0;
+      restoreZiaShim();
+    }, 40);
+  }
 
   function bind(node, name, fn, opts) {
     node?.addEventListener?.(name, fn, opts);
@@ -490,6 +569,11 @@
     ghost = null;
   }
   function finish(event) {
+    if (ziaDelegate) {
+      pending = null;
+      releaseZiaAfterDrop();
+      return;
+    }
     if (!active) { pending = null; return; }
     // The final release uses the SAME measured slot as the last visual
     // dock, unless the pointer has moved or the slot is no longer valid.
@@ -542,6 +626,7 @@
 
   function onDown(event) {
     if (event.button !== 0) return;
+    restoreZiaShim(); ziaDelegate = null;
     const source = sourceFromEvent(event);
     generation++;
     const port = source ? findScrollPort(source) : null;
@@ -550,16 +635,61 @@
       scrollPort: port, scrolls: captureScrolls(event, port),
       layout: captureLayout(source), root: source.parent.parentElement,
       collapsed: source.parent.collapsed } : null;
+    if (source?.kind === 'group') primeZiaShim(source);
   }
   function onMove(event) {
+    if (ziaDelegate) return; // Zia solely owns the preview and destination.
     if (!active) {
       if (!pending) return;
-      if (!(event.buttons & 1)) { pending = null; return; }
-      if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) >= THRESHOLD)
-        activate(pending, event);
+      if (!(event.buttons & 1)) {
+        pending = null;
+        restoreZiaShim();
+        return;
+      }
+      if (Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < THRESHOLD)
+        return;
+      if (ziaShim) {
+        // In genuine macOS drag gestures, let native dragstart arrive
+        // before starting our pointer-only fallback. Synthetic regression
+        // events have no native dragstart, and remain deterministic.
+        if (event.isTrusted === false) {
+          restoreZiaShim();
+          activate(pending, event);
+          return;
+        }
+        if (!ziaFallbackFrame) {
+          const captured = { clientX: event.clientX, clientY: event.clientY };
+          ziaFallbackFrame = window.requestAnimationFrame?.(() => {
+            ziaFallbackFrame = 0;
+            if (!pending || ziaDelegate || ziaIsDragging()) return;
+            restoreZiaShim();
+            activate(pending, captured);
+          }) || 0;
+        }
+        return;
+      }
+      activate(pending, event);
     } else if (event.buttons & 1) update(event);
   }
   function onStart(event) {
+    // Zia was loaded before this script; its window-capture dragstart
+    // has already called begin() if our temporary folder flag worked.
+    const path = event.composedPath?.() || [];
+    if (ziaShim && ziaIsDragging() &&
+        (path.includes(ziaShim.group) ||
+         ziaShim.group.contains?.(event.target))) {
+      if (ziaFallbackFrame) {
+        window.cancelAnimationFrame?.(ziaFallbackFrame);
+        ziaFallbackFrame = 0;
+      }
+      if (active) reset();
+      ziaDelegate = { group: ziaShim.group,
+        parent: ziaShim.group.parentElement,
+        workspace: window.gZenWorkspaces?.activeWorkspace };
+      pending = null;
+      return;
+    }
+    if (ziaShim) restoreZiaShim();
     const source = pending?.item?.isConnected ? pending : sourceFromEvent(event);
     if (source && !source.layout) {
       source.layout = captureLayout(source);
@@ -575,9 +705,11 @@
     }
   }
   function onOver(event) {
+    if (ziaDelegate) return;
     if (active) update(event);
   }
   function hideNativeDragImage(event) {
+    if (ziaDelegate) return; // Zia already blanks its native drag image.
     // Window bubble phase runs after native dragstart handlers. Keep the
     // real DataTransfer/drop events; suppress only the OS ghost picture.
     if (!active?.item?.isConnected || !event.dataTransfer?.setDragImage)
@@ -597,7 +729,9 @@
     }
   }
   function onKey(event) {
-    if (event.key === 'Escape') { generation++; reset(); }
+    if (event.key === 'Escape') {
+      generation++; ziaDelegate = null; restoreZiaShim(); reset();
+    }
   }
   function start() {
     if (started || destroyed) return;
@@ -614,18 +748,27 @@
     // Commit the displayed valid slot immediately instead of merely
     // resetting our preview; native OS drag keeps its separate drop path.
     bind(window, 'mouseup', event => {
+      if (ziaDelegate) return; // Wait for Zia's native drop.
       if (active && !active.native) finish(event);
-      else if (!active) pending = null;
+      else if (!active) { pending = null; restoreZiaShim(); }
     }, true);
-    bind(window, 'dragend', reset, true);
+    bind(window, 'dragend', () => {
+      if (ziaDelegate) releaseZiaAfterDrop();
+      else restoreZiaShim();
+      reset();
+    }, true);
     // Tab switching focuses the content browser and emits a window blur too.
     // Only OS-window deactivation cancels the gesture; descendant/content
     // focus changes must not erase the source captured on mousedown.
-    bind(window, 'deactivate', () => { generation++; reset(); }, true);
+    bind(window, 'deactivate', () => {
+      generation++; ziaDelegate = null; restoreZiaShim(); reset();
+    }, true);
     bind(window, 'keydown', onKey, true);
     bind(window, 'ZenWorkspacesUIUpdate', () => {
       const workspace = window.gZenWorkspaces?.activeWorkspace;
-      if (workspace !== lastWorkspace) { generation++; reset(); }
+      if (workspace !== lastWorkspace) {
+        generation++; ziaDelegate = null; restoreZiaShim(); reset();
+      }
       lastWorkspace = workspace;
     });
     bind(window, 'mousedown', () => { generation++; }, true);
@@ -633,6 +776,8 @@
   function destroy() {
     if (destroyed) return;
     destroyed = true;
+    ziaDelegate = null;
+    restoreZiaShim();
     reset();
     nativeBlank?.remove();
     nativeBlank = null;
@@ -642,7 +787,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.5.4', chooseSlot, commit, beforeMutation, nativeIdle };
+  const api = { start, destroy, version: '0.5.5', chooseSlot, commit, beforeMutation, nativeIdle };
   window.__zsfDragV037 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
