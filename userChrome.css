@@ -202,7 +202,7 @@
    Applying a clip-path to the *entire animated folder* forces expensive
    repaints on every scroll/frame, particularly during video playback.
    Keep the selected tab glow visible without an oversized clipping layer. */
-#tabbrowser-tabs tab-group[data-zsf-site]:not([collapsed], [split-view-group]):has(> .tab-group-container > .tabbrowser-tab:is([selected], [visuallyselected])) > .tab-group-container:not([zia-folder-holding]) {
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]):not([collapsed][has-active]):has(> .tab-group-container > .tabbrowser-tab:is([selected], [visuallyselected])) > .tab-group-container:not([zia-folder-holding]) {
   overflow: visible !important;
   clip-path: none !important;
 }
