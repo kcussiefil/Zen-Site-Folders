@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.3.5
+// @version      0.3.6
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfMenuV035) return;
+  if (window.__zsfMenuV036) return;
   const TAG = '[ZenSiteFoldersMenu]';
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
   const ARCHIVE_KEY = 'zsf-archived-snapshots-v1';
@@ -117,7 +117,7 @@
     try { window.alert?.(message); } catch (_) {}
   }
 
-  function archiveSnapshotForMutation(action) {
+  function archiveSnapshotForMutation(action, keepActiveSnapshot = false) {
     const spaceId = currentSpace();
     const all = read(SNAPSHOT_KEY);
     if (!spaceId || !all) {
@@ -142,6 +142,10 @@
       alertUser('快照封存失敗，未修改任何分頁。');
       return false;
     }
+    // For manual "解散群組", keep the active snapshot and rescue arrow
+    // until remaining owned groups can be safely handled. A lost tab ID or
+    // partial ungroup must never erase the only visible recovery entry.
+    if (keepActiveSnapshot) return true;
     const next = { ...all };
     delete next[spaceId];
     if (!write(SNAPSHOT_KEY, next)) {
@@ -278,18 +282,21 @@
 
   function ungroup(group) {
     const list = members(group);
-    const browser = window.gBrowser;
-    if (typeof browser?.ungroupTab !== 'function') { alertUser('目前 Zen 不支援解散群組。'); return; }
-    if (!promptConfirm('確定解散「' + group.label + '」群組？\n' +
-      '共 ' + list.length + ' 個分頁會全部保留，但排列可能改變。\n' +
-      '如果有整理快照，會自動先封存備份。')) return;
-    if (!archiveSnapshotForMutation('解散群組')) return;
-    let count = 0;
-    for (const tab of list) {
-      try { browser.ungroupTab(tab); if (tab.isConnected && tab.group !== group) count++; }
-      catch (error) { console.warn(TAG, 'Ungroup failed', error); }
+    const helper = window.__zenSiteFoldersV036?.ungroupInDisplayOrder;
+    if (typeof helper !== 'function') {
+      alertUser('保序解散功能尚未載入；為避免分頁倒序，沒有進行解散。');
+      return;
     }
-    if (count !== list.length) alertUser('部分解除群組失敗，請核對現有分頁。');
+    if (!list.length) { alertUser('群組中沒有可解散的一般分頁。'); return; }
+    if (!promptConfirm('確定解散「' + group.label + '」群組？\n' +
+      '共 ' + list.length + ' 個分頁將保留，並維持原本由上到下的順序。\n' +
+      '如果有整理快照，會自動先封存備份，並保留還原箭頭。')) return;
+    if (!archiveSnapshotForMutation('解散群組', true)) return;
+    const result = helper(group, list);
+    if (result.errors || result.moved !== list.length || !result.ordered) {
+      alertUser('部分解散或順序驗證失敗：已解散 ' + result.moved +
+        ' 個分頁，請核對。快照及還原箭頭仍保留。');
+    }
   }
 
   function deleteGroup(group) {
@@ -478,8 +485,8 @@
     menu?.remove();
   }
 
-  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.5' };
-  window.__zsfMenuV035 = api;
+  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.6' };
+  window.__zsfMenuV036 = api;
   if (document.readyState === 'complete') init();
   else bind(window, 'load', init, { once: true });
   bind(window, 'unload', destroy, { once: true });
