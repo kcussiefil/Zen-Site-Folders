@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Zia-style live in-list drag preview: moved folder visibly occupies its final slot before release.",
+  "description": "Whole site folders delegate to Zia's native row-shift and drop controller, with scoped identity restore and safe fallback.",
   "author": "kcussiefil",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T18:08:53.163Z"
+  "updatedAt": "2026-11-01T21:01:59.584Z"
 }

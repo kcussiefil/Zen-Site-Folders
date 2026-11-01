@@ -6,8 +6,13 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'site-folders-drag.uc.js'
 const core = fs.readFileSync(path.join(__dirname, '..', 'site-folders.uc.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 new vm.Script(src);
-assert(!/\bpreventDefault\(|\bstopPropagation\(|dropEffect\s*=/.test(src),
-  'must never interrupt native Zen/Zia drop events');
+assert(!/dropEffect\s*=/.test(src), 'never alter native drag effect');
+assert((src.match(/event\.preventDefault\?\.\(\)/g)||[]).length===2 &&
+       (src.match(/event\.stopPropagation\?\.\(\)/g)||[]).length===2,
+  'Zen interception is scoped to Zia-delegated group dragover/drop only');
+assert(src.includes('if (ziaDelegate)') &&
+  src.includes('Zia already painted the displaced rows'),
+  'normal Zen/Zia drop events must not be intercepted');
 assert((src.match(/\.setDragImage\(/g)||[]).length===1,
   'only the ZSF-scoped OS preview may be overwritten, not native drop events');
 assert(!/\.(?:pinTab|unpinTab|removeTab)\s*\(/.test(src),
@@ -129,7 +134,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.5.4');
+assert(api&&api.version==='0.5.5');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -299,6 +304,47 @@ async function main(){
     dataTransfer:{setDragImage(){unrelatedBlanked=true;}}});
   assert(!unrelatedBlanked,'unrelated native drag preview must stay intact');
 
+  // Privileged synthetic events can be trusted: no dragstart means the
+  // pointer fallback must own the preview immediately, without a frame.
+  window.__ziaLoaded = true;
+  emit(strip,'mousedown',{...gEvent(160,160),isTrusted:true});
+  emit(window,'mousemove',{...gEvent(160,120),isTrusted:true});
+  assert.equal(api.debugDrag(source).activeKind,'group');
+  assert.equal(api.debugDrag(source).ziaDelegate,false);
+  assert(source.hasAttribute('data-zsf-drag-source'));
+  root.setAttribute('zia-dragging-tab','true');
+  emit(window,'dragstart',{...gEvent(160,120),dataTransfer:{}});
+  assert.equal(api.debugDrag(source).ziaDelegate,true);
+  assert.equal(api.debugDrag(source).activeKind,null);
+  assert(!source.hasAttribute('data-zsf-drag-source'));
+  root.removeAttribute('zia-dragging-tab');
+  emit(window,'keydown',{key:'Escape'});
+  assert(!source.isZenFolder);
+
+  // Temporary Zia group hand-off: the normal JS unit fixture emulates
+  // the flag Zia sets during its own window-capture dragstart.
+  window.__ziaLoaded = true;
+  const nativeBefore = moveLog.length;
+  emit(strip,'mousedown',gEvent(160,160,sourceLabel));
+  assert(api.prepareZiaGroupDrag(source) === true,
+    'isolated synthetic Zia regression explicitly primes native adapter');
+  assert(source.isZenFolder === true,
+    'only the grabbed ZSF group may be temporarily recognized by Zia');
+  root.setAttribute('zia-dragging-tab','true');
+  emit(window,'dragstart',{...gEvent(160,160,sourceLabel),
+    composedPath:()=>[sourceLabel,source,strip],
+    dataTransfer:{setDragImage(){throw Error('ZSF must not override Zia drag image');}}});
+  assert(!root.querySelector('.zsf-drag-ghost'),
+    'no duplicate drag preview when Zia has taken over a whole group');
+  emit(window,'drop',gEvent(160,140,sourceLabel));
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert(source.isZenFolder !== true,
+    'temporary native folder identity must be restored after drop');
+  assert(moveLog.length===nativeBefore || moveLog.length===nativeBefore+1,
+    'native delegated path can make at most one safety-only reorder for an incorrect destination');
+  root.removeAttribute('zia-dragging-tab');
+  window.__ziaLoaded = false;
+
   // Zia implements its own native tab row displacement and target
   // calculation. Our preview MUST disappear when Zia starts that drag,
   // otherwise our CSS masks Zia's actual moving row.
@@ -319,6 +365,8 @@ async function main(){
   assert.deepEqual(container.children,ziaOrder,
     'without a mocked Zia drop, our delegated path must not mutate the DOM');
   root.removeAttribute('zia-dragging-tab');
+  assert(api.commit({kind:'group',source,target:first,before:true},
+    {kind:'group',parent:strip}), 'restore native-test source ordering');
 
   // The gap math must also work when moving DOWN, where Zia shifts
   // intervening rows upward. The preview must already occupy the exact
