@@ -635,7 +635,11 @@
       scrollPort: port, scrolls: captureScrolls(event, port),
       layout: captureLayout(source), root: source.parent.parentElement,
       collapsed: source.parent.collapsed } : null;
-    if (source?.kind === 'group') primeZiaShim(source);
+    // Zia's native controller is entered only by real user gestures.
+    // Synthetic MouseEvents used by tests/other Mods must retain the
+    // established standalone ZSF fallback without transient identity.
+    if (source?.kind === 'group' && event.isTrusted === true)
+      primeZiaShim(source);
   }
   function onMove(event) {
     if (ziaDelegate) return; // Zia solely owns the preview and destination.
@@ -790,7 +794,13 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.5.5', chooseSlot, commit, beforeMutation, nativeIdle };
+  const api = { start, destroy, version: '0.5.5', chooseSlot, commit,
+    beforeMutation, nativeIdle,
+    // Explicit probe for isolated native Zen+Zia regression tests.
+    prepareZiaGroupDrag(group) {
+      return primeZiaShim({ kind: 'group', item: group });
+    }
+  };
   window.__zsfDragV037 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
