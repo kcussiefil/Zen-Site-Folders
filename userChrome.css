@@ -282,6 +282,13 @@ tab-group[data-zsf-site][collapsed]:has(> .tab-group-container > tab[selected]):
 tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-container[hidden] {
   display: none !important;
 }
+/* Clip children while Zia animates the height of a collapsed group with no
+   active tab; otherwise our ordinary-group overflow:visible leaks the rows. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site][collapsed]:not(:has(> .tab-group-container > tab[selected])):not([split-view-group])
+> .tab-group-container:not([hidden]) {
+  overflow: clip !important;
+}
 
 /* Share Zia's actual list classes / variables. Our popup remains an
    independent read-only DOM: do not overwrite Zia's #zia-folder-card. */
