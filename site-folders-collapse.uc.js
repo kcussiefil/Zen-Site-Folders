@@ -58,11 +58,26 @@
     // which raced over the same elements and broke Zia's spring, particularly
     // when an audio tab was already visible.
     //
-    // The new selected tab may still have native height:0 / opacity:0 left
-    // by the previous collapse; only clear THAT tab's native inline styles.
+    // Native 'folder-active' remains on the previously selected tab even
+    // after browser selection moved. Zen considers it active alongside the
+    // newly selected tab, leaving TWO rows visible (caught by native CI).
+    // Retire only the former selected rows, preserving nested/folder state.
     if (collapsed && prior?.collapsed) {
+      for (const tab of prior.selected) {
+        if (selected.includes(tab) || !tab.isConnected) continue;
+        if (tab.hasAttribute('folder-active')) {
+          tab.removeAttribute('folder-active');
+          tab.style.removeProperty('--zen-folder-indent');
+        }
+      }
+      // The new selected tab may still have native height:0 / opacity:0 left
+      // by the previous collapse; clear only its old inline native styles.
       const newlySelected = selected.filter(tab => !prior.selected.includes(tab));
       if (newlySelected.length) zen.styleCleanup?.(newlySelected);
+    }
+    if (collapsed && selected.length === 0 && group.hasAttribute('has-active')) {
+      group.removeAttribute('has-active');
+      group.activeTabs = [];
     }
     // Exactly one native animation path per state transition. Zia decorates
     // this same native path; no competing WAAPI timeline is introduced.
