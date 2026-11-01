@@ -170,7 +170,11 @@ const finish = arguments[arguments.length - 1];
     head.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,composed:true,
       button:0,buttons:1,clientX:from.left+20,clientY:from.top+10}));
     window.dispatchEvent(new MouseEvent('mousemove',{buttons:1,clientX:x,clientY:y}));
-    assert(h.group.hasAttribute('data-zsf-drag-source'), 'dragging folder must expose its floating card');
+    assert(h.group.hasAttribute('data-zsf-drag-source'),
+      'dragging folder must expose its floating card: ' +
+        JSON.stringify({state:drag.debugDrag?.(h.group),
+          syntheticTrusted:new MouseEvent('mousemove').isTrusted,
+          down:{x:from.left+20,y:from.top+10},move:{x,y}}));
     assert(first.hasAttribute('data-zsf-drag-avoid'), 'ordinary sibling must enter the avoidance path');
     const docked = document.querySelector('.zsf-drag-ghost[data-zsf-docked]');
     assert(docked && !document.querySelector('.zsf-drop-guide'),
