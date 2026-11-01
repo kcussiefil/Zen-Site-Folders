@@ -716,7 +716,10 @@
         // In genuine macOS drag gestures, let native dragstart arrive
         // before starting our pointer-only fallback. Synthetic regression
         // events have no native dragstart, and remain deterministic.
-        if (event.isTrusted === false) {
+        if (event.isTrusted !== true) {
+          // Chrome-privileged synthetic input has isTrusted=false (and
+          // some test harnesses omit it entirely). Never defer a normal
+          // pointer fallback or make it wait for a native dragstart.
           restoreZiaShim();
           activate(pending, event);
           return;
