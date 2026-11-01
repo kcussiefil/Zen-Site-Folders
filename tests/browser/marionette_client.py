@@ -10,6 +10,7 @@ class Marionette:
         self.sequence = 0
         self._read()  # protocol greeting
         self.call('WebDriver:NewSession', {'capabilities': {'alwaysMatch': {}}})
+        self.call('WebDriver:SetTimeouts', {'script': 90000, 'pageLoad': 60000, 'implicit': 0})
         self.call('Marionette:SetContext', {'value': 'chrome'})
 
     def _receive(self, count):
