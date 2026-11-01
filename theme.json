@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Website folders, cached icons, neutral styling, animated divider and persistent one-click undo. Zia-compatible.",
+  "description": "Ordinary unpinned website tab groups, cached icons, neutral styling, animated divider and persistent one-click undo. Zia-compatible.",
   "author": "kcussiefil",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "style": {
     "chrome": "userChrome.css"
   },
