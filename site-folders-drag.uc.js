@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders — 拖曳位置提示
-// @version      0.3.5
+// @version      0.3.6
 // @description  Visual-only drag preview and same-level insertion guide; Zen/Zia owns drops.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfDragV035) return;
+  if (window.__zsfDragV036) return;
 
   const GROUP = 'tab-group[data-zsf-site]:not([split-view-group])';
   const NS = 'http://www.w3.org/1999/xhtml';
@@ -224,10 +224,10 @@
     for (const [node, name, handler, options] of listeners)
       try { node.removeEventListener(name, handler, options); } catch (_) {}
     listeners.length = 0;
-    if (window.__zsfDragV035 === api) delete window.__zsfDragV035;
+    if (window.__zsfDragV036 === api) delete window.__zsfDragV036;
   }
-  const api = { start, destroy, version: '0.3.5', chooseSlot };
-  window.__zsfDragV035 = api;
+  const api = { start, destroy, version: '0.3.6', chooseSlot };
+  window.__zsfDragV036 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });
