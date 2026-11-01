@@ -12,7 +12,7 @@ const finish = arguments[arguments.length - 1];
   const same = (a, b) => a.length === b.length && a.every((tab, i) => tab === b[i]);
   const names = list => list.map(tab => tab.zsfTestName || tab.id);
   let serial = 0;
-  async function fixture() {
+  async function fixture(caseName = '') {
     const id = ++serial;
     const make = name => {
       const tab = gBrowser.addTab('about:blank#zsf-' + id + name, {
@@ -22,6 +22,11 @@ const finish = arguments[arguments.length - 1];
       return tab;
     };
     const prefix = make('prefix'), tabs = ['A', 'B', 'C', 'D'].map(make), suffix = make('suffix');
+    // Only the scroll stability test needs a guaranteed overflowing real
+    // arrowscrollbox even when run alone with --case.
+    if (caseName.includes('scroll offset')) {
+      for (let i = 0; i < 34; i++) make('overflow-' + i);
+    }
     const group = gBrowser.addTabGroup(tabs, { id: 'zsf-native-test-' + id,
       label: 'GitHub', insertBefore: tabs[0], showCreateUI: false });
     group.setAttribute('data-zsf-site', 'github.com');
@@ -46,7 +51,7 @@ const finish = arguments[arguments.length - 1];
   async function test(name, fn) {
     if (selectedCase && !name.includes(selectedCase)) return;
     try {
-      const h = await fixture();
+      const h = await fixture(name);
       await guarded(h, () => fn(h));
       results.push({ name, status: 'PASS' });
     } catch (error) { results.push({ name, status: 'FAIL', error: String(error.message || error) + '\n' + (error.stack || '') }); }
@@ -233,14 +238,78 @@ const finish = arguments[arguments.length - 1];
     for (const wait of [0,40,100]) {
       if (wait) await delay(wait);
       const container=h.group.groupContainer, paint=getComputedStyle(container);
-      if (!container.hasAttribute('zia-folder-holding')) assert(paint.overflowY==='visible' && paint.clipPath!=='none',
-        'opening must retain expanded glow paint room instead of the inline hidden clip: '+JSON.stringify({wait,overflow:paint.overflowY,clip:paint.clipPath,inline:container.style.overflowY}));
+      if (!container.hasAttribute('zia-folder-holding')) assert(paint.overflowY==='visible' && paint.clipPath==='none',
+        'opening must retain glow without an expensive expanded folder-wide clip: '+JSON.stringify({wait,overflow:paint.overflowY,clip:paint.clipPath,inline:container.style.overflowY}));
       assert(h.tabs[1].getBoundingClientRect().height>10, 'selected row remains visible during opening');
     }
     await idle(h.group);
     assert(h.group.groupContainer.getBoundingClientRect().height>60, 'normal expanded layout must remain intact');
     const settled=getComputedStyle(h.group.groupContainer);
-    assert(settled.overflowY==='visible' && settled.clipPath!=='none', 'selected glow room must survive the opening transition');
+    assert(settled.overflowY==='visible' && settled.clipPath==='none', 'selected glow must remain visible without group-wide clipping after opening');
+  });
+  await test('scroll offset stays fixed while opening a folder with animated sound bars', async h => {
+    const space = gZenWorkspaces.activeWorkspaceElement;
+    const scroll = space.scrollbox?.scrollbox;
+    assert(scroll && typeof scroll.scrollTop === 'number', 'real Zen arrowscrollbox scrollport must exist');
+    assert(space.hasAttribute('data-zsf-scroll-stable'), 'only a Space owning site groups must opt out of anchoring');
+    // This triggers Zia's CSS sound bars on a REAL tab without requiring a
+    // remote video stream; video decode/GPU contention is a physical follow-up.
+    const tab = h.tabs[1];
+    tab.setAttribute('soundplaying', 'true');
+    tab.dispatchEvent(new CustomEvent('TabAttrModified', {
+      bubbles: true, detail: { changed: ['soundplaying'] }
+    }));
+    await delay(150);
+    assert(tab.hasAttribute('soundplaying'), 'animated sound-bar state retained');
+    assert(scroll.scrollHeight > scroll.clientHeight + 80,
+      'must test overflow, not a scrollport that cannot move');
+    gBrowser.selectedTab = tab;
+    h.group.collapsed = true;
+    await idle(h.group);
+    scroll.scrollTop = Math.min(180, scroll.scrollHeight - scroll.clientHeight - 30);
+    await delay(140);
+    const start = scroll.scrollTop;
+    assert(start > 30, 'must begin with nonzero actual scrollTop');
+    const samples = [start];
+    h.group.collapsed = false;
+    // Sample mid-animation and after settling, not just the final frame.
+    for (const ms of [30, 50, 90, 120, 230]) {
+      await delay(ms);
+      samples.push(scroll.scrollTop);
+    }
+    await idle(h.group);
+    samples.push(scroll.scrollTop);
+    assert(samples.every(n => Math.abs(n - start) <= 2),
+      'native folder animation must not scroll sidebar when video sound indicator is active: ' +
+      JSON.stringify({ start, samples }));
+    assert(h.group.groupContainer.getBoundingClientRect().height > 60,
+      'sound wave must not cancel native folder expansion');
+  });
+  await test('Zia spring remains when soundplaying tab is selected inside folder', async h => {
+    const tab = h.tabs[1];
+    tab.setAttribute('soundplaying', 'true');
+    tab.dispatchEvent(new CustomEvent('TabAttrModified', {
+      bubbles: true, detail: { changed: ['soundplaying'] }
+    }));
+    gBrowser.selectedTab = tab;
+    await delay(120);
+    h.group.collapsed = true;
+    await idle(h.group);
+    const capturing = () => [h.group.groupStartElement, h.group.groupContainer, ...h.tabs]
+      .flatMap(el => el?.getAnimations?.() || [])
+      .map(anim => Number(anim.effect?.getTiming?.().duration) || 0);
+    h.group.collapsed = false;
+    // Zia's native selected-item path may animate children rather than the
+    // group start. Check the whole group for a spring-scale duration.
+    await delay(40);
+    const timings = capturing();
+    assert(timings.some(n => n >= 320),
+      'soundplaying selected tab must not lose the Zia/Zen spring duration: ' +
+      JSON.stringify(timings));
+    await idle(h.group);
+    assert(tab.getBoundingClientRect().height > 10 &&
+      h.group.groupContainer.getBoundingClientRect().height > 60,
+      'selected tab and group remain fully visible with audio indicator');
   });
   await test('simultaneous collapsed groups keep headers as actual hit targets', async h => {
     const [A,B,C,D] = h.tabs;
