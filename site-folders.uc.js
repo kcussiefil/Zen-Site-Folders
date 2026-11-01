@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.1.9
+// @version      0.2.0
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
   if (window.__zenSiteFoldersV020) return;
-  window.__zenSiteFoldersV019 = true;
+  window.__zenSiteFoldersV020 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -419,8 +419,7 @@
     const snapshot = current && stored[current.id];
     if (!snapshot) { toast('這個工作區沒有可還原的整理紀錄'); return; }
     if (snapshot.version !== 3) { toast('舊版快照不支援新版安全還原，請勿重試；請保留備份', true); return; }
-    if (!window.gBrowser?.ungroupTab || !window.gBrowser?.moveTabBefore ||
-        (snapshot.version === 2 && !window.gBrowser?.unpinTab)) {
+    if (!window.gBrowser?.ungroupTab || !window.gBrowser?.moveTabBefore) {
       toast('Zen 的原生還原 API 不可用，未修改分頁'); return;
     }
     running = true;
@@ -430,25 +429,8 @@
     try {
       const tabMap = findTabMap(current);
       missing = snapshot.tabs.filter(x => !tabMap.has(x.id)).length;
-      // Zen's native createFolder pins the original normal tabs.
-      // Undo MUST detach those tabs from our pinned folders and unpin them
-      // before restoring their original normal groups and positions.
-      if (false) { // Legacy pinned-folder restore is intentionally disabled.
-        for (const item of snapshot.tabs) {
-          const tab = tabMap.get(item.id);
-          if (!tab?.isConnected) continue;
-          try {
-            if (tab.group?.isZenFolder &&
-                (snapshot.createdFolders || []).includes(tab.group.id)) {
-              window.gBrowser.ungroupTab(tab);
-            }
-            if (!item.pinned && tab.pinned) window.gBrowser.unpinTab(tab);
-          } catch (e) {
-            errors++;
-            console.warn(TAG, 'Native folder ungroup/unpin failed:', e);
-          }
-        }
-      }
+      // v3 modifies only ordinary groups; never unpin or delete a Zen folder.
+
       // 1) Re-create lost manual groups with their original stable ID, label,
       // colour and members. This also covers groups emptied by sorting.
       for (const original of snapshot.elements.filter(x => x.type === 'group')) {
@@ -507,25 +489,9 @@
         if (item.collapsed) group.setAttribute('collapsed', 'true');
         else group.removeAttribute('collapsed');
       }
-      // Delete ONLY folders created by this operation and now containing
-      // ZERO real tabs. Never close newly added/user tabs in a folder.
-      let pendingFolders = 0;
-      if (false) { // Never delete a Zen native folder during undo.
-        for (const id of snapshot.createdFolders || []) {
-          const folder = findGroupByID(current, id);
-          if (!folder?.isZenFolder) continue;
-          const realTabs = [...folder.querySelectorAll('tab')]
-            .filter(t => t.isConnected && !t.hasAttribute('zen-empty-tab'));
-          if (realTabs.length) { pendingFolders++; continue; }
-          try {
-            await folder.delete(); // only the generated blank placeholder remains
-            forgetOwnedSite(folder);
-          } catch (e) {
-            pendingFolders++;
-            console.warn(TAG, 'Native empty folder cleanup failed:', e);
-          }
-        }
-      }
+      // Empty ordinary site groups are removed automatically by Firefox.
+      const pendingFolders = 0;
+
       // 5) Verify original pin status, membership and order before discarding backup.
       const wrong = snapshot.tabs.filter(item => {
         const tab = tabMap.get(item.id);
@@ -733,7 +699,7 @@
       if (absent.length) throw new Error('缺少還原 API：' + absent.join('、'));
       const stored = readSnapshots();
       if (stored[current.id] && stored[current.id].version !== 3) {
-        throw new Error('仍有舊版整理快照；請先按「還原」');
+        throw new Error('仍有舊版快照；為保護分頁已拒絕整理，請先備份並處理舊版工作階段');
       }
       if (!stored[current.id]) {
         const snapshot = captureSnapshot(current);
@@ -786,7 +752,7 @@
               else errors++;
             } catch (e) {
               errors++;
-              console.warn(TAG, 'Moving tab to native folder failed:', site, e);
+              console.warn(TAG, 'Moving tab to ordinary site group failed:', site, e);
             }
           }
           // Do not reorder members or move the group into the pinned region.
@@ -794,14 +760,14 @@
           try { folder.collapsed = true; } catch (_) {}
         } catch (e) {
           errors++;
-          console.warn(TAG, 'Native folder creation failed:', site, e);
+          console.warn(TAG, 'Ordinary site group creation failed:', site, e);
         }
       }
       if (!requested) {
         toast('目前沒有新增的一般網站分頁需要整理');
       } else if (completed !== requested || errors) {
         toast(`整理不完整：${completed}/${requested} 個分頁已入資料夾，可按還原`, true);
-        console.warn(TAG, 'Native sort incomplete', { requested, completed, errors });
+        console.warn(TAG, 'Ordinary group sort incomplete', { requested, completed, errors });
       } else {
         toast(`已整理 ${completed} 個分頁，新增 ${newFolders} 個 Zen 資料夾`);
       }
