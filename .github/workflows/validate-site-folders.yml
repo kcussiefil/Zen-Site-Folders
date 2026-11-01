@@ -30,7 +30,7 @@ jobs:
           node --check site-folders-drag.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.3.8' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.3.9' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -82,11 +82,11 @@ jobs:
             trap - EXIT
             echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/Zen.app/Contents/MacOS/zen" >> "$GITHUB_ENV"
           fi
-      - name: Prove regressions fail on v0.3.7
+      - name: Prove regressions fail on v0.3.8
         shell: bash
         run: |
           mkdir -p .runtime/baseline
-          git archive 5a3fe4a3d8d6cb33b69127238159feefefa30fad | tar -x -C .runtime/baseline
+          git archive f0b71ddee8f9caefad2864030e3f14fe714669b4 | tar -x -C .runtime/baseline
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --repo .runtime/baseline --output native-results/baseline && exit 1 || test -f native-results/baseline/results.json
           python3 tests/browser/check-baseline.py native-results/baseline/results.json
       - name: Verify candidate against native tab objects, events and layout

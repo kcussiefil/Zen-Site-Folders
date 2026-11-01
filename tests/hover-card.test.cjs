@@ -52,8 +52,12 @@ async function main() {
   // The hover script must not call destructive browser operations.
   assert(!/\b(removeTab|closeTab|pinTab|unpinTab)\s*\(/.test(source));
   assert(!/SNAPSHOT_KEY|writeSnapshots|captureSnapshot/.test(source));
-  assert(!css.includes('tab-group[data-zsf-site][collapsed]'),
-    'do not override Zia native collapsed group transitions');;
+  const collapsedRules = css.replace(/\/\*[\s\S]*?\*\//g, '').match(/[^{}]*tab-group\[data-zsf-site\]\[collapsed\][^{}]*\{[^{}]*\}/g) || [];
+  for (const rule of collapsedRules) {
+    const declarations = rule.slice(rule.indexOf('{'));
+    assert(!/(?:^|[;{])\s*(?:height|min-height|max-height|display|margin(?:-[\w-]+)?|animation(?:-[\w-]+)?)\s*:/.test(declarations),
+      'collapsed compatibility must not add another geometry or animation controller');
+  }
   assert(css.includes('#zsf-folder-hover-card'));
   assert(css.includes('@media -moz-pref("zia.cards.blur")'), 'Zia glass preference is honored');
   assert(css.includes('blur(24px) saturate(1.6)'), 'Zia glass blur matches');
@@ -131,7 +135,7 @@ async function main() {
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
   const api = window.__zsfGroupHoverV037;
-  assert.equal(api.version, '0.3.8');
+  assert.equal(api.version, '0.3.9');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));

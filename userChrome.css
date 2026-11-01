@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.8 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.3.9 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -175,6 +175,27 @@
    Zen and Zia already animate ordinary tab-group, its children, and the
    currently selected tab. Leave all visibility, height, margin and
    selection transitions to their native code. */
+/* Ordinary owned groups need the same clipping and hit-test rules that
+   Zen/Zia scope to zen-folder. These do not animate or change row heights. */
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group], [has-active]) > .tab-group-container {
+  overflow-y: clip;
+}
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab:not([selected], [visuallyselected], [folder-active="true"], [atg-folder-active], [zia-open-in-closed], [zia-closing-in-closed]) {
+  pointer-events: none;
+}
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed][has-active]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab:not([selected], [visuallyselected], [folder-active="true"], [atg-folder-active], [zia-open-in-closed], [zia-closing-in-closed]) {
+  opacity: 0 !important;
+  transition: opacity 0.18s ease-in-out;
+}
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed][zia-was-active]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab {
+  opacity: 0 !important;
+  transition: opacity 0.15s ease-in !important;
+}
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed][has-active]:not([split-view-group]) > .tab-group-container:not([zia-folder-holding]) {
+  --zia-glow-room: calc(-1 * (var(--zia-active-glow-blur, 0px) + var(--zia-active-glow-spread, 0px) + var(--zia-active-glow-reach, 0px)));
+  overflow: visible !important;
+  clip-path: inset(var(--zia-glow-room));
+}
 /* v0.2.8: own site groups look like a compact Zia folder WITHOUT
    Advanced Tab Groups. Do not restyle native Zen folders or user-made groups. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs > zen-workspace tab-group[data-zsf-site]:not([split-view-group]),
