@@ -11,7 +11,7 @@ class FakeNode {
     this.children = [];
     this.attrs = {};
     this.dataset = {};
-    this.style = {};
+    this.style = { setProperty(key, value) { this[key] = value; }, removeProperty(key) { delete this[key]; } };
     this.events = {};
     this.isConnected = true;
     this.hidden = false;
@@ -23,6 +23,7 @@ class FakeNode {
   appendChild(child) { this.append(child); return child; }
   replaceChildren(...children) { this.children = []; this.append(...children); }
   setAttribute(key, value) { this.attrs[key] = String(value); }
+  removeAttribute(key) { delete this.attrs[key]; }
   getAttribute(key) { return this.attrs[key] ?? null; }
   hasAttribute(key) { return Object.hasOwn(this.attrs, key); }
   addEventListener(type, handler) { this.events[type] = handler; }
@@ -39,6 +40,8 @@ class FakeNode {
     return null;
   }
   getBoundingClientRect() { return { top: 120, left: 100, width: 222, height: 128, right: 322, bottom: 248 }; }
+  get offsetWidth() { return this.tag === 'div' && this.id === 'zsf-folder-hover-card' ? 222 : 20; }
+  get offsetHeight() { return this.id === 'zsf-folder-hover-card' ? 420 : 32; }
 }
 
 async function main() {
@@ -53,6 +56,8 @@ async function main() {
   assert(css.includes('#zsf-folder-hover-card'));
   assert(css.includes('@media -moz-pref("zia.cards.blur")'), 'Zia glass preference is honored');
   assert(css.includes('blur(24px) saturate(1.6)'), 'Zia glass blur matches');
+  assert(css.includes('max-height: calc(100vh - 16px)'), 'viewport clamp required');
+  assert(css.includes('[data-closing]'), 'Zia-style exit animation required');
   assert(!css.includes('display: none !important;\n  max-height: 0 !important;\n  margin: 0 !important;\n  padding: 0 !important;'), 'no hard collapsed display:none that cancels Zia spring');
   assert(!css.includes('zsf-rescue-button'));
   new vm.Script(source);
@@ -112,8 +117,8 @@ async function main() {
     createElementNS: (_ns, type) => new FakeNode(type),
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
-  const api = window.__zsfGroupHoverV031;
-  assert.equal(api.version, '0.3.1');
+  const api = window.__zsfGroupHoverV032;
+  assert.equal(api.version, '0.3.2');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
@@ -126,12 +131,26 @@ async function main() {
   assert.equal(rows[2].dataset.action, 'new');
   assert.equal(rows[0].getAttribute('zia-selected'), 'true', 'selected row uses Zia highlight');
   assert(rows[0].className.includes('zia-folder-card-row'), 'Zia list styling is inherited');
+  assert(popup.hasAttribute('data-open'), 'first show plays Zia-style entry animation');
+  assert.equal(popup.style.maxHeight, '884px', 'card height limited by window geometry');
+  window.innerHeight = 330;
+  label.getBoundingClientRect = () => ({ left: 40, right: 225, top: 302, bottom: 328, width: 185, height: 26 });
+  api.position(label);
+  const computedTop = Number.parseInt(popup.style.top, 10);
+  assert(computedTop >= 8 && computedTop + Math.min(popup.offsetHeight, 314) <= 322,
+    'bottom anchored card must stay inside a small viewport');
+  assert.equal(popup.querySelector('.zsf-hover-list').style.maxHeight, '314px',
+    'last New Tab row remains reachable in a scrollable list');
+  window.innerHeight = 900;
+  label.getBoundingClientRect = () => ({ left: 40, right: 225, top: 158, bottom: 188, width: 185, height: 30 });
+  api.position(label);
   assert.equal(first.group, group, 'hover may not move or pin a tab');
   assert.equal(created, 0, 'hover may not create a tab');
 
   popup.events.click({ target: rows[1], stopPropagation() {} });
   assert.equal(browser.selectedTab, second, 'click must select correct tab');
   assert(popup.hidden, 'popup should hide after selection');
+  assert(!popup.hasAttribute('data-open'), 'close clears animation flag so it restarts next time');
   // Updating the selection should not reset a long card to its first row.
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
