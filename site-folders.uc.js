@@ -286,6 +286,18 @@
     }
   }
 
+  function sortOwnedGroupNewestFirst(group) {
+    if (!group?.isConnected || group.isZenFolder ||
+        group.pinned || !siteOfGroup(group) ||
+        group.hasAttribute('split-view-group')) return;
+    const members = [...(group.tabs || group.querySelectorAll('tab'))]
+      .filter(tab => eligible(tab) && tab.group === group && !tab.pinned);
+    const order = members.map((tab, index) => ({
+      tab, stamp: openedAt(tab), index
+    })).sort((a, b) => (b.stamp - a.stamp) || (a.index - b.index));
+    reorderGroup(group, order.map(item => item.tab));
+  }
+
   // Persist tab identity in Firefox's own SessionStore. The document's tab
   // nodes can be recreated on restart; DOM references cannot serve as backup.
   function tabUID(tab) {
@@ -1195,6 +1207,19 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
+    // Zen emits TabGrouped with the tab in event.detail. Sort only this
+    // mod's ordinary unpinned group after an explicit user grouping action;
+    // never auto-group or continuously override manual drag ordering.
+    window.addEventListener('TabGrouped', event => {
+      const tab = event?.detail;
+      const group = tab?.group;
+      if (running || !group?.isConnected || !siteOfGroup(group) ||
+          group.isZenFolder || group.pinned) return;
+      setTimeout(() => {
+        if (!running && tab?.isConnected && tab.group === group)
+          sortOwnedGroupNewestFirst(group);
+      }, 80);
+    });
     window.__zenSiteFoldersV029 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
