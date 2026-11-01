@@ -527,3 +527,23 @@ tab-group[data-zsf-site][data-zsf-drag-source]
 :root[zen-compact-mode="true"] #navigator-toolbox[data-zsf-preview-sidebar-hold] #titlebar {
   visibility: visible !important;
 }
+
+/* v0.5.4: Zia-like in-list landing preview. The ONE existing floating
+   card docks into the space opened by displaced sibling rows; there is
+   no additional horizontal insertion line. The actual tab DOM is not
+   altered during a gesture. */
+.zsf-drag-ghost[data-zsf-docked] {
+  max-width: none !important;
+  min-height: 0 !important;
+  height: var(--zsf-drag-dock-h, 35px) !important;
+  padding: 3px 10px !important;
+  gap: 8px !important;
+  border-radius: var(--zia-tab-card-radius, 10px) !important;
+  box-shadow: 0 3px 12px rgba(0,0,0,.16) !important;
+  backdrop-filter: none !important;
+  background: var(--zia-tab-card-bg, #28282b) !important;
+  transition: none !important;
+}
+.zsf-drag-ghost[data-zsf-docked] .zsf-drag-hint {
+  display: none !important;
+}

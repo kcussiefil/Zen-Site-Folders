@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Restore native-safe group drag avoidance and pointer-drop completion, preserving Sine auto-updates and compact preview behavior.",
+  "description": "Zia-style live in-list drag preview: moved folder visibly occupies its final slot before release.",
   "author": "kcussiefil",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T17:54:16.275Z"
+  "updatedAt": "2026-11-01T18:08:53.163Z"
 }
