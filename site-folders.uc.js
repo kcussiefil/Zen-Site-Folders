@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.1.7
+// @version      0.1.8
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV017) return;
-  window.__zenSiteFoldersV017 = true;
+  if (window.__zenSiteFoldersV018) return;
+  window.__zenSiteFoldersV018 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -42,12 +42,26 @@
   let seq = 0;
   let uidSeq = 0;
   let noticeTimer = null;
+  let noticeSerial = 0;
   const legacyBase = Date.now() - 86_400_000;
   let SessionStore = null;
   try {
     ({ SessionStore } = ChromeUtils.importESModule('resource:///modules/sessionstore/SessionStore.sys.mjs'));
   } catch (error) {
-    console.warn(TAG, 'SessionStore unavailable; new/old order will be per session:', error);
+    console.warn(TAG, 'SessionStore import unavailable; trying window.SessionStore:', error);
+  }
+
+  // Zen exposes the live SessionStore on window (the same API Zia uses).
+  // The module import is a backup for startup timing differences.
+  function sessionStores() {
+    const stores = [];
+    try { if (window.SessionStore) stores.push(window.SessionStore); } catch (_) {}
+    if (SessionStore && !stores.includes(SessionStore)) stores.push(SessionStore);
+    return stores;
+  }
+  function getSessionStore(...methods) {
+    return sessionStores().find(store => methods.every(name =>
+      typeof store?.[name] === 'function')) || null;
   }
 
   function workspace() {
@@ -84,7 +98,7 @@
     }
     // Restored/sleeping tabs may only carry their URL in SessionStore.
     try {
-      const json = SessionStore?.getTabState(tab);
+      const json = getSessionStore('getTabState')?.getTabState(tab);
       if (json) {
         const state = JSON.parse(json);
         const entry = state.entries?.[(state.index || state.entries?.length || 1) - 1];
@@ -128,7 +142,7 @@
 
   function openedAt(tab) {
     try {
-      const saved = Number(SessionStore?.getCustomTabValue(tab, STORE_KEY));
+      const saved = Number(getSessionStore('getCustomTabValue')?.getCustomTabValue(tab, STORE_KEY));
       if (Number.isFinite(saved) && saved > 0) return saved;
     } catch (_) {}
     if (Number.isFinite(tab.__zsfOpenedAt)) return tab.__zsfOpenedAt;
@@ -136,7 +150,7 @@
     // current relative order as the initial ordering baseline.
     const fallback = legacyBase + (Number(tab._tPos) || 0);
     tab.__zsfOpenedAt = fallback;
-    try { SessionStore?.setCustomTabValue(tab, STORE_KEY, String(fallback)); } catch (_) {}
+    try { getSessionStore('setCustomTabValue')?.setCustomTabValue(tab, STORE_KEY, String(fallback)); } catch (_) {}
     return fallback;
   }
 
@@ -144,7 +158,7 @@
     if (!tab || tab.__zsfOpenedAt) return;
     // During session restore, do not overwrite the original creation stamp.
     try {
-      const restored = Number(SessionStore?.getCustomTabValue(tab, STORE_KEY));
+      const restored = Number(getSessionStore('getCustomTabValue')?.getCustomTabValue(tab, STORE_KEY));
       if (Number.isFinite(restored) && restored > 0) {
         tab.__zsfOpenedAt = restored;
         return;
@@ -152,7 +166,7 @@
     } catch (_) {}
     const stamp = Date.now() + (++seq / 1000);
     tab.__zsfOpenedAt = stamp;
-    try { SessionStore?.setCustomTabValue(tab, STORE_KEY, String(stamp)); } catch (_) {}
+    try { getSessionStore('setCustomTabValue')?.setCustomTabValue(tab, STORE_KEY, String(stamp)); } catch (_) {}
   }
 
   function getGroups(node) {
@@ -164,29 +178,29 @@
   // ONLY our own group IDs, never infer ownership from another mod's label.
   function readOwnedSites() {
     try {
-      const raw = SessionStore?.getCustomWindowValue?.(window, OWNED_GROUPS_KEY);
+      const raw = getSessionStore('getCustomWindowValue')?.getCustomWindowValue(window, OWNED_GROUPS_KEY);
       const parsed = raw ? JSON.parse(raw) : {};
       return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     } catch (_) { return {}; }
   }
 
   function rememberOwnedSite(group, site) {
-    if (!group?.id || !site || !SessionStore?.setCustomWindowValue) return;
+    if (!group?.id || !site || !getSessionStore('setCustomWindowValue')) return;
     try {
       const owned = readOwnedSites();
       if (owned[group.id] === site) return;
       owned[group.id] = site;
-      SessionStore.setCustomWindowValue(window, OWNED_GROUPS_KEY, JSON.stringify(owned));
+      getSessionStore('setCustomWindowValue').setCustomWindowValue(window, OWNED_GROUPS_KEY, JSON.stringify(owned));
     } catch (error) { console.warn(TAG, 'Could not persist site group ID:', error); }
   }
 
   function forgetOwnedSite(group) {
-    if (!group?.id || !SessionStore?.setCustomWindowValue) return;
+    if (!group?.id || !getSessionStore('setCustomWindowValue')) return;
     try {
       const owned = readOwnedSites();
       if (!(group.id in owned)) return;
       delete owned[group.id];
-      SessionStore.setCustomWindowValue(window, OWNED_GROUPS_KEY, JSON.stringify(owned));
+      getSessionStore('setCustomWindowValue').setCustomWindowValue(window, OWNED_GROUPS_KEY, JSON.stringify(owned));
     } catch (error) { console.warn(TAG, 'Could not clear site group ID:', error); }
   }
 
@@ -255,38 +269,60 @@
   // Persist tab identity in Firefox's own SessionStore. The document's tab
   // nodes can be recreated on restart; DOM references cannot serve as backup.
   function tabUID(tab) {
-    if (!SessionStore?.getCustomTabValue || !SessionStore?.setCustomTabValue) return null;
-    try {
-      const old = SessionStore.getCustomTabValue(tab, TAB_UID_KEY);
-      if (old) return old;
-      const id = 'tab-' + (Services.uuid?.generateUUID?.()?.toString?.() ||
-        `${Date.now().toString(36)}-${++uidSeq}`);
-      SessionStore.setCustomTabValue(tab, TAB_UID_KEY, id);
-      return SessionStore.getCustomTabValue(tab, TAB_UID_KEY) === id ? id : null;
-    } catch (error) {
-      console.warn(TAG, 'Unable to save a tab identity:', error);
+    // Persisted ID is mandatory for undo. Try the Zen window API first.
+    const stores = sessionStores().filter(store =>
+      typeof store?.getCustomTabValue === 'function' &&
+      typeof store?.setCustomTabValue === 'function');
+    if (!stores.length) {
+      console.warn(TAG, 'SessionStore tab identity API unavailable');
       return null;
     }
+    const errors = [];
+    for (const store of stores) {
+      try {
+        const saved = store.getCustomTabValue(tab, TAB_UID_KEY);
+        if (typeof saved === 'string' && saved) return saved;
+      } catch (e) { errors.push('read: ' + String(e?.message || e)); }
+    }
+    const id = 'tab-' + (Services.uuid?.generateUUID?.()?.toString?.() ||
+      `${Date.now().toString(36)}-${++uidSeq}`);
+    for (const store of stores) {
+      try {
+        store.setCustomTabValue(tab, TAB_UID_KEY, id);
+        if (store.getCustomTabValue(tab, TAB_UID_KEY) === id) return id;
+        errors.push('readback mismatch');
+      } catch (e) { errors.push('write: ' + String(e?.message || e)); }
+    }
+    console.warn(TAG, 'Unable to persist tab ID', {
+      localName: tab?.localName, connected: tab?.isConnected, errors
+    });
+    return null;
   }
 
   function readSnapshots() {
     try {
-      const raw = SessionStore?.getCustomWindowValue?.(window, SNAPSHOT_KEY);
+      const raw = getSessionStore('getCustomWindowValue')?.getCustomWindowValue(window, SNAPSHOT_KEY);
       const parsed = raw && JSON.parse(raw);
       return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     } catch (_) { return {}; }
   }
 
   function writeSnapshots(next) {
-    if (!SessionStore?.setCustomWindowValue || !SessionStore?.getCustomWindowValue) return false;
-    try {
-      const serialized = JSON.stringify(next);
-      SessionStore.setCustomWindowValue(window, SNAPSHOT_KEY, serialized);
-      return SessionStore.getCustomWindowValue(window, SNAPSHOT_KEY) === serialized;
-    } catch (error) {
-      console.error(TAG, 'Undo backup could not be saved:', error);
+    const stores = sessionStores().filter(store =>
+      typeof store?.setCustomWindowValue === 'function' &&
+      typeof store?.getCustomWindowValue === 'function');
+    if (!stores.length) {
+      console.warn(TAG, 'Window SessionStore backup unavailable');
       return false;
     }
+    const serialized = JSON.stringify(next);
+    for (const store of stores) {
+      try {
+        store.setCustomWindowValue(window, SNAPSHOT_KEY, serialized);
+        if (store.getCustomWindowValue(window, SNAPSHOT_KEY) === serialized) return true;
+      } catch (e) { console.warn(TAG, 'Window backup failed:', e); }
+    }
+    return false;
   }
 
   function captureSnapshot(current) {
@@ -306,7 +342,8 @@
       if (tag === 'tab-group' && !element.hasAttribute('split-view-group')) {
         if (!element.id) reject('現有群組沒有可還原的 ID');
         const members = [...element.querySelectorAll('tab')]
-          .filter(t => t.isConnected && (t.group === element || t.closest('tab-group') === element));
+          .filter(t => eligible(t) &&
+            (t.group === element || t.closest('tab-group') === element));
         const ids = [];
         for (const tab of members) {
           const id = tabUID(tab);
@@ -324,6 +361,9 @@
         });
       } else if (tag === 'tab') {
         if (element.getAttribute('zen-workspace-id') !== current.id) continue;
+        // Synthetic empty/Glance/pinned tabs are excluded from sorting and
+        // may have no SessionStore identity; do not back them up as movable tabs.
+        if (!eligible(element)) continue;
         const id = tabUID(element);
         if (!id) reject('一般分頁無法保存識別碼');
         if (seen.has(id)) reject('一般分頁的識別碼重複');
@@ -564,17 +604,12 @@
   }
 
   function toast(message, isError = false) {
-    // gZenUIManager.showToast() expects a Fluent translation ID. Passing a
-    // literal Chinese sentence produces the blank black notification the
-    // user observed. Render our own text under Zen's existing toast host.
     const text = String(message);
     (isError ? console.warn : console.log)(TAG, text);
     const container = document.getElementById('zen-toast-container');
-    if (!container) {
-      if (isError) window.alert(text);
-      return;
-    }
+    if (!container) { if (isError) window.alert(text); return; }
     let box = container.querySelector('#zsf-notification');
+    const reused = !!box;
     if (!box) {
       box = document.createXULElement('hbox');
       box.id = 'zsf-notification';
@@ -587,17 +622,48 @@
     }
     box.querySelector('.zsf-notification-text').setAttribute('value', text);
     box.setAttribute('tooltiptext', text);
-    // Use Zen's native toast markup and theme for both success and errors.
-    // Alert semantics do not need a custom-colored border.
     box.setAttribute('aria-live', isError ? 'assertive' : 'polite');
     container.appendChild(box);
     container.removeAttribute('hidden');
     if (noticeTimer) clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => {
-      box.remove();
-      if (!container.querySelector(':scope > .zen-toast')) container.setAttribute('hidden', 'true');
-      noticeTimer = null;
-    }, isError ? 6500 : 4200);
+    const serial = ++noticeSerial;
+    const motion = window.gZenUIManager?.motion;
+    const play = async (frames, options, fallback, duration) => {
+      if (typeof motion?.animate === 'function') {
+        try { await motion.animate(box, frames, options); return; }
+        catch (e) { console.warn(TAG, 'Zen toast animation fallback:', e); }
+      }
+      try {
+        if (typeof box.animate === 'function') {
+          await box.animate(fallback, {
+            duration, easing: 'ease-out', fill: 'forwards'
+          }).finished;
+        }
+      } catch (_) {}
+    };
+    const animateToast = async () => {
+      box.style.opacity = '1';
+      if (!reused) box.style.transform = 'scale(0)';
+      await play({ scale: 1 },
+        { type: 'spring', bounce: .2, duration: .5, reduceMotion: false },
+        [{ opacity: 0, transform: 'scale(.75)' },
+         { opacity: 1, transform: 'scale(1)' }], 300);
+      if (serial !== noticeSerial || !box.isConnected) return;
+      noticeTimer = setTimeout(async () => {
+        if (serial !== noticeSerial || !box.isConnected) return;
+        await play({ opacity: [1, 0], scale: [1, .5] },
+          { duration: .2, bounce: 0, reduceMotion: false },
+          [{ opacity: 1, transform: 'scale(1)' },
+           { opacity: 0, transform: 'scale(.5)' }], 200);
+        if (serial !== noticeSerial) return;
+        box.remove();
+        if (!container.querySelector(':scope > .zen-toast')) {
+          container.setAttribute('hidden', 'true');
+        }
+        noticeTimer = null;
+      }, 2000);
+    };
+    void animateToast().catch(e => console.warn(TAG, 'Toast animation failed:', e));
   }
 
   async function organize() {
@@ -756,7 +822,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV017 = { organize, undo, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV018 = { organize, undo, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
@@ -765,5 +831,6 @@
     clearTimeout(initTimer);
     if (waveFrame != null) cancelAnimationFrame(waveFrame);
     if (noticeTimer) clearTimeout(noticeTimer);
+    noticeSerial++;
   }, { once: true });
 })();
