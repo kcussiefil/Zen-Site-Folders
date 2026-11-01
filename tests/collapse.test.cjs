@@ -13,8 +13,15 @@ console.log('PASS: motion bridge safety; native layout behavior covered by brows
 // trigger an overlapping expand/collapse pair (v0.4.1 regression).
 const calls = [];
 const cleaned = [];
-const first = { selected: true, multiselected: false, getAttribute: () => null };
-const second = { selected: false, multiselected: false, getAttribute: () => null };
+const oldActive = new Set(['folder-active']);
+const first = {
+  selected: true, multiselected: false, isConnected: true,
+  getAttribute: name => oldActive.has(name) ? 'true' : null,
+  hasAttribute: name => oldActive.has(name),
+  removeAttribute: name => oldActive.delete(name),
+  style: { removeProperty() {} }
+};
+const second = { selected: false, multiselected: false, isConnected: true, getAttribute: () => null };
 const group = {
   isConnected: true, isZenFolder: false, pinned: false, collapsed: false,
   tabs: [first, second], groupContainer: { hidden: false },
@@ -51,4 +58,5 @@ second.selected = true;
 bridge.sync(group);
 assert.deepEqual(calls, ['expand', 'collapse', 'collapse'], 'selection change never expands while closed');
 assert.deepEqual(cleaned, [second], 'only newly selected hidden tab gets native style cleanup');
+assert(!oldActive.has('folder-active'), 'former selected tab must not remain active in native group');
 console.log('PASS: single-path audio/selection motion and native row cleanup');
