@@ -128,9 +128,10 @@
         scheduleGroupSync(record.target);
       } else if (record.type === 'attributes' &&
                  (record.attributeName === 'selected' ||
-                  record.attributeName === 'multiselected') &&
-                 ours(record.target.group)) {
-        scheduleGroupSync(record.target.group);
+                  record.attributeName === 'multiselected')) {
+        // A selection change outside Site Folders is not structural.
+        // It must not rescan all groups during normal/video tab switches.
+        if (ours(record.target.group)) scheduleGroupSync(record.target.group);
       } else if (record.type === 'attributes' &&
                  record.attributeName === 'data-zsf-site' &&
                  ours(record.target)) {
