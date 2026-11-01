@@ -156,20 +156,32 @@ const finish = arguments[arguments.length - 1];
     const head = g.querySelector(':scope > .tab-group-label-container');
     const from = head.getBoundingClientRect();
     try {
-      Object.defineProperty(g, 'isZenFolder', { configurable: true, value: true });
+      assert(!g.isZenFolder, 'an ordinary website group must not be a native folder');
       const event = new DragEvent('dragstart', {
         bubbles: true, composed: true, clientX: from.left + 24,
         clientY: from.top + 12, dataTransfer: new DataTransfer()
       });
+      // ZSF primes only the grabbed group during real mousedown. Zia
+      // receives dragstart first and is the SINGLE visual/drop controller.
+      head.dispatchEvent(new MouseEvent('mousedown', {
+        bubbles: true, composed: true, button: 0, buttons: 1,
+        clientX: from.left + 24, clientY: from.top + 12
+      }));
+      assert(g.isZenFolder === true,
+        'mousedown must transiently adapt the original group for Zia');
       head.dispatchEvent(event);
       assert(document.documentElement.hasAttribute('zia-dragging-tab'),
-        'Zia did not recognize a temporarily adapted native tab-group as a folder');
+        'Zia must take over the actual native group drag');
       assert(!document.querySelector('.zsf-drag-ghost'),
         'Site Folders must not run a second preview if Zia accepted the folder');
       window.dispatchEvent(new DragEvent('dragend', { bubbles: true }));
       await delay(150);
       assert(!document.documentElement.hasAttribute('zia-dragging-tab'),
         'Zia must clean its own temporary drag state');
+      assert(!g.isZenFolder,
+        'the original group must NOT retain the Zen folder identity');
+      assert(g.parentElement === root() && same(order(g), h.tabs),
+        'single-controller drag cancellation must retain same-level group and members');
     } finally {
       if (before) Object.defineProperty(g, 'isZenFolder', before);
       else delete g.isZenFolder;

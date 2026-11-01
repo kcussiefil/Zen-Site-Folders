@@ -129,7 +129,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.5.4');
+assert(api&&api.version==='0.5.5');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -298,6 +298,28 @@ async function main(){
     composedPath:()=>[outsideTab,strip],
     dataTransfer:{setDragImage(){unrelatedBlanked=true;}}});
   assert(!unrelatedBlanked,'unrelated native drag preview must stay intact');
+
+  // Temporary Zia group hand-off: the normal JS unit fixture emulates
+  // the flag Zia sets during its own window-capture dragstart.
+  window.__ziaLoaded = true;
+  const nativeBefore = moveLog.length;
+  emit(strip,'mousedown',gEvent(160,160,sourceLabel));
+  assert(source.isZenFolder === true,
+    'only the grabbed ZSF group may be temporarily recognized by Zia');
+  root.setAttribute('zia-dragging-tab','true');
+  emit(window,'dragstart',{...gEvent(160,160,sourceLabel),
+    composedPath:()=>[sourceLabel,source,strip],
+    dataTransfer:{setDragImage(){throw Error('ZSF must not override Zia drag image');}}});
+  assert(!root.querySelector('.zsf-drag-ghost'),
+    'no duplicate drag preview when Zia has taken over a whole group');
+  emit(window,'drop',gEvent(160,140,sourceLabel));
+  await new Promise(resolve=>setTimeout(resolve,60));
+  assert(source.isZenFolder !== true,
+    'temporary native folder identity must be restored after drop');
+  assert.equal(moveLog.length,nativeBefore,
+    'ZSF must not perform a second reorder after Zia handles group drop');
+  root.removeAttribute('zia-dragging-tab');
+  window.__ziaLoaded = false;
 
   // Zia implements its own native tab row displacement and target
   // calculation. Our preview MUST disappear when Zia starts that drag,

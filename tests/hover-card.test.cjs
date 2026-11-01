@@ -135,7 +135,7 @@ async function main() {
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
   const api = window.__zsfGroupHoverV037;
-  assert.equal(api.version, '0.5.4');
+  assert.equal(api.version, '0.5.5');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
@@ -147,7 +147,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.5.4');
+  assert.equal(manifest.version, '0.5.5');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
