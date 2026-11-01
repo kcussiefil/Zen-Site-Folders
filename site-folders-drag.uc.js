@@ -65,9 +65,11 @@
       if (folders && typeof folders.canDropElement === 'function') {
         const original = folders.canDropElement;
         const wrapped = function(element, target) {
-          if (element === group &&
-              target?.closest?.('tab-group:not([split-view-group]), zen-folder'))
-            return false;
+          // Site Folders are deliberately flat. Zia calls canNest()
+          // both for hovered descendants and their closest folder.
+          // Deny ALL nesting of the dragged site group rather than
+          // relying on the queried target node's .closest() chain.
+          if (element === group) return false;
           return original.call(this, element, target);
         };
         folders.canDropElement = wrapped;
