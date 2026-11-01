@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.3.1
+// @version      0.3.2
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfMenuV031) return;
+  if (window.__zsfMenuV032) return;
   const TAG = '[ZenSiteFoldersMenu]';
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
   const ARCHIVE_KEY = 'zsf-archived-snapshots-v1';
@@ -385,7 +385,9 @@
     const element = document.createXULElement(name);
     if (label != null) element.setAttribute('label', label);
     if (handler) bind(element, 'command', () => {
-      const group = activeGroup;
+      // XUL may fire popuphidden before command. Persist the target on the
+      // menu itself so the first click does not silently lose its group.
+      const group = activeGroup || menu?.zsfTargetGroup;
       if (!validGroup(group)) return;
       try { handler(group); }
       catch (error) { console.error(TAG, 'Menu action failed', error); alertUser('群組操作失敗，未進行後續動作。'); }
@@ -427,7 +429,11 @@
     menu.appendChild(xul('menuitem', '轉為 Zen 分頁夾（上方釘選）', convert));
     menu.appendChild(xul('menuseparator'));
     menu.appendChild(xul('menuitem', '刪除群組', deleteGroup));
-    bind(menu, 'popuphidden', () => { activeGroup = null; });
+    bind(menu, 'popuphidden', () => {
+      activeGroup = null;
+      // Keep menu.zsfTargetGroup until the next opening: a queued native XUL
+      // command can run after popuphidden. It is validated before every action.
+    });
     (document.getElementById('mainPopupSet') || document.documentElement).appendChild(menu);
     return menu;
   }
@@ -441,6 +447,7 @@
     event.stopImmediatePropagation();
     event.stopPropagation();
     activeGroup = group;
+    menu.zsfTargetGroup = group;
     menu.openPopupAtScreen(event.screenX, event.screenY, false);
   }
 
@@ -467,11 +474,12 @@
     observer?.disconnect();
     for (const [node, type, callback, capture] of listeners)
       try { node.removeEventListener(type, callback, capture); } catch (_) {}
+    if (menu) menu.zsfTargetGroup = null;
     menu?.remove();
   }
 
-  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.1' };
-  window.__zsfMenuV031 = api;
+  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.3.2' };
+  window.__zsfMenuV032 = api;
   if (document.readyState === 'complete') init();
   else bind(window, 'load', init, { once: true });
   bind(window, 'unload', destroy, { once: true });
