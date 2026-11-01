@@ -382,6 +382,21 @@
   function update(event, scheduleScroll = true) {
     if (!active?.item?.isConnected || !ghost) return;
     const { x, y } = point(event);
+    // Zia already owns real tab drag visuals: it moves the tab and shifts
+    // neighbours with transforms, then commits its exact target on drop.
+    // Do NOT hide the Zia-dragged tab with our opacity=0 override, and do
+    // NOT perform a second independent move on drop. Our custom drag is
+    // only needed for the Site Folders group label, which Zia doesn't
+    // recognize as a zen-folder.
+    const ziaOwnsTab = active.kind === 'tab' &&
+      document.documentElement.hasAttribute('zia-dragging-tab');
+    if (ziaOwnsTab) {
+      active.delegatedToZia = true;
+      active.item.removeAttribute('data-zsf-drag-member');
+      ghost.hidden = true;
+      if (scheduleScroll) scheduleAutoScroll(x, y);
+      return;
+    }
     const slot = chooseSlot(active, x, y);
     updateAvoidance(active, slot);
     dockGroupPreview(active, slot, x, y);
@@ -481,6 +496,10 @@
     const pointNow = point(event);
     const slot = chooseSlot(active, pointNow.x, pointNow.y);
     const context = active;
+    if (context.delegatedToZia) {
+      reset();
+      return; // Zia is the single writer of the actual tab order.
+    }
     const docked = slot && context.kind === 'group' &&
       ghost?.hasAttribute?.('data-zsf-docked') ? ghost : null;
     if (docked) ghost = null; // keep ONE preview visible during landing
