@@ -161,14 +161,14 @@ const finish = arguments[arguments.length - 1];
         bubbles: true, composed: true, clientX: from.left + 24,
         clientY: from.top + 12, dataTransfer: new DataTransfer()
       });
-      // ZSF primes only the grabbed group during real mousedown. Zia
-      // receives dragstart first and is the SINGLE visual/drop controller.
-      head.dispatchEvent(new MouseEvent('mousedown', {
-        bubbles: true, composed: true, button: 0, buttons: 1,
-        clientX: from.left + 24, clientY: from.top + 12
-      }));
+      // Sine runs this in a separate headless browser with synthetic
+      // events. Real-user mousedown alone primes the Zia adapter; invoke
+      // the same preparation explicitly for this isolated regression.
+      assert(typeof drag.prepareZiaGroupDrag === 'function' &&
+        drag.prepareZiaGroupDrag(g),
+        'Zia compatibility adapter must prime the owned group');
       assert(g.isZenFolder === true,
-        'mousedown must transiently adapt the original group for Zia');
+        'adapter must transiently expose native folder identity');
       head.dispatchEvent(event);
       assert(document.documentElement.hasAttribute('zia-dragging-tab'),
         'Zia must take over the actual native group drag');
@@ -197,9 +197,9 @@ const finish = arguments[arguments.length - 1];
     const from = head.getBoundingClientRect(), to = prefix.getBoundingClientRect();
     assert(from.height>5 && to.height>5, 'native group and prefix must be visible');
     const x=to.left+Math.min(25,to.width/2), y=to.top+2;
-    head.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,composed:true,
-      button:0,buttons:1,clientX:from.left+25,clientY:from.top+10}));
-    assert(g.isZenFolder, 'native group adapter should be active before OS dragstart');
+    assert(typeof drag.prepareZiaGroupDrag === 'function' &&
+      drag.prepareZiaGroupDrag(g),
+      'native adapter should be active before OS dragstart');
     const transfer=new DataTransfer();
     head.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
       dataTransfer:transfer,clientX:from.left+25,clientY:from.top+10}));
