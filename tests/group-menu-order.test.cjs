@@ -91,7 +91,7 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
       removeTabGroup() { removeCount++; },
     },
     gZenEmojiPicker: { open(anchor, options) { window.iconPicker = options; } },
-    __zenSiteFoldersV036: {
+    __zenSiteFoldersV037: {
       ungroupInDisplayOrder(group, ordered) {
         let count = 0;
         for (const tab of ordered) {
@@ -120,8 +120,8 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   class FakeMutationObserver { observe() {} disconnect() {} }
   vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
-  const api = window.__zsfMenuV036;
-  assert.equal(api.version, '0.3.6');
+  const api = window.__zsfMenuV037;
+  assert.equal(api.version, '0.3.7');
   const event = { target: label, screenX: 30, screenY: 40, prevented: false,
     composedPath: () => [label, group],
     preventDefault() { this.prevented = true; }, stopPropagation() {}, stopImmediatePropagation() {} };
@@ -175,19 +175,16 @@ async function testMenu() {
   assert.equal(a.api.validGroup(unrelated), false, 'non-ZSF group excluded');
   a.api.destroy();
 
-  // Native XUL may send popuphidden BEFORE command. The first click must
-  // still resolve its original group and show the single confirmation.
+  // The first click must work even if native XUL emits popuphidden first,
+  // and no confirm modal may appear for this non-destructive command.
   const firstClick = makeHarness({ prompts: [false] });
   const firstPopup = firstClick.context();
   for (const listener of firstPopup.events.popuphidden || []) listener({});
   firstClick.command(firstPopup, '解散群組');
-  assert.equal(firstClick.stats().confirmCount, 1, 'first click must not be lost after popuphidden');
-  assert.equal(firstClick.stats().ungroupCount, 0, 'cancel preserves every tab');
-
-  const cancel = makeHarness({ prompts: [false] });
-  cancel.command(cancel.context(), '解散群組');
-  assert.equal(cancel.stats().ungroupCount, 0);
-  assert(JSON.parse(cancel.saved['zsf-before-sort-v1']).space1);
+  assert.equal(firstClick.stats().confirmCount, 0, 'ungroup directly without modal');
+  assert.equal(firstClick.stats().ungroupCount, 2, 'first click must ungroup both tabs');
+  assert(JSON.parse(firstClick.saved['zsf-before-sort-v1']).space1,
+    'archive and keep live snapshot for later safe cleanup');
 
   const corrupt = makeHarness({ archiveCorrupt: true, prompts: [true] });
   corrupt.command(corrupt.context(), '解散群組');
@@ -197,7 +194,7 @@ async function testMenu() {
   const yes = makeHarness({ prompts: [true] });
   yes.command(yes.context(), '解散群組');
   assert.equal(yes.stats().ungroupCount, 2);
-  assert.equal(yes.stats().confirmCount, 1, 'one confirmation must cover both action and automatic snapshot archive');
+  assert.equal(yes.stats().confirmCount, 0, 'ungroup never prompts; only delete and pin conversion confirm');
   assert(yes.tabs.every(t => t.isConnected && !t.pinned && t.group === null));
   assert(JSON.parse(yes.saved['zsf-before-sort-v1']).space1,
     'manual ungroup must keep recovery snapshot and arrow until user verifies');
@@ -212,7 +209,7 @@ async function testMenu() {
   const convertCancelled = makeHarness({ prompts: [false] });
   convertCancelled.command(convertCancelled.context(), '轉為 Zen 分頁夾（上方釘選）');
   assert(convertCancelled.tabs.every(t => !t.pinned));
-  console.log('PASS: Traditional Chinese menu, localized commands, picker, color, archival guards, ungroup, cancel, isolation');
+  console.log('PASS: Traditional Chinese menu, first-click ungroup without confirm, archive safety, destructive confirmations');
 }
 
 function testNewestFirst() {
