@@ -1,4 +1,4 @@
-# Zen Site Folders 0.3.0 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.3.1 — 一般分頁區域群組（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內依記錄的開啟時間由新到舊排序（沒有開啟時間的歷史分頁依原位置估算），圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,15 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.3.1 修正網站群組無法收合（2026-11-01）
+- 修正 v0.3.0 在一般網站分頁群組的子容器強制 `display:flex !important`，蓋掉 Zen 原生收合樣式，造成群組箭頭已變化但子分頁仍顯示。
+- 新增獨立 `site-folders-collapse.uc.js`：群組收到 `TabGroupCollapse` 或其 `collapsed` 屬性變化時，先讓 Zia 原生約 420ms 彈跳動畫執行，470ms 後加入 `data-zsf-collapse-settled` 作為最終收合保護。展開時立即移除此狀態。
+- 收合且沒有正在查看的分頁時，群組子容器會完整隱藏；若群組內有正在查看的分頁，只保留該選取分頁，其餘分頁在原生動畫完成後隱藏。
+- 重新啟動後已收合的群組會立即同步最終狀態；快速收合再展開會取消舊計時，避免延遲誤隱藏。
+- 此腳本只處理 `tab-group[data-zsf-site]`，不處理 Zia 原生 `zen-folder`、其他使用者群組、分頁移動、關閉或釘選。
+- 主核心整理、快照、還原、救援、群組排序與右鍵選單行為未更動，除了四個腳本的版號一致性。
+- 新增收合控制器的 Node 22 模擬回歸測試與 CI 檢查，仍需 Zen + Zia macOS 實機驗證（特別是開合動畫與目前分頁常駐）。
 
 ## v0.3.0 收合常駐分頁、Zia 彈跳與透明玻璃卡片（2026-11-01）
 
