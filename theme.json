@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Unpinned site groups with Zia-aligned active-tab collapse, spring, translucent hover cards, and safer Traditional Chinese menus.",
+  "description": "Unpinned site groups with reliable delayed collapse, active-tab visibility, Zia spring/glass and Traditional Chinese menus.",
   "author": "kcussiefil",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -24,6 +24,12 @@
         "chrome://browser/content/browser.xhtml"
       ],
       "loadOrder": 30
+    },
+    "site-folders-collapse.uc.js": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ],
+      "loadOrder": 10
     }
   },
   "tags": [
@@ -36,5 +42,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T10:37:27.846Z"
+  "updatedAt": "2026-11-01T10:47:12.135Z"
 }
