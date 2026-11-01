@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.1.9
+// @version      0.2.0
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV019) return;
-  window.__zenSiteFoldersV019 = true;
+  if (window.__zenSiteFoldersV020) return;
+  window.__zenSiteFoldersV020 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -221,7 +221,7 @@
 
   function findGroup(node, site) {
     // Only native Zen folders are valid new site-folder destinations.
-    return getGroups(node).find(g => g.isZenFolder && siteOfGroup(g) === site) || null;
+    return getGroups(node).find(g => !g.isZenFolder && siteOfGroup(g) === site && g.parentElement === node.tabsContainer) || null;
   }
 
   function sourceFaviconURL(tab) {
@@ -394,7 +394,7 @@
       reject('有 ' + missing.length + ' 個分頁無法完整備份；可能位於特殊資料夾');
     }
     if (!elements.length && needsBackup.length) reject('沒有找到可還原的原始分頁順序');
-    return { version: 2, workspaceId: current.id, capturedAt: Date.now(), elements, tabs, createdFolders: [] };
+    return { version: 3, workspaceId: current.id, capturedAt: Date.now(), elements, tabs, createdFolders: [] };
   }
 
   function findTabMap(current) {
@@ -418,8 +418,8 @@
     const stored = readSnapshots();
     const snapshot = current && stored[current.id];
     if (!snapshot) { toast('這個工作區沒有可還原的整理紀錄'); return; }
-    if (!window.gBrowser?.ungroupTab || !window.gBrowser?.moveTabBefore ||
-        (snapshot.version === 2 && !window.gBrowser?.unpinTab)) {
+    if (snapshot.version !== 3) { toast('舊版快照不支援新版安全還原，請勿重試；請保留備份', true); return; }
+    if (!window.gBrowser?.ungroupTab || !window.gBrowser?.moveTabBefore) {
       toast('Zen 的原生還原 API 不可用，未修改分頁'); return;
     }
     running = true;
@@ -429,25 +429,8 @@
     try {
       const tabMap = findTabMap(current);
       missing = snapshot.tabs.filter(x => !tabMap.has(x.id)).length;
-      // Zen's native createFolder pins the original normal tabs.
-      // Undo MUST detach those tabs from our pinned folders and unpin them
-      // before restoring their original normal groups and positions.
-      if (snapshot.version === 2) {
-        for (const item of snapshot.tabs) {
-          const tab = tabMap.get(item.id);
-          if (!tab?.isConnected) continue;
-          try {
-            if (tab.group?.isZenFolder &&
-                (snapshot.createdFolders || []).includes(tab.group.id)) {
-              window.gBrowser.ungroupTab(tab);
-            }
-            if (!item.pinned && tab.pinned) window.gBrowser.unpinTab(tab);
-          } catch (e) {
-            errors++;
-            console.warn(TAG, 'Native folder ungroup/unpin failed:', e);
-          }
-        }
-      }
+      // v3 modifies only ordinary groups; never unpin or delete a Zen folder.
+
       // 1) Re-create lost manual groups with their original stable ID, label,
       // colour and members. This also covers groups emptied by sorting.
       for (const original of snapshot.elements.filter(x => x.type === 'group')) {
@@ -506,31 +489,15 @@
         if (item.collapsed) group.setAttribute('collapsed', 'true');
         else group.removeAttribute('collapsed');
       }
-      // Delete ONLY folders created by this operation and now containing
-      // ZERO real tabs. Never close newly added/user tabs in a folder.
-      let pendingFolders = 0;
-      if (snapshot.version === 2) {
-        for (const id of snapshot.createdFolders || []) {
-          const folder = findGroupByID(current, id);
-          if (!folder?.isZenFolder) continue;
-          const realTabs = [...folder.querySelectorAll('tab')]
-            .filter(t => t.isConnected && !t.hasAttribute('zen-empty-tab'));
-          if (realTabs.length) { pendingFolders++; continue; }
-          try {
-            await folder.delete(); // only the generated blank placeholder remains
-            forgetOwnedSite(folder);
-          } catch (e) {
-            pendingFolders++;
-            console.warn(TAG, 'Native empty folder cleanup failed:', e);
-          }
-        }
-      }
+      // Empty ordinary site groups are removed automatically by Firefox.
+      const pendingFolders = 0;
+
       // 5) Verify original pin status, membership and order before discarding backup.
       const wrong = snapshot.tabs.filter(item => {
         const tab = tabMap.get(item.id);
         if (!tab?.isConnected) return false;
         return (tab.group?.id || null) !== item.group ||
-          (snapshot.version === 2 && !!tab.pinned !== !!item.pinned);
+          (!!tab.pinned !== !!item.pinned);
       }).length;
       const wrongSequence = snapshot.elements.filter(item => {
         if (item.type !== 'group') return false;
@@ -598,8 +565,25 @@
       // It adjusts automatically when Undo appears or the sidebar is resized.
       const hostRect = separator.getBoundingClientRect();
       const lineRect = line.getBoundingClientRect();
-      svg.style.setProperty('--zsf-wave-left', Math.max(0, lineRect.left - hostRect.left).toFixed(1) + 'px');
-      svg.style.setProperty('--zsf-wave-width', Math.max(0, lineRect.width).toFixed(1) + 'px');
+      const undoButton = separator.querySelector('.zsf-undo-button:not([hidden])');
+      const sortButton = separator.querySelector('.zsf-sort-button:not([hidden])');
+      const clearButton = separator.querySelector('.zen-tabs-clear-button, .zen-clear-tabs-button');
+      // The wave is restricted to the free line segment, even while undo is
+      // shown or CSS layout is animating. Never paint over toolbar controls.
+      const controlRight = Math.max(
+        lineRect.left,
+        ...( [sortButton, undoButton]
+          .filter(button => button && button.getClientRects().length)
+          .map(button => button.getBoundingClientRect().right + 6))
+      );
+      const start = Math.max(lineRect.left, controlRight);
+      const end = Math.max(start, Math.min(lineRect.right,
+        clearButton?.getClientRects().length
+          ? clearButton.getBoundingClientRect().left - 6 : lineRect.right));
+      const width = Math.max(0, end - start);
+      svg.style.setProperty('--zsf-wave-left', Math.max(0, start - hostRect.left).toFixed(1) + 'px');
+      svg.style.setProperty('--zsf-wave-width', width.toFixed(1) + 'px');
+      svg.style.visibility = width >= 12 ? 'visible' : 'hidden';
     }
     separator.classList.add('zsf-is-sorting');
     waveStart = performance.now();
@@ -726,15 +710,13 @@
     updateButtons();
     try {
       const browser = window.gBrowser;
-      if (typeof window.gZenFolders?.createFolder !== 'function') {
-        throw new Error('目前 Zen 不支援原生資料夾建立');
-      }
-      const required = ['moveTabToExistingGroup', 'ungroupTab', 'unpinTab', 'addTabGroup', 'moveTabBefore'];
+      // Only create Firefox's unpinned ordinary tab groups.
+      const required = ['moveTabToExistingGroup', 'ungroupTab', 'addTabGroup', 'moveTabBefore'];
       const absent = required.filter(name => typeof browser?.[name] !== 'function');
       if (absent.length) throw new Error('缺少還原 API：' + absent.join('、'));
       const stored = readSnapshots();
-      if (stored[current.id] && stored[current.id].version !== 2) {
-        throw new Error('仍有舊版整理快照；請先按「還原」');
+      if (stored[current.id] && stored[current.id].version !== 3) {
+        throw new Error('仍有舊版快照；為保護分頁已拒絕整理，請先備份並處理舊版工作階段');
       }
       if (!stored[current.id]) {
         const snapshot = captureSnapshot(current);
@@ -744,7 +726,8 @@
       }
       const buckets = new Map();
       for (const tab of allWorkspaceTabs(current.node, current.id)) {
-        if (!eligible(tab)) continue;
+        if (!eligible(tab) || (tab.group && !siteOfGroup(tab.group))) continue;
+        if (tab.pinned || tab.closest('zen-folder')) continue;
         const site = siteFor(tabURL(tab));
         if (!site) continue;
         if (!buckets.has(site)) buckets.set(site, []);
@@ -753,7 +736,7 @@
       const requested = [...buckets.values()].reduce((sum, items) => sum + items.length, 0);
       let completed = 0, errors = 0, newFolders = 0;
       for (const [site, items] of buckets) {
-        items.sort((a, b) => b.order - a.order);
+        // Preserve existing relative order within each site.
         let folder = findGroup(current.node, site);
         try {
           if (!folder) {
@@ -761,46 +744,49 @@
             // A crash/partial sort must not leave an untracked owned folder.
             const saved = readSnapshots();
             const snapshot = saved[current.id];
-            if (!snapshot || snapshot.version !== 2) throw new Error('快照已遺失');
+            if (!snapshot || snapshot.version !== 3) throw new Error('快照已遺失');
             const id = 'zsf-' + String(Services.uuid.generateUUID()).replace(/[{}]/g, '');
             snapshot.createdFolders.push(id);
             if (!writeSnapshots(saved)) throw new Error('資料夾 ID 無法保存');
-            folder = window.gZenFolders.createFolder([], {
-              id, label: nameFor(site), renameFolder: false,
-              collapsed: false, workspaceId: current.id
+            const first = items[0]?.tab;
+            if (!first?.isConnected || first.pinned || first.group) throw new Error('來源分頁不適合建立群組');
+            folder = browser.addTabGroup([first], {
+              id, label: nameFor(site), color: 'grey',
+              insertBefore: first, showCreateUI: false
             });
             newFolders++;
           }
-          if (!folder?.isZenFolder || !folder.isConnected ||
-              folder.getAttribute('zen-workspace-id') !== current.id) {
-            throw new Error('沒有建立出原生 Zen 資料夾');
+          if (!folder || folder.isZenFolder || !folder.isConnected ||
+              folder.parentElement !== current.node.tabsContainer) {
+            throw new Error('沒有建立出一般分頁群組');
           }
           for (const {tab} of items) {
             if (!tab.isConnected) { errors++; continue; }
             try {
+              if (tab.pinned) throw new Error('拒絕移動釘選分頁');
               if (tab.group !== folder) browser.moveTabToExistingGroup(tab, folder);
-              if (tab.group === folder && tab.pinned) completed++;
+              if (tab.group === folder && !tab.pinned && folder.parentElement === current.node.tabsContainer) completed++;
               else errors++;
             } catch (e) {
               errors++;
-              console.warn(TAG, 'Moving tab to native folder failed:', site, e);
+              console.warn(TAG, 'Moving tab to ordinary site group failed:', site, e);
             }
           }
-          reorderGroup(folder, items.map(x => x.tab));
+          // Do not reorder members or move the group into the pinned region.
           decorate(folder, site, items[0]?.tab);
           try { folder.collapsed = true; } catch (_) {}
         } catch (e) {
           errors++;
-          console.warn(TAG, 'Native folder creation failed:', site, e);
+          console.warn(TAG, 'Ordinary site group creation failed:', site, e);
         }
       }
       if (!requested) {
         toast('目前沒有新增的一般網站分頁需要整理');
       } else if (completed !== requested || errors) {
         toast(`整理不完整：${completed}/${requested} 個分頁已入資料夾，可按還原`, true);
-        console.warn(TAG, 'Native sort incomplete', { requested, completed, errors });
+        console.warn(TAG, 'Ordinary group sort incomplete', { requested, completed, errors });
       } else {
-        toast(`已整理 ${completed} 個分頁，新增 ${newFolders} 個 Zen 資料夾`);
+        toast(`已整理 ${completed} 個分頁，新增 ${newFolders} 個一般分頁群組`);
       }
     } catch (e) {
       console.error(TAG, 'Sort stopped:', e);
@@ -878,7 +864,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV019 = { organize, undo, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV020 = { organize, undo, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
