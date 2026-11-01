@@ -1,19 +1,20 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.2.6
+// @version      0.2.7
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV026) return;
-  window.__zenSiteFoldersV026 = true;
+  if (window.__zenSiteFoldersV027) return;
+  window.__zenSiteFoldersV027 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
   const ICON_CLASS = 'zsf-favicon';
   const TAB_UID_KEY = 'zsf-tab-uid-v1';
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
+  const ARCHIVED_SNAPSHOTS_KEY = 'zsf-archived-snapshots-v1';
   const OWNED_GROUPS_KEY = 'zsf-owned-group-sites-v1';
   const MIN_WAVE_MS = 1250;
   const SITE_NAMES = {
@@ -534,7 +535,73 @@
     }
     const groups = getCreated();
     if (!groups.length) {
-      toast('找不到這次整理建立的群組；未變更分頁或快照', true);
+      // A Zen session restore may have recreated or removed the groups while
+      // preserving the earlier v3 snapshot. Never infer that an unknown
+      // group is ours, and never discard an unrecoverable snapshot without
+      // first preserving a second durable copy.
+      const candidates = new Set(getGroups(current.node));
+      for (const tab of allWorkspaceTabs(current.node, current.id)) {
+        if (tab.group?.isConnected) candidates.add(tab.group);
+      }
+      const owned = readOwnedSites();
+      const possibleOwned = [...candidates].filter(group => group?.isConnected &&
+        (String(group.id || '').startsWith('zsf-') ||
+         Boolean(group.getAttribute?.('data-zsf-site')) ||
+         Boolean(group.id && owned[group.id]))
+      );
+      if (possibleOwned.length) {
+        toast('仍偵測到 ' + possibleOwned.length + ' 個可能由本工具建立的群組；為保護分頁，未清除快照', true);
+        return;
+      }
+      if (!Array.isArray(snapshot.createdFolders) || !created.every(id => typeof id === 'string' && id.startsWith('zsf-'))) {
+        toast('舊快照未記錄可信任的群組 ID；拒絕清除，原始備份保留', true);
+        return;
+      }
+      const visibleTabCount = allWorkspaceTabs(current.node, current.id)
+        .filter(tab => tab?.isConnected && !tab.hasAttribute('cloned')).length;
+      if (!confirmRescue('原本這次整理建立的群組已無法找到，目前也未偵測到本工具的群組。\n' +
+        '目前可辨識 ' + visibleTabCount + ' 個分頁，舊快照包含 ' + snapshot.tabs.length + ' 個分頁。\n' +
+        '此操作不會移動、關閉或重新載入任何分頁，但無法確認舊分頁是否全部仍存在。\n' +
+        '確定先把舊快照封存成另一份備份，再解除這次整理鎖定嗎？')) return;
+      const store = getSessionStore('getCustomWindowValue', 'setCustomWindowValue');
+      if (!store) {
+        toast('無法安全封存舊快照：SessionStore 不可寫入；未變更分頁或快照', true);
+        return;
+      }
+      let archived = {};
+      try {
+        const raw = store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY);
+        archived = raw ? JSON.parse(raw) : {};
+        if (!archived || typeof archived !== 'object' || Array.isArray(archived)) throw new Error('invalid archive');
+      } catch (error) {
+        console.warn(TAG, 'Cannot parse old snapshot archive:', error);
+        toast('既有快照封存資料無法讀取；拒絕覆蓋，未變更快照', true);
+        return;
+      }
+      const history = Array.isArray(archived[current.id]) ? archived[current.id] : [];
+      const nextArchive = { ...archived, [current.id]: [...history, {
+        archivedAt: Date.now(), reason: 'orphaned-created-groups',
+        snapshot: JSON.parse(JSON.stringify(snapshot))
+      }] };
+      try {
+        const payload = JSON.stringify(nextArchive);
+        store.setCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY, payload);
+        if (store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY) !== payload) {
+          throw new Error('readback mismatch');
+        }
+      } catch (error) {
+        console.warn(TAG, 'Could not persist snapshot archive:', error);
+        toast('封存舊快照失敗；沒有解除整理鎖定', true);
+        return;
+      }
+      const next = { ...stored };
+      delete next[current.id];
+      if (!writeSnapshots(next)) {
+        toast('舊快照已額外封存，但解除整理鎖定失敗；目前分頁未變更', true);
+        return;
+      }
+      updateButtons();
+      toast('已封存舊快照並解除整理鎖定；分頁未移動。建議先核對分頁再整理');
       return;
     }
     const candidates = [];
@@ -835,21 +902,14 @@
         node.querySelector('.pinned-tabs-container-separator');
       if (!separator) continue;
       const undoButton = separator.querySelector('.zsf-undo-button');
-      const rescueButton = separator.querySelector('.zsf-rescue-button');
       const sortButton = separator.querySelector('.zsf-sort-button');
       const snapshot = snapshots[node.id];
       if (undoButton) {
         undoButton.hidden = !Boolean(snapshot);
         undoButton.disabled = running;
-      }
-      if (rescueButton) {
-        const available = Boolean(snapshot && [3, 4].includes(snapshot.version) &&
-          (snapshot.rescueCompleted || snapshot.createdFolders?.length));
-        rescueButton.hidden = !available;
-        rescueButton.disabled = running;
-        rescueButton.setAttribute('tooltiptext', snapshot?.rescueCompleted
-          ? '安全拆分已完成：核對分頁後，左鍵確認清除舊快照'
-          : '安全拆分：左鍵拆開本工具建立的群組，不會關閉分頁');
+        undoButton.setAttribute('tooltiptext', snapshot
+          ? '左鍵還原｜觸控板雙指點按（右鍵）安全拆分'
+          : '還原整理前的分頁順序及群組');
       }
       if (sortButton) sortButton.disabled = running;
     }
@@ -1016,6 +1076,34 @@
     }
   }
 
+  // Trackpad two-finger secondary click on macOS is either a right-button
+  // mousedown followed by contextmenu, or a contextmenu-only event. Handle
+  // both in capture phase before Zen/Zia's toolbar contextmenu handlers.
+  // This applies ONLY to our undo button; ordinary menus remain untouched.
+  let lastSecondaryUndo = 0;
+  function onUndoSecondaryClick(event) {
+    if (event.type === 'mousedown' && event.button !== 2) return;
+    const path = typeof event.composedPath === 'function' ?
+      event.composedPath() : [event.target];
+    const button = path.find(node => node?.classList?.contains?.('zsf-undo-button'));
+    if (!button || button.hidden || button.disabled || !button.isConnected) return;
+    const current = workspace();
+    const snapshot = current && readSnapshots()[current.id];
+    if (!snapshot) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+    const now = Date.now();
+    // macOS sends both mousedown and contextmenu for the same gesture.
+    if (now - lastSecondaryUndo < 650) return;
+    lastSecondaryUndo = now;
+    rescueSiteGroups().catch(error => {
+      console.error(TAG, 'Secondary-click rescue failed:', error);
+      toast('安全拆分操作失敗，快照保留', true);
+    });
+  }
+
   function addButton() {
     // Zen creates one native pinned-tabs separator per Space. Install into
     // all of them, not just the one that happened to be active at startup.
@@ -1041,27 +1129,19 @@
       if (!undoButton) {
         undoButton = document.createXULElement('toolbarbutton');
         undoButton.classList.add('zsf-undo-button');
-        undoButton.setAttribute('tooltiptext', '還原整理前的分頁順序及群組（不關閉分頁）');
+        undoButton.setAttribute('tooltiptext', '左鍵還原｜雙指點按（右鍵）安全拆分');
         undoButton.setAttribute('aria-label', '還原整理前的分頁');
-        undoButton.addEventListener('command', () => undo().catch(e => console.error(TAG, e)));
+        undoButton.addEventListener('command', event => {
+          // Right-click must never fall through into the normal undo action.
+          if (event.button === 2 || Date.now() - lastSecondaryUndo < 650) return;
+          undo().catch(e => console.error(TAG, e));
+        });
         separator.insertBefore(undoButton, line);
       }
 
-      // Dedicated left-click rescue control: Zen/Zia can intercept native
-      // contextmenu on toolbarbuttons, so recovery must not depend on it.
-      let rescueButton = separator.querySelector('.zsf-rescue-button');
-      if (!rescueButton) {
-        rescueButton = document.createXULElement('toolbarbutton');
-        rescueButton.classList.add('zsf-rescue-button');
-        rescueButton.setAttribute('label', '拆');
-        rescueButton.setAttribute('aria-label', '安全拆分網站群組');
-        rescueButton.addEventListener('command', () =>
-          rescueSiteGroups().catch(e => {
-            console.error(TAG, 'Safe rescue failed:', e);
-            toast('安全拆分操作失敗，已保留備份', true);
-          }));
-        separator.insertBefore(rescueButton, line);
-      }
+      // Remove the experimental third control left by a prior live update.
+      // Only the folder icon and the undo arrow should remain visible.
+      separator.querySelector('.zsf-rescue-button')?.remove();
 
       // Remove the v0.1.4 extra spacer if a live-reload preserved it.
       // Zen's own toolbarseparator already expands to fill remaining space.
@@ -1077,6 +1157,10 @@
       initTimer = setTimeout(initialize, 1000);
       return;
     }
+    // Use capture at the browser window: contextmenu on XUL toolbarbuttons
+    // can be consumed by native Zen/Zia handlers before a target listener.
+    window.addEventListener('mousedown', onUndoSecondaryClick, true);
+    window.addEventListener('contextmenu', onUndoSecondaryClick, true);
     addButton();
     reapplyAppearance();
     // SessionStore may restore group elements after window load.
@@ -1097,12 +1181,14 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV026 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV027 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
   else window.addEventListener('load', initialize, { once: true });
   window.addEventListener('unload', () => {
+    window.removeEventListener('mousedown', onUndoSecondaryClick, true);
+    window.removeEventListener('contextmenu', onUndoSecondaryClick, true);
     clearTimeout(initTimer);
     if (waveFrame != null) cancelAnimationFrame(waveFrame);
     if (noticeTimer) clearTimeout(noticeTimer);

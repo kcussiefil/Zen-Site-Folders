@@ -3,7 +3,7 @@
   "name": "Zen Site Folders",
   "description": "Ordinary unpinned website and about-page tab groups, cached icons, neutral styling, animated divider and persistent one-click undo. Zia-compatible.",
   "author": "kcussiefil",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -24,5 +24,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T09:06:15.006Z"
+  "updatedAt": "2026-11-01T09:18:42.764Z"
 }
