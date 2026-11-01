@@ -15,7 +15,7 @@ assert(!/\.(?:pinTab|unpinTab|removeTab)\s*\(/.test(src),
 assert(!core.includes("window.addEventListener('TabGrouped'"),
   'user manual drag must not get silently undone by newest-first on TabGrouped');
 assert(css.includes('.zsf-drag-ghost') && !css.includes('.zsf-drop-guide'));
-assert(!src.includes("create('div', 'zsf-drop-guide')"), 'no duplicated drop guide element');
+assert(!src.includes('zsf-drop-guide'), 'remove redundant horizontal guide');
 assert(css.includes('pointer-events: none !important'));
 
 class Node {
@@ -129,7 +129,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.5.1');
+assert(api&&api.version==='0.5.3');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -141,17 +141,19 @@ async function main(){
   assert.equal(root.querySelector('.zsf-drag-ghost'),null,'tiny movement should not start drag');
   emit(window,'mousemove',gEvent(160,95));
   const ghost=root.querySelector('.zsf-drag-ghost');
-  assert(ghost && !root.querySelector('.zsf-drop-guide'),'drag uses floating card without duplicated horizontal guide');
-  assert.deepEqual(strip.children,[source,first,last],
-    'whole-folder live preview must reorder the actual DOM before drop');
+  assert(ghost && !root.querySelector('.zsf-drop-guide'),
+    'group preview must be floating card plus live sibling avoidance without extra bar');
   assert(root.hasAttribute('data-zsf-hide-native-indicator'),
     'owned group drag hides native grey drop line with circle endcaps');
   assert(css.includes('#zen-drag-indicator') && css.includes('visibility: hidden !important'),
     'Zen DOM drop indicator must be hidden while ZSF guide is shown');
   assert.equal(ghost.getAttribute('aria-hidden'),'true');
-  assert.notDeepEqual(strip.children,initial,'live preview should reorder before drop');
-  assert(!first.hasAttribute('data-zsf-drag-avoid'),
-    'real live DOM ordering must not compete with an additional avoidance transform');
+  assert.deepEqual(strip.children,initial,'visual drag must not reorder until drop');
+  assert(first.hasAttribute('data-zsf-drag-avoid') &&
+    first.style.getPropertyValue('--zsf-drag-avoid-y')==='35px',
+    'dragging whole folder above first must animate first sibling downward');
+  assert(last.style.getPropertyValue('--zsf-drag-avoid-y')==='0px',
+    'unaffected siblings must not move');
   assert(source.hasAttribute('data-zsf-drag-source'),
     'source must be visibly represented by floating card, not a native grey bar');
   let blankImage=null;
@@ -167,24 +169,36 @@ async function main(){
   await waitNative();
   assert.deepEqual(strip.children,[source,first,last],
     'GitHub group must reach top of ordinary tab list');
-  assert.equal(moveLog.length,1,'native move happens once during live preview');
-  assert(!ghost.isConnected,'drop cleans floating preview');
+  assert.equal(moveLog.length,1,'use native browser moveTabBefore exactly once');
+  assert(!ghost.isConnected,'drop cleans floating overlay');
   assert(!root.hasAttribute('data-zsf-hide-native-indicator'),
     'native indicator mask must clear after drop');
-  assert(!first.hasAttribute('data-zsf-drag-avoid'),
-    'no avoid styles retained after live drop');
+  assert(!first.hasAttribute('data-zsf-drag-avoid') &&
+    !first.style.getPropertyValue('--zsf-drag-avoid-y'),
+    'group avoidance styles must be removed after drop');
   // An already-correct native result must not get moved twice.
   assert.equal(api.commit({kind:'group',source,target:first,before:true},
     {kind:'group',parent:strip}),true);
   assert.equal(moveLog.length,1,'skip duplicate correction if Zen/Zia already moved');
+
+  // Pointer-only gestures on macOS may have mouseup without a drop event.
+  emit(strip,'mousedown',gEvent(160,160));
+  emit(window,'mousemove',gEvent(160,129));
+  assert.deepEqual(strip.children,[source,first,last],
+    'visual group avoidance must not mutate the real DOM on mousemove');
+  emit(window,'mouseup',gEvent(160,129));
+  await Promise.resolve();
+  assert.deepEqual(strip.children,[first,source,last],
+    'pointer-only mouseup must finish the group reorder immediately');
+  assert(api.commit({kind:'group',source,target:first,before:true},
+    {kind:'group',parent:strip}), 'reset fixture to original order');
 
   // Explicit out-of-sidebar drop must never move/pin a group.
   emit(strip,'mousedown',gEvent(160,111));
   emit(window,'mousemove',gEvent(160,135));
   emit(window,'drop',gEvent(800,300));
   await waitNative();
-  assert.deepEqual(strip.children.map(n=>n===source?'source':n===first?'first':'last'),
-    ['source','first','last'], 'cancelled out-of-sidebar live drag must restore source before first');
+  assert.deepEqual(strip.children,[source,first,last]);
 
   // Member order: native TabGrouped had been re-sorting the dragged tab after
   // 80ms. Now user-directed A,B,C -> B,A,C must remain stable.
@@ -238,15 +252,11 @@ async function main(){
   const beforeSwitch = container.children.slice();
   emit(strip, 'mousedown', tabEvent(100,210,B));
   emit(window, 'mousemove', tabEvent(100,180,B));
-  assert.notDeepEqual(container.children,beforeSwitch,
-    'new live drag must update the DOM before dropping');
   emit(window, 'drop', tabEvent(100,180,B));
-  await Promise.resolve();
-  const acceptedOrder = container.children.slice();
   window.gZenWorkspaces.activeWorkspace = 'space2';
   await waitNative();
-  assert(container.children.every((tab, i) => tab === acceptedOrder[i]),
-    'workspace switch must not permit a late correction after accepted live drop');
+  assert(container.children.every((tab, i) => tab === beforeSwitch[i]),
+    'a workspace switch without UI notification must invalidate pending correction');
   // A real Zen arrowscrollbox need not be in the pointer event path.
   const port=new Node('scrollbox');
   port.scrollTop=110;port.scrollHeight=1000;port.clientHeight=320;
@@ -269,7 +279,7 @@ async function main(){
   assert(port.scrollTop<afterDown,'top-edge drag must scroll up');
   emit(window,'keydown',{key:'Escape'});
   assert.equal(rafs.size,0,'Esc cancels any pending scroll frames');
-  assert(!first.hasAttribute('data-zsf-drag-avoid'),'Esc leaves no avoidance flags');
+  assert(!first.hasAttribute('data-zsf-drag-avoid'),'Esc clears avoidance flags');
   // A dragstart from an unrelated regular tab must not blank its OS image.
   let unrelatedBlanked=false;
   const outsideTab=new Node('tab','tabbrowser-tab');

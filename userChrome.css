@@ -432,7 +432,7 @@ tab-group[data-zsf-site][data-zsf-drag-source]
    between original slot and destination; native DOM order never changes. */
 #tabbrowser-tabs [data-zsf-drag-avoid] {
   translate: 0 var(--zsf-drag-avoid-y, 0px) !important;
-  transition: translate 155ms cubic-bezier(.2,.8,.2,1) !important;
+  transition: translate 110ms cubic-bezier(.2,.8,.2,1) !important;
 }
 #zsf-drag-ghost { /* intentionally unused; class is the public selector */ }
 .zsf-drag-ghost {

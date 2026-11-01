@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Keep Zen compact sidebar expanded during folder hover preview; Sine update timestamp fixed.",
+  "description": "Restore native-safe group drag avoidance and pointer-drop completion, preserving Sine auto-updates and compact preview behavior.",
   "author": "kcussiefil",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-01T17:39:31.251Z"
+  "updatedAt": "2026-11-01T17:54:16.275Z"
 }
