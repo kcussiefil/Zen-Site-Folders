@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.2.0
+// @version      0.2.1
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV020) return;
+  if (window.__zenSiteFoldersV021) return;
   window.__zenSiteFoldersV020 = true;
 
   const TAG = '[ZenSiteFolders]';
@@ -560,31 +560,28 @@
     if (!separator) return;
     const svg = ensureWave(separator);
     const line = separator.querySelector(':scope > toolbarseparator');
-    if (svg && line) {
-      // Align the effect with the actual native separator's current geometry.
-      // It adjusts automatically when Undo appears or the sidebar is resized.
+    if (!svg || !line) return;
+    // Position is recalculated on EVERY animation frame: the Undo button
+    // becomes visible after the snapshot is saved, while the wave is running.
+    const positionWave = () => {
       const hostRect = separator.getBoundingClientRect();
       const lineRect = line.getBoundingClientRect();
-      const undoButton = separator.querySelector('.zsf-undo-button:not([hidden])');
-      const sortButton = separator.querySelector('.zsf-sort-button:not([hidden])');
-      const clearButton = separator.querySelector('.zen-tabs-clear-button, .zen-clear-tabs-button');
-      // The wave is restricted to the free line segment, even while undo is
-      // shown or CSS layout is animating. Never paint over toolbar controls.
-      const controlRight = Math.max(
-        lineRect.left,
-        ...( [sortButton, undoButton]
-          .filter(button => button && button.getClientRects().length)
-          .map(button => button.getBoundingClientRect().right + 6))
+      const controls = [...separator.querySelectorAll('toolbarbutton')].filter(button =>
+        !button.hidden && !button.disabled && button.getClientRects().length &&
+        getComputedStyle(button).display !== 'none'
       );
-      const start = Math.max(lineRect.left, controlRight);
-      const end = Math.max(start, Math.min(lineRect.right,
-        clearButton?.getClientRects().length
-          ? clearButton.getBoundingClientRect().left - 6 : lineRect.right));
-      const width = Math.max(0, end - start);
-      svg.style.setProperty('--zsf-wave-left', Math.max(0, start - hostRect.left).toFixed(1) + 'px');
+      const leftGuard = Math.max(lineRect.left,
+        ...controls.filter(button => button.getBoundingClientRect().left <= lineRect.left + 12)
+          .map(button => button.getBoundingClientRect().right + 12));
+      const rightGuard = Math.min(lineRect.right,
+        ...controls.filter(button => button.getBoundingClientRect().left > lineRect.left + 12)
+          .map(button => button.getBoundingClientRect().left - 12));
+      const width = Math.max(0, rightGuard - leftGuard);
+      svg.style.setProperty('--zsf-wave-left', Math.max(0, leftGuard - hostRect.left).toFixed(1) + 'px');
       svg.style.setProperty('--zsf-wave-width', width.toFixed(1) + 'px');
-      svg.style.visibility = width >= 12 ? 'visible' : 'hidden';
-    }
+      svg.style.visibility = width >= 24 ? 'visible' : 'hidden';
+    };
+    positionWave();
     separator.classList.add('zsf-is-sorting');
     waveStart = performance.now();
     waveEnding = false;
@@ -592,6 +589,7 @@
       const svg = separator.querySelector('.zsf-wave');
       const path = svg?.querySelector('.zsf-wave-path');
       if (!path || !separator.isConnected) { waveFrame = null; return; }
+      positionWave(); // Undo may have appeared or the separator may have resized.
       const duration = now - waveStart;
       const fadeIn = Math.min(1, duration / 180);
       const fadeOut = waveEnding ? Math.max(0, 1 - (duration - MIN_WAVE_MS) / 260) : 1;
