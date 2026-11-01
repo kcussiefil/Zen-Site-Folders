@@ -79,7 +79,7 @@
   margin: 0 !important;
   opacity: .9 !important;
 }
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zsf-rescue-button) > .toolbarbutton-text {
+.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button) > .toolbarbutton-text {
   display: none !important;
 }
 .pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zsf-rescue-button)[disabled] {
