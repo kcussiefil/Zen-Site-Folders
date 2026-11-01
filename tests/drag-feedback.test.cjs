@@ -304,6 +304,8 @@ async function main(){
   window.__ziaLoaded = true;
   const nativeBefore = moveLog.length;
   emit(strip,'mousedown',gEvent(160,160,sourceLabel));
+  assert(api.prepareZiaGroupDrag(source) === true,
+    'isolated synthetic Zia regression explicitly primes native adapter');
   assert(source.isZenFolder === true,
     'only the grabbed ZSF group may be temporarily recognized by Zia');
   root.setAttribute('zia-dragging-tab','true');
