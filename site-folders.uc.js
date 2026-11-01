@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.2.8
+// @version      0.2.9
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV028) return;
-  window.__zenSiteFoldersV028 = true;
+  if (window.__zenSiteFoldersV029) return;
+  window.__zenSiteFoldersV029 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -257,7 +257,7 @@
     }
     const tab = sampleTab || [...group.querySelectorAll('tab')].find(t => siteFor(tabURL(t)) === site);
     const src = tab ? sourceFaviconURL(tab) : null;
-    if (src && icon.getAttribute('src') !== src) icon.setAttribute('src', src);
+    if (src && !group.hasAttribute('data-zsf-custom-icon') && icon.getAttribute('src') !== src) icon.setAttribute('src', src);
     if (src && group.isZenFolder) {
       try { window.gZenFolders?.setFolderUserIcon?.(group, src); }
       catch (e) { console.warn(TAG, 'Native folder favicon error:', e); }
@@ -1013,7 +1013,9 @@
       const requested = [...buckets.values()].reduce((sum, items) => sum + items.length, 0);
       let completed = 0, errors = 0, newFolders = 0;
       for (const [site, items] of buckets) {
-        // Preserve existing relative order within each site.
+        // Sort newest to oldest. Legacy tabs without timestamps use their
+        // recorded original tab position as a stable approximate baseline.
+        items.sort((a, b) => b.order - a.order);
         let folder = findGroup(current.node, site);
         try {
           if (!folder) {
@@ -1049,7 +1051,19 @@
               console.warn(TAG, 'Moving tab to ordinary site group failed:', site, e);
             }
           }
-          // Do not reorder members or move the group into the pinned region.
+          // Only reorder tabs already verified as members of this ordinary
+          // unpinned group. moveTabBefore preserves the group's position in
+          // the normal workspace and never pins any member.
+          const sorted = items.map(item => item.tab).filter(tab =>
+            tab?.isConnected && tab.group === folder && !tab.pinned);
+          reorderGroup(folder, sorted);
+          const visibleOrder = [...folder.querySelectorAll('tab')].filter(tab =>
+            sorted.includes(tab) && tab.group === folder);
+          if (visibleOrder.length !== sorted.length ||
+              visibleOrder.some((tab, index) => tab !== sorted[index])) {
+            errors++;
+            console.warn(TAG, 'Newest-first order verification failed', site);
+          }
           decorate(folder, site, items[0]?.tab);
           try { folder.collapsed = true; } catch (_) {}
         } catch (e) {
@@ -1181,7 +1195,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV028 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV029 = { organize, undo, rescueSiteGroups, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
