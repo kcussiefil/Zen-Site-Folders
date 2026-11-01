@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.3.6
+// @version      0.3.7
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV036) return;
-  window.__zenSiteFoldersV036 = true;
+  if (window.__zenSiteFoldersV037) return;
+  window.__zenSiteFoldersV037 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -565,24 +565,6 @@
   // exist. Never closes, recreates, reloads, pins or guesses tab identities.
   // All tabs in this mod's generated ordinary groups are left in their current
   // relative location; full historical order cannot be established from v3.
-  function confirmRescue(message) {
-    try {
-      if (typeof Services.prompt?.confirm === 'function') {
-        return Services.prompt.confirm(window, 'Zen Site Folders', message);
-      }
-    } catch (error) {
-      console.warn(TAG, 'Native confirmation unavailable:', error);
-    }
-    try {
-      return typeof window.confirm === 'function'
-        ? window.confirm(message) : false;
-    } catch (error) {
-      console.warn(TAG, 'Confirmation failed; rescue cancelled:', error);
-      toast('無法開啟安全拆分確認視窗；沒有移動任何分頁', true);
-      return false;
-    }
-  }
-
   // An active window can restore owned site groups with *new* DOM/SessionStore
   // group IDs. Never rely on snapshot.createdFolders alone. Ownership must
   // follow our private prefix, our persisted ownership map or the attribute
@@ -638,12 +620,10 @@
         toast('舊快照缺少可信任的群組識別資料；拒絕清除，備份保留', true);
         return;
       }
-      const visible = allWorkspaceTabs(current.node, current.id).filter(tab =>
-        tab?.isConnected && !tab.hasAttribute('cloned')).length;
-      if (!confirmRescue('目前已找不到由本工具建立的任何網站群組，也沒有其他一般群組待確認。\n' +
-        '可辨識 ' + visible + ' 個分頁；舊快照包含 ' + snapshot.tabs.length +
-        ' 個。此操作不會移動或關閉分頁。\n' +
-        '確定將舊快照完整封存，再清除整理鎖定與還原箭頭嗎？')) return;
+      // No prompt: the second explicit secondary-click, after a prior safe
+      // ungroup or successful absence check, requests final archival.
+      // We still archive with readback and recheck every ordinary group
+      // before removing the snapshot or the recovery arrow.
       const store = getSessionStore('getCustomWindowValue', 'setCustomWindowValue');
       if (!store) { toast('SessionStore 無法寫入；快照未清除', true); return; }
       let archives = {};
@@ -695,12 +675,9 @@
       }
       candidates.push({ group, tabs });
     }
-    const count = candidates.reduce((n, entry) => n + entry.tabs.length, 0);
-    if (!confirmRescue('安全拆分將解除目前辨識為本工具建立的 ' + groups.length +
-      ' 個網站群組，保留其中 ' + count + ' 個分頁。\n' +
-      '即使 Zen 恢復工作階段後改變群組 ID，也會依可信任的擁有權標記辨識。\n' +
-      '分頁維持原本在資料夾內由上到下的順序；不會關閉或重新載入網頁。\n' +
-      '拆分後先保留快照與還原箭頭，供你核對。確定嗎？')) return;
+    // This secondary-click is already the explicit safe-ungroup gesture.
+    // After all preflight checks pass, do it directly; keep the snapshot and
+    // arrow until a later user invocation clears the verified empty state.
 
     const browser = window.gBrowser;
     if (typeof browser?.ungroupTab !== 'function' ||
@@ -1301,20 +1278,13 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    // Zen emits TabGrouped with the tab in event.detail. Sort only this
-    // mod's ordinary unpinned group after an explicit user grouping action;
-    // never auto-group or continuously override manual drag ordering.
-    window.addEventListener('TabGrouped', event => {
-      const tab = event?.detail;
-      const group = tab?.group;
-      if (running || !group?.isConnected || !siteOfGroup(group) ||
-          group.isZenFolder || group.pinned) return;
-      setTimeout(() => {
-        if (!running && tab?.isConnected && tab.group === group)
-          sortOwnedGroupNewestFirst(group);
-      }, 80);
-    });
-    window.__zenSiteFoldersV036 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots };
+    // Do not automatically re-sort when native Zen emits TabGrouped.
+    // During a manual in-folder drag, Zen may emit TabGrouped as it moves
+    // the tab. The former 80ms newest-first pass undid the user's chosen
+    // position, making some tabs appear impossible to reorder.
+    // Explicit 'organize' still applies newest-first once, and afterwards
+    // the user's manual order always takes precedence.
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
