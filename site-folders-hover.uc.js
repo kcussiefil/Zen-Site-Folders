@@ -393,7 +393,7 @@
     card = null;
     if (window.__zsfGroupHoverV032 === api) delete window.__zsfGroupHoverV032;
   }
-  const api = { start, destroy, closeNow, version: '0.3.2' };
+  const api = { start, destroy, closeNow, position, version: '0.3.2' };
   window.__zsfGroupHoverV032 = api;
   if (document.readyState === 'complete') {
     if (!start()) window.addEventListener('load', start, { once: true });
