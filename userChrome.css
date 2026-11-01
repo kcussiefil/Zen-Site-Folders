@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.4.1 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.4.2 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -191,18 +191,12 @@
   opacity: 0 !important;
   transition: opacity 0.15s ease-in !important;
 }
-/* A closed group with an active tab still needs a bounded hit-test area,
-   including its glow. Otherwise invisible rows can overlap the next header. */
-#tabbrowser-tabs tab-group[data-zsf-site][collapsed][has-active]:not([split-view-group]) > .tab-group-container:not([zia-folder-holding]) {
-  --zia-glow-room: calc(-1 * (var(--zia-active-glow-blur, 0px) + var(--zia-active-glow-spread, 0px) + var(--zia-active-glow-reach, 0px)));
-  overflow: visible !important;
-  clip-path: inset(var(--zia-glow-room));
-}
-/* While opening / fully open there are no hidden members to isolate.
-   Applying a clip-path to the *entire animated folder* forces expensive
-   repaints on every scroll/frame, particularly during video playback.
-   Keep the selected tab glow visible without an oversized clipping layer. */
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]):not([collapsed][has-active]):has(> .tab-group-container > .tabbrowser-tab:is([selected], [visuallyselected])) > .tab-group-container:not([zia-folder-holding]) {
+/* v0.4.2: never clip an entire animated group: clip-path on the
+   soundplaying/selected group forces a large repainted layer per frame.
+   All inactive collapsed members already have pointer-events: none;
+   native height/opacity animation owns their visual and hit-test state. */
+#tabbrowser-tabs tab-group[data-zsf-site][collapsed][has-active]:not([split-view-group]) > .tab-group-container:not([zia-folder-holding]),
+#tabbrowser-tabs tab-group[data-zsf-site]:not([collapsed], [split-view-group]) > .tab-group-container:not([zia-folder-holding]) {
   overflow: visible !important;
   clip-path: none !important;
 }

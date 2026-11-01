@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.4.1
+// @version      0.4.2
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -12,6 +12,7 @@
   const listeners = [];
   let observer, dead = false;
   let queuedScan = false;
+  const queuedGroups = new Set();
   let lastSelected = null;
   const ours = group => group?.isConnected && group.matches?.(SELECTOR) &&
     !group.isZenFolder && !group.pinned;
@@ -52,14 +53,21 @@
         prior.selected.every((tab, i) => tab === selected[i])) return;
     const state = { collapsed, selected, done: null };
     states.set(group, state);
-    // Zen's public event handlers skip ordinary tab-group. Its animation
-    // methods use the same native animation registry that Zia decorates.
-    // On selection, reveal the new active row and collapse the other rows
-    // through that registry; replacement cancels each old item animation.
-    const jobs = [];
-    if (!collapsed || prior?.collapsed) jobs.push(zen.animateExpand(group));
-    if (collapsed) jobs.push(zen.animateCollapse(group));
-    state.done = Promise.all(jobs).then(() => {
+    // A selected-tab change inside an already-closed group is not an
+    // expansion. The previous bridge started expand AND collapse together,
+    // which raced over the same elements and broke Zia's spring, particularly
+    // when an audio tab was already visible.
+    //
+    // The new selected tab may still have native height:0 / opacity:0 left
+    // by the previous collapse; only clear THAT tab's native inline styles.
+    if (collapsed && prior?.collapsed) {
+      const newlySelected = selected.filter(tab => !prior.selected.includes(tab));
+      if (newlySelected.length) zen.styleCleanup?.(newlySelected);
+    }
+    // Exactly one native animation path per state transition. Zia decorates
+    // this same native path; no competing WAAPI timeline is introduced.
+    const job = collapsed ? zen.animateCollapse(group) : zen.animateExpand(group);
+    state.done = Promise.resolve(job).then(() => {
       if (dead || !ours(group) || states.get(group) !== state) return;
       // Zen's shared animation counter skips finalization for all but the
       // last concurrently animated group. Finish this group's native state
@@ -75,7 +83,6 @@
     if (dead) return;
     const tabs = window.gBrowser?.tabContainer;
     if (!tabs) return;
-    clearLegacyFlags();
     const groups = [...tabs.querySelectorAll(SELECTOR)];
     const spaces = new Set();
     for (const group of groups) {
@@ -90,6 +97,16 @@
         space.toggleAttribute('data-zsf-scroll-stable', enabled);
     }
     for (const group of states.keys()) if (!ours(group)) states.delete(group);
+  }
+  function scheduleGroupSync(group) {
+    if (dead || !ours(group) || queuedGroups.has(group)) return;
+    queuedGroups.add(group);
+    // Run after all TabGroup* capture listeners, including Zia's motion
+    // marker, have observed the event; still before its next paint.
+    queueMicrotask(() => {
+      queuedGroups.delete(group);
+      if (!dead && ours(group)) sync(group);
+    });
   }
   function scheduleScan() {
     if (queuedScan || dead) return;
@@ -108,7 +125,12 @@
       if (record.type === 'attributes' &&
           record.attributeName === 'collapsed' && ours(record.target)) {
         // Never scan every tab in the whole sidebar for a single folder.
-        sync(record.target);
+        scheduleGroupSync(record.target);
+      } else if (record.type === 'attributes' &&
+                 (record.attributeName === 'selected' ||
+                  record.attributeName === 'multiselected') &&
+                 ours(record.target.group)) {
+        scheduleGroupSync(record.target.group);
       } else if (record.type === 'attributes' &&
                  record.attributeName === 'data-zsf-site' &&
                  ours(record.target)) {
@@ -123,14 +145,21 @@
     if (structural) scheduleScan();
   }
   function onTabSelect(event) {
-    lastSelected = event?.target?.localName === 'tab' ?
+    const previous = lastSelected;
+    const current = event?.target?.localName === 'tab' ?
       event.target : window.gBrowser?.selectedTab || null;
-    // The native selected state can move between groups asynchronously.
-    // Querying just the previous/current group missed some real Zen restore
-    // paths. Iterate already-known groups in memory, not the whole DOM.
-    for (const group of states.keys()) {
-      if (ours(group) && group.collapsed) sync(group);
+    lastSelected = current;
+    // Only the previous and current owners can have changed active rows.
+    // Remembered state catches workspace/restore transitions where a tab's
+    // .group pointer has already changed by the time TabSelect fires.
+    const affected = new Set([previous?.group, current?.group]);
+    for (const [group, state] of states) {
+      if (!group.collapsed) continue;
+      if (state.selected.includes(previous) || state.selected.includes(current))
+        affected.add(group);
     }
+    for (const group of affected)
+      if (ours(group) && group.collapsed) scheduleGroupSync(group);
   }
   function start() {
     const tabs = window.gBrowser?.tabContainer;
@@ -138,12 +167,15 @@
     for (const version of ['031', '032', '033', '034', '035', '036'])
       window['__zsfCollapseV' + version]?.destroy?.();
     lastSelected = window.gBrowser?.selectedTab || null;
-    bind(window, 'TabGroupCollapse', event => sync(event.target), true);
-    bind(window, 'TabGroupExpand', event => sync(event.target), true);
+    clearLegacyFlags();
+    bind(window, 'TabGroupCollapse', event => scheduleGroupSync(event.target), true);
+    bind(window, 'TabGroupExpand', event => scheduleGroupSync(event.target), true);
     bind(window, 'TabSelect', onTabSelect, true);
     observer = new MutationObserver(onMutations);
     observer.observe(tabs, { subtree: true, childList: true,
-      attributes: true, attributeFilter: ['data-zsf-site', 'collapsed'] });
+      attributes: true, attributeFilter: [
+        'data-zsf-site', 'collapsed', 'selected', 'multiselected'
+      ] });
     scan();
   }
   async function whenIdle(group) {
@@ -174,10 +206,11 @@
     for (const space of window.gBrowser?.tabContainer?.querySelectorAll('zen-workspace') || [])
       space.removeAttribute('data-zsf-scroll-stable');
     for (const [node, type, fn, options] of listeners) node.removeEventListener(type, fn, options);
+    queuedGroups.clear();
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.1', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });
