@@ -91,6 +91,16 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
       removeTabGroup() { removeCount++; },
     },
     gZenEmojiPicker: { open(anchor, options) { window.iconPicker = options; } },
+    __zenSiteFoldersV036: {
+      ungroupInDisplayOrder(group, ordered) {
+        let count = 0;
+        for (const tab of ordered) {
+          window.gBrowser.ungroupTab(tab);
+          if (tab.group !== group) count++;
+        }
+        return { moved: count, errors: ordered.length - count, ordered: count === ordered.length };
+      },
+    },
     addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
     removeEventListener(type, fn) { listeners[type] = (listeners[type] || []).filter(f => f !== fn); },
     dispatchEvent() {},
@@ -110,8 +120,8 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   class FakeMutationObserver { observe() {} disconnect() {} }
   vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
-  const api = window.__zsfMenuV035;
-  assert.equal(api.version, '0.3.5');
+  const api = window.__zsfMenuV036;
+  assert.equal(api.version, '0.3.6');
   const event = { target: label, screenX: 30, screenY: 40, prevented: false,
     composedPath: () => [label, group],
     preventDefault() { this.prevented = true; }, stopPropagation() {}, stopImmediatePropagation() {} };
@@ -189,7 +199,8 @@ async function testMenu() {
   assert.equal(yes.stats().ungroupCount, 2);
   assert.equal(yes.stats().confirmCount, 1, 'one confirmation must cover both action and automatic snapshot archive');
   assert(yes.tabs.every(t => t.isConnected && !t.pinned && t.group === null));
-  assert(!JSON.parse(yes.saved['zsf-before-sort-v1']).space1);
+  assert(JSON.parse(yes.saved['zsf-before-sort-v1']).space1,
+    'manual ungroup must keep recovery snapshot and arrow until user verifies');
   const archived = JSON.parse(yes.saved['zsf-archived-snapshots-v1']).space1;
   assert.equal(archived.length, 1);
   assert.equal(archived[0].snapshot.tabs.length, 1);
