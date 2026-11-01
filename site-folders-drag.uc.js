@@ -754,7 +754,10 @@
     }, true);
     bind(window, 'dragend', () => {
       if (ziaDelegate) releaseZiaAfterDrop();
-      else restoreZiaShim();
+      else if (!ziaCleanupTimer) restoreZiaShim();
+      // After a native drop, Zia's setTimeout(0) finishFolderDrop still
+      // needs the temporary identity. Do not clear it on dragend earlier
+      // than the 40ms deferred cleanup already scheduled by drop.
       reset();
     }, true);
     // Tab switching focuses the content browser and emits a window blur too.
