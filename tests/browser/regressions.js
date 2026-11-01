@@ -348,6 +348,8 @@ const finish = arguments[arguments.length - 1];
       assert(collapses <= 1, 'event and attribute observers must coalesce to one collapse: ' + collapses);
       assert(h.tabs[1].getBoundingClientRect().height > 10,
         'newly selected tab must remain visible inside closed folder');
+      assert(h.tabs[0].getBoundingClientRect().height <= 1,
+        'former selected soundplaying tab must no longer occupy a visible row');
       assert(Number(getComputedStyle(h.tabs[1]).opacity) > .9,
         'newly selected tab must not retain opacity 0');
     } finally {
