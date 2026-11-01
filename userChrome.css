@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.3.5 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.3.6 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -539,4 +539,15 @@ tab-group[data-zsf-site][data-zsf-drag-source]
 @media (prefers-reduced-motion: no-preference) {
   .zsf-drag-ghost { transition: opacity 90ms ease-out !important; }
   .zsf-drop-guide { transition: top 85ms ease-out, left 85ms ease-out !important; }
+}
+
+
+/* v0.3.6: During a native TabClose, keep the hover card at its current
+   left/top/transform origin. The old double refresh re-triggered its scale
+   animation and made the entire preview appear to slide left for one frame.
+   Event/controller cleanup restores the normal enter animation on next open. */
+#zsf-folder-hover-card[data-acting] {
+  animation: none !important;
+  transform: none !important;
+  transition: none !important;
 }
