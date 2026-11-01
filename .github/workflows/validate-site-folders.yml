@@ -1,0 +1,32 @@
+name: Validate Zen Site Folders
+
+on:
+  pull_request:
+    paths:
+      - "site-folders*.uc.js"
+      - "userChrome.css"
+      - "theme.json"
+      - "tests/**"
+      - ".github/workflows/validate-site-folders.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check scripts
+        run: |
+          node --check site-folders.uc.js
+          node --check site-folders-hover.uc.js
+      - name: Check Sine metadata and script declarations
+        run: |
+          node -e "const m=require('./theme.json'); if(m.version !== '0.2.8' || !m.scripts['site-folders-hover.uc.js']) process.exit(1)"
+      - name: Test independent hover layer
+        run: node tests/hover-card.test.cjs

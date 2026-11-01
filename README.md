@@ -1,6 +1,6 @@
-# Zen Site Folders 0.2.7 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.2.8 — 一般分頁區域群組（測試）
 
-依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內盡可能依新到舊排序，圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
+依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內保留原本相對順序，圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
 ## 與 Zia 的相容設計
 
@@ -12,6 +12,16 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.2.8 獨立的 Zia 風格資料夾預覽與收合（2026-11-01）
+- **不需要 Advanced Tab Groups** 來繪製本 Mod 的網站群組列、子分頁縮排或已收合內容。使用 `tab-group[data-zsf-site]` 專用 CSS；保持普通分頁區域，不自動釘選。
+- 已收合的網站群組上停留滑鼠約 230ms，右側出現 **獨立的 Zia 風格分頁清單**。清單會列出群組內實際分頁及 favicon，點選即可切換；也可明確點選「開啟新分頁」。超長清單可以捲動。
+- Zia 原生 Hover Card 只接受 `isZenFolder`，因此這項功能使用**獨立腳本** `site-folders-hover.uc.js`，不覆寫 Zia 的內部函式、不攔截 Zia 原生資料夾、不借用或修改 `#zia-folder-card`。
+- 預覽卡片採用與 Zia 相近的尺寸、間距、動畫與玻璃變數；如果 Zia 主題變數存在會跟隨配色，但 Zia 未來的 DOM 或動畫改動不一定自動同步到此卡片。
+- 只隱藏本站群組的彩色底、外框、偽元素裝飾。資料夾列、網站 favicon、展開箭頭與 hover 中性反白仍保留；不影響手動建立的 Zen／Zia 資料夾。
+- **整理與還原、SessionStore 快照、舊版救援及雙指點按還原箭頭的邏輯完全未修改**，只有主腳本版號更新。仍需 Zen + Zia + Advanced Tab Groups 停用狀態實機確認。
+- Firefox 的原生 `browser.tabs.groups.enabled` 必須開啟，這是原生分組功能，不是依賴 Advanced Tab Groups 本身。
+- 已新增不使用外部套件的 Node 22 回歸測試及 GitHub Actions 驗證工作流程。
 
 ## v0.2.7 還原箭頭雙指點按與孤立快照封存（2026-11-01）
 - 恢復原本的簡潔介面：分隔線只有「資料夾整理」與「還原箭頭」兩個按鈕，**移除「拆」按鈕**。
