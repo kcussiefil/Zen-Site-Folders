@@ -572,6 +572,11 @@
   }
   function finish(event) {
     if (ziaDelegate) {
+      // Zia's registered capture drop handler has already scheduled its
+      // own finishFolderDrop at this point. Prevent Zen's second native
+      // drop handler from nesting the flat site group elsewhere.
+      event.preventDefault?.();
+      event.stopPropagation?.();
       pending = null;
       releaseZiaAfterDrop();
       return;
@@ -711,7 +716,14 @@
     }
   }
   function onOver(event) {
-    if (ziaDelegate) return;
+    if (ziaDelegate) {
+      // Zia already painted the displaced rows in its earlier capture
+      // listener. Suppress only Zen's second native dragover path for this
+      // exact delegated website folder; all unrelated drags are untouched.
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      return;
+    }
     if (active) update(event);
   }
   function hideNativeDragImage(event) {
