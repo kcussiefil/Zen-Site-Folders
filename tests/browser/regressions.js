@@ -149,8 +149,12 @@ const finish = arguments[arguments.length - 1];
     } finally { gBrowser.tabContainer.removeEventListener('TabMove', listener); }
   });
   await test('whole group drag animates neighbour avoidance and clears on Escape', async h => {
-    const head=h.group.querySelector(':scope > .tab-group-label-container');
     const first=h.prefix;
+    // Enforce a known pre-drag order rather than depending on Zen's restored
+    // default position; otherwise "move before prefix" can be a no-op.
+    gBrowser.moveTabAfter(h.group, first);
+    await idle(h.group);
+    const head=h.group.querySelector(':scope > .tab-group-label-container');
     first.scrollIntoView({block:'nearest'});
     await delay(250);
     const from=head.getBoundingClientRect(), to=first.getBoundingClientRect();
@@ -161,8 +165,13 @@ const finish = arguments[arguments.length - 1];
     window.dispatchEvent(new MouseEvent('mousemove',{buttons:1,clientX:x,clientY:y}));
     assert(h.group.hasAttribute('data-zsf-drag-source'), 'dragging folder must expose its floating card');
     assert(first.hasAttribute('data-zsf-drag-avoid'), 'ordinary sibling must enter the avoidance path');
-    assert(parseFloat(first.style.getPropertyValue('--zsf-drag-avoid-y'))>15,
-      'target neighbour must move down to make a visual group slot');
+    const shift=parseFloat(first.style.getPropertyValue('--zsf-drag-avoid-y'));
+    assert(shift>15,
+      'target neighbour must move down to make a visual group slot: ' +
+      JSON.stringify({ shift, sourceTop:from.top, targetTop:to.top,
+        guess:drag.chooseSlot({kind:'group',item:h.group,parent:h.group.parentElement},x,y)?.target?.id,
+        order:[...h.group.parentElement.children].filter(n =>
+          n.localName==='tab-group'||gBrowser.isTab(n)).map(n=>n.id) }));
     await delay(90);
     const opacity=Number(getComputedStyle(head).opacity);
     assert(opacity<.05, 'native source grey bar must be hidden while group ghost is visible: '+opacity);
