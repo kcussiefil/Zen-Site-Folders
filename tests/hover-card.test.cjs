@@ -220,7 +220,9 @@ async function main() {
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
   const fresh = popup.querySelector('.zsf-hover-list').children;
-  popup.events.click({ target: fresh[2], stopPropagation() {} });
+  const newRow = fresh.find(row => row.dataset?.action === 'new');
+  assert(newRow, 'New Tab row must remain available after closing a member');
+  popup.events.click({ target: newRow, stopPropagation() {} });
   assert.equal(created, 1, 'new tab only after an explicit click');
   assert.equal(browser.selectedTab.group, group);
   assert.equal(browser.selectedTab.pinned, false);
