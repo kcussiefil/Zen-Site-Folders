@@ -1,8 +1,9 @@
-/* Zen Site Folders v0.2.5 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.2.6 — compact native separator buttons, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
-.pinned-tabs-container-separator > toolbarbutton.zsf-undo-button {
+.pinned-tabs-container-separator > toolbarbutton.zsf-undo-button,
+.pinned-tabs-container-separator > toolbarbutton.zsf-rescue-button {
   -moz-appearance: none !important;
   appearance: none !important;
   box-sizing: border-box !important;
@@ -44,7 +45,30 @@
 .pinned-tabs-container-separator > toolbarbutton.zsf-undo-button[hidden] {
   display: none !important;
 }
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button) > .toolbarbutton-icon {
+/* The escape hatch is an ordinary, clearly labelled left-click control,
+   not a native right-click popup intercepted by Zen/Zia. */
+.pinned-tabs-container-separator > toolbarbutton.zsf-rescue-button {
+  list-style-image: none !important;
+  margin-inline-end: 10px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+.pinned-tabs-container-separator > toolbarbutton.zsf-rescue-button[hidden] {
+  display: none !important;
+}
+.pinned-tabs-container-separator > toolbarbutton.zsf-rescue-button > .toolbarbutton-icon {
+  display: none !important;
+}
+.pinned-tabs-container-separator > toolbarbutton.zsf-rescue-button > .toolbarbutton-text {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  opacity: .9 !important;
+}
+.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zsf-rescue-button) > .toolbarbutton-icon {
   width: 15px !important;
   min-width: 15px !important;
   max-width: 15px !important;
@@ -55,14 +79,14 @@
   margin: 0 !important;
   opacity: .9 !important;
 }
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button) > .toolbarbutton-text {
+.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zsf-rescue-button) > .toolbarbutton-text {
   display: none !important;
 }
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button)[disabled] {
+.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zsf-rescue-button)[disabled] {
   pointer-events: none !important;
   opacity: .35 !important;
 }
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button):hover:not([disabled]) {
+.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zsf-rescue-button):hover:not([disabled]) {
   opacity: 1 !important;
   background: color-mix(in srgb, currentColor 8%, transparent) !important;
   background-image: none !important;
