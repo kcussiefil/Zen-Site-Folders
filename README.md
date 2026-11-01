@@ -1,4 +1,4 @@
-# Zen Site Folders 0.2.3 — 一般分頁區域群組（測試）
+# Zen Site Folders 0.2.4 — 一般分頁區域群組（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內盡可能依新到舊排序，圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,12 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.2.4 群組收合與 Sine 更新偵測（2026-11-01）
+- 對本 Mod 的一般 Tab Groups 增加獨立的 CSS 收合樣式。Advanced Tab Groups v3.12.1 關閉時，也應能隱藏已收合的子分頁（保留選取中的分頁），不影響 Zia 或其他使用者群組。
+- Sine 會依 `updatedAt` 而非單純 `version` 判斷更新；新版的 `theme.json` 已補上更新時間，往後每次發版都要同步更新。
+- 修正範圍限 CSS、版本及更新中繼資料；**不修改既有 v3 還原快照、SessionStore、分頁位置、分組或復原流程**。
+- 靜態與語法檢查已完成，Zen 實機仍需驗證；若先前仍有「5 個分頁無法辨識」，不要反覆按還原。
 
 ## v0.2.3 About 與 Zia Hover Cards（2026-11-01）
 - 允許 `about:config`、`about:addons`、`about:support` 等瀏覽器內部頁面整理到普通分頁區域的 `About` 群組。
