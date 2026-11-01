@@ -1,4 +1,4 @@
-# Zen Site Folders 0.1.8 — Sine / Zia 相容版（測試）
+# Zen Site Folders 0.1.9 — Sine / Zia 相容版（測試）
 
 依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內盡可能依新到舊排序，圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
 
@@ -12,6 +12,14 @@
 - Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
 - 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
 - **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+
+## v0.1.9 真正 Zen 資料夾（2026-11-01）
+- 改用 `gZenFolders.createFolder` 建立 Zen 原生可收合的網站資料夾，不再使用 Firefox 一般群組作為網站整理目標。
+- **Zen 原生資料夾會把子分頁釘選到分隔線上方。** 這是原生 API 行為；按「還原」會嘗試解除這些釘選並恢復原本的群組、位置和順序。
+- 整理前儲存 v2 快照；建立每個原生資料夾前先保存其 ID。還原只清理本 Mod 創建、且不含任何真實分頁的空資料夾，不會關閉使用者後續加進去的分頁。
+- 整理結果只計入真正移入對應原生資料夾且已釘選的分頁；只完成部分時顯示失敗訊息並保留還原備份。
+- 若留有 v0.1.8 舊版快照，先按還原再整理，避免兩種還原格式混用。
+- 此為測試版；尚未在實際 Zen + Zia 環境完成整理及還原驗證，請先使用獨立測試 Space。
 
 ## v0.1.8 修正（2026-11-01）
 - **SessionStore 分頁識別碼修正：** 優先使用 Zen 視窗的 `window.SessionStore`（與 Zia 相同入口）；如不可用，改用已匯入的 SessionStore 模組。必須成功寫入並讀回識別碼才允許整理，沒有不可靠的記憶體 ID 備援。
