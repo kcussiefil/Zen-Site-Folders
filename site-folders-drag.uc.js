@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.4.3
+// @version      0.5.0
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -326,6 +326,9 @@
     if (active || !subject?.item?.isConnected) return;
     pending = null;
     active = subject;
+    // Zen's grey bar with circular ends is the DOM drop indicator,
+    // NOT the native DataTransfer drag image. Mask only our own drag.
+    document.documentElement.setAttribute('data-zsf-hide-native-indicator', 'true');
     ensureOverlays();
     if (subject.kind === 'group') {
       const icon = groupLabel(subject.item)?.querySelector?.('.zsf-favicon');
@@ -429,6 +432,7 @@
     autoFrame = 0;
     autoPointer = null;
     clearAvoidance(active);
+    document.documentElement.removeAttribute('data-zsf-hide-native-indicator');
     if (active?.kind === 'group')
       active.item?.removeAttribute?.('data-zsf-drag-source');
     if (active?.kind === 'tab')
@@ -449,7 +453,18 @@
     task.done = (async () => {
       const valid = () => !destroyed && generation === token &&
         window.gZenWorkspaces?.activeWorkspace === context.workspace;
-      if (await nativeIdle(context.parent, valid)) commit(slot, context);
+      // The window capture listener runs before Zen/Zia's native drop
+      // handlers. Yield ONE microtask for the dispatch to finish, then
+      // move the existing tab or group immediately to the previewed slot.
+      // Never wait for a 400-600ms landing animation before the first move.
+      await Promise.resolve();
+      if (!valid()) return;
+      commit(slot, context);
+      // Keep the existing one-time safety reconciliation for late native
+      // placements (e.g. Zia's delayed TabMove). It runs after the first
+      // visible move and therefore adds no perceived drop latency.
+      if (await nativeIdle(context.parent, valid) && valid() &&
+          !orderMatches(slot)) commit(slot, context);
     })().finally(() => tasks.delete(task));
     tasks.add(task);
   }
@@ -550,7 +565,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.4.3', chooseSlot, commit, beforeMutation, nativeIdle };
+  const api = { start, destroy, version: '0.5.0', chooseSlot, commit, beforeMutation, nativeIdle };
   window.__zsfDragV037 = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });

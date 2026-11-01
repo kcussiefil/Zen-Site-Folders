@@ -128,7 +128,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.4.3');
+assert(api&&api.version==='0.5.0');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -143,6 +143,10 @@ async function main(){
   const guide=root.querySelector('.zsf-drop-guide');
   assert(ghost&&guide&&!guide.hidden,'moving to gap above first group must show valid slot');
   assert.equal(guide.getAttribute('data-position'),'before');
+  assert(root.hasAttribute('data-zsf-hide-native-indicator'),
+    'owned group drag hides native grey drop line with circle endcaps');
+  assert(css.includes('#zen-drag-indicator') && css.includes('visibility: hidden !important'),
+    'Zen DOM drop indicator must be hidden while ZSF guide is shown');
   assert.equal(ghost.getAttribute('aria-hidden'),'true');
   assert.deepEqual(strip.children,initial,'visual drag must not reorder until drop');
   assert(first.hasAttribute('data-zsf-drag-avoid') &&
@@ -159,11 +163,16 @@ async function main(){
     'OS drag image must be replaced only for an owned source');
   // Actual fix, not just an insertion-line illustration.
   emit(window,'drop',gEvent(160,95));
+  await Promise.resolve();
+  assert.deepEqual(strip.children,[source,first,last],
+    'whole folder must move immediately without waiting for animation idle');
   await waitNative();
   assert.deepEqual(strip.children,[source,first,last],
     'GitHub group must reach top of ordinary tab list');
   assert.equal(moveLog.length,1,'use native browser moveTabBefore exactly once');
   assert(!ghost.isConnected&&!guide.isConnected,'drop cleans overlays');
+  assert(!root.hasAttribute('data-zsf-hide-native-indicator'),
+    'native indicator mask must clear after drop');
   assert(!first.hasAttribute('data-zsf-drag-avoid') &&
     !first.style.getPropertyValue('--zsf-drag-avoid-y'),
     'group avoidance styles must be removed after drop');
@@ -211,7 +220,12 @@ async function main(){
   emit(window,'mousemove',tabEvent(100,202,C));
   const memberGhost=root.querySelector('.zsf-drag-ghost');
   assert(memberGhost,'member drag should also have a visible preview');
+  assert(root.hasAttribute('data-zsf-hide-native-indicator'),
+    'individual member drag also suppresses the circular-ended grey indicator');
   emit(window,'drop',tabEvent(100,180,C));
+  await Promise.resolve();
+  assert.deepEqual(container.children,[C,B,A],
+    'member drop must take effect immediately without waiting for animation idle');
   await waitNative();
   assert.deepEqual(container.children,[C,B,A],
     'native fallback must support member moving to group start');
