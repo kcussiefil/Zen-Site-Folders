@@ -559,9 +559,9 @@
       }
       const visibleTabCount = allWorkspaceTabs(current.node, current.id)
         .filter(tab => tab?.isConnected && !tab.hasAttribute('cloned')).length;
-      if (!confirmRescue('原本這次整理建立的群組已無法找到，目前也未偵測到本工具的群組。\\n' +
-        '目前可辨識 ' + visibleTabCount + ' 個分頁，舊快照包含 ' + snapshot.tabs.length + ' 個分頁。\\n' +
-        '此操作不會移動、關閉或重新載入任何分頁，但無法確認舊分頁是否全部仍存在。\\n' +
+      if (!confirmRescue('原本這次整理建立的群組已無法找到，目前也未偵測到本工具的群組。\n' +
+        '目前可辨識 ' + visibleTabCount + ' 個分頁，舊快照包含 ' + snapshot.tabs.length + ' 個分頁。\n' +
+        '此操作不會移動、關閉或重新載入任何分頁，但無法確認舊分頁是否全部仍存在。\n' +
         '確定先把舊快照封存成另一份備份，再解除這次整理鎖定嗎？')) return;
       const store = getSessionStore('getCustomWindowValue', 'setCustomWindowValue');
       if (!store) {
