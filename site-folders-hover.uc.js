@@ -1,25 +1,28 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.3.1
+// @version      0.3.2
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zsfGroupHoverV031) return;
-  window.__zsfGroupHoverV031 = true;
+  if (window.__zsfGroupHoverV032) return;
+  window.__zsfGroupHoverV032 = true;
 
   const TAG = '[ZenSiteFoldersHover]';
   const XHTML_NS = 'http://www.w3.org/1999/xhtml';
   const GROUP_SELECTOR = 'tab-group[data-zsf-site]:not([split-view-group])';
-  const HOVER_DELAY_MS = 230;
-  const HIDE_DELAY_MS = 180;
+  const HOVER_DELAY_MS = 105;
+  const HIDE_DELAY_MS = 120;
+  const EXIT_MS = 120;
   const GAP = 8;
   let card = null;
   let activeGroup = null;
   let activeLabel = null;
   let openTimer = null;
   let closeTimer = null;
+  let exitTimer = null;
+  let pendingLabel = null;
   let started = false;
   let destroyed = false;
   let hoverHost = null;
@@ -34,10 +37,14 @@
   function clearOpen() {
     if (openTimer != null) clearTimeout(openTimer);
     openTimer = null;
+    pendingLabel = null;
   }
   function clearClose() {
     if (closeTimer != null) clearTimeout(closeTimer);
     closeTimer = null;
+    if (exitTimer != null) clearTimeout(exitTimer);
+    exitTimer = null;
+    card?.removeAttribute?.('data-closing');
   }
 
   function groupAt(target) {
@@ -128,9 +135,12 @@
     const popup = ensureCard();
     const list = popup.querySelector('.zsf-hover-list');
     if (!list) return false;
+    const inset = tabEdgeInset();
+    if (inset) list.style.setProperty('--zia-folder-card-inset', inset + 'px');
+    else list.style.removeProperty('--zia-folder-card-inset');
     const tabs = members(group);
     if (!tabs.length) return false;
-    const scrollTop = list.scrollTop || 0;
+    const scrollTop = activeGroup === group ? (list.scrollTop || 0) : 0;
     const rows = tabs.map(makeRow);
     const add = el('div', 'zia-folder-card-row zsf-hover-row zsf-hover-new');
     add.setAttribute('zia-new-tab', 'true');
@@ -148,6 +158,28 @@
     return true;
   }
 
+  // Zia measures the sidebar icon inset rather than assuming a fixed padding.
+  // Use the exact same inset for the speaker, favicon and label alignment.
+  function tabEdgeInset() {
+    try {
+      const tabs = window.gBrowser?.visibleTabs || window.gBrowser?.tabs || [];
+      const tab = [...tabs].find(item => !item.pinned &&
+        !item.hasAttribute?.('zen-essential') && item.getBoundingClientRect?.().width);
+      const edge = tab?.querySelector?.('.tab-background')?.getBoundingClientRect?.();
+      const icon = ['.tab-icon-image', '.tab-icon-stack']
+        .map(query => tab?.querySelector?.(query)?.getBoundingClientRect?.())
+        .find(box => box?.width);
+      const inset = edge && icon?.width ?
+        Math.round((icon.left - edge.left) * 2) / 2 : 0;
+      return inset >= 4 && inset <= 16 ? inset : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  // Use LAYOUT dimensions (offsetHeight/offsetWidth), never transformed
+  // getBoundingClientRect values while the 0.7→1 Zia animation is running.
+  // Otherwise the calculated card is too short and its bottom can escape.
   function position(label) {
     const popup = ensureCard();
     const anchor = label.getBoundingClientRect();
@@ -156,24 +188,35 @@
     const onRight = root.getAttribute('zen-right-side') === 'true';
     const viewportW = window.innerWidth || root.clientWidth || 1200;
     const viewportH = window.innerHeight || root.clientHeight || 800;
-    const width = popup.getBoundingClientRect().width || 222;
-    const height = popup.getBoundingClientRect().height || 60;
+    const list = popup.querySelector('.zsf-hover-list');
+    const available = Math.max(64, viewportH - 16);
+    // Keep the row list scrollable to its very last "New Tab" entry even
+    // when the group header is near the bottom of a short window.
+    popup.style.maxHeight = available + 'px';
+    if (list) list.style.maxHeight = available + 'px';
+    const width = popup.offsetWidth || 222;
+    const height = Math.min(popup.offsetHeight || 60, available);
     let x = onRight ? sidebar.left - width - GAP : sidebar.right + GAP;
-    // If the sidebar is unusually wide, preserve the popup within the window.
     x = Math.max(8, Math.min(x, viewportW - width - 8));
     const first = popup.querySelector('.zsf-hover-row');
     const middle = first ? first.offsetTop + first.offsetHeight / 2 : height / 2;
-    const y = Math.max(8, Math.min(anchor.top + anchor.height / 2 - middle,
-      viewportH - height - 8));
+    const anchorY = anchor.top + anchor.height / 2;
+    const y = Math.max(8, Math.min(anchorY - middle, viewportH - height - 8));
     popup.style.left = Math.round(x) + 'px';
     popup.style.top = Math.round(y) + 'px';
-    popup.style.transformOrigin = (onRight ? 'right' : 'left') + ' top';
+    popup.style.transformOrigin = (onRight ? 'right' : 'left') + ' ' +
+      Math.round(anchorY - y) + 'px';
   }
 
   function closeNow() {
     clearOpen();
     clearClose();
-    if (card) card.hidden = true;
+    if (card) {
+      card.hidden = true;
+      card.removeAttribute('data-open');
+      card.removeAttribute('data-snap');
+      card.removeAttribute('data-closing');
+    }
     activeGroup = null;
     activeLabel = null;
   }
@@ -181,18 +224,36 @@
   function scheduleClose() {
     clearOpen();
     clearClose();
-    closeTimer = setTimeout(closeNow, HIDE_DELAY_MS);
+    closeTimer = setTimeout(() => {
+      closeTimer = null;
+      if (!card || card.hidden) { closeNow(); return; }
+      if (activeLabel?.matches?.(':hover') || card.matches?.(':hover')) return;
+      card.removeAttribute('data-open');
+      card.setAttribute('data-closing', 'true');
+      exitTimer = setTimeout(closeNow, EXIT_MS);
+    }, HIDE_DELAY_MS);
   }
 
   function open(group, label) {
     if (destroyed || !group?.isConnected || !label?.isConnected ||
         (!group.collapsed && !group.hasAttribute('collapsed'))) return;
+    const wasUp = card?.isConnected && !card.hidden && !card.hasAttribute('data-closing');
+    clearOpen();
+    clearClose();
     if (!render(group)) return;
     activeGroup = group;
     activeLabel = label;
     card.hidden = false;
+    card.removeAttribute('data-open');
     position(label);
-    card.setAttribute('data-open', 'true');
+    if (wasUp) {
+      card.setAttribute('data-snap', 'true');
+    } else {
+      card.removeAttribute('data-snap');
+      // Restart the Zia-style 260ms spring on EVERY new appearance.
+      void card.offsetWidth;
+      card.setAttribute('data-open', 'true');
+    }
   }
 
   function onCardClick(event) {
@@ -262,8 +323,16 @@
     if (!target) return;
     clearClose();
     if (activeGroup === target.group && card && !card.hidden) return;
+    // Moving over nested label/icon nodes emits multiple mouseover events.
+    // Never restart the delay for the same pending folder.
+    if (pendingLabel === target.label && openTimer != null) return;
+    const alreadyUp = !!(card?.isConnected && !card.hidden);
     clearOpen();
+    if (alreadyUp) { open(target.group, target.label); return; }
+    pendingLabel = target.label;
     openTimer = setTimeout(() => {
+      openTimer = null;
+      pendingLabel = null;
       if (target.label.isConnected && target.label.matches(':hover')) {
         open(target.group, target.label);
       }
@@ -287,7 +356,11 @@
     hoverHost = toolbox;
     bind(toolbox, 'mouseover', onMouseOver);
     bind(toolbox, 'mouseout', onMouseOut);
-    bind(toolbox, 'wheel', closeNow, { passive: true, capture: true });
+    bind(toolbox, 'wheel', event => {
+      // Scrolling the card must not close it; sidebar scrolling may.
+      if (card?.contains?.(event.target)) return;
+      closeNow();
+    }, { passive: true, capture: true });
     bind(toolbox, 'mousedown', closeNow, true);
     bind(tabContainer, 'TabGroupExpand', closeNow);
     bind(window, 'TabSelect', () => {
@@ -318,10 +391,10 @@
     handlers.length = 0;
     card?.remove();
     card = null;
-    if (window.__zsfGroupHoverV031 === api) delete window.__zsfGroupHoverV031;
+    if (window.__zsfGroupHoverV032 === api) delete window.__zsfGroupHoverV032;
   }
-  const api = { start, destroy, closeNow, version: '0.3.1' };
-  window.__zsfGroupHoverV031 = api;
+  const api = { start, destroy, closeNow, version: '0.3.2' };
+  window.__zsfGroupHoverV032 = api;
   if (document.readyState === 'complete') {
     if (!start()) window.addEventListener('load', start, { once: true });
   } else {
