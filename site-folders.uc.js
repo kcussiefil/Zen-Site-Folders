@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.1.5
+// @version      0.1.6
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
   'use strict';
-  if (window.__zenSiteFoldersV015) return;
-  window.__zenSiteFoldersV015 = true;
+  if (window.__zenSiteFoldersV016) return;
+  window.__zenSiteFoldersV016 = true;
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
@@ -15,7 +15,7 @@
   const TAB_UID_KEY = 'zsf-tab-uid-v1';
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
   const OWNED_GROUPS_KEY = 'zsf-owned-group-sites-v1';
-  const MIN_WAVE_MS = 750;
+  const MIN_WAVE_MS = 1250;
   const SITE_NAMES = {
     'youtube.com': 'YouTube', 'youtu.be': 'YouTube',
     'github.com': 'GitHub', 'reddit.com': 'Reddit',
@@ -41,6 +41,7 @@
   let waveEnding = false;
   let seq = 0;
   let uidSeq = 0;
+  let noticeTimer = null;
   const legacyBase = Date.now() - 86_400_000;
   let SessionStore = null;
   try {
@@ -289,8 +290,13 @@
   }
 
   function captureSnapshot(current) {
+    // A failed snapshot must never permit sorting. Report exactly why it failed.
+    const reject = (reason) => {
+      console.warn(TAG, 'Sort blocked: snapshot is incomplete —', reason);
+      throw new Error(reason);
+    };
     const root = current.node.tabsContainer;
-    if (!root?.children) return null;
+    if (!root?.children) reject('無法讀取目前 Space 的分頁容器');
     const elements = [];
     const tabs = [];
     const seen = new Set();
@@ -298,13 +304,14 @@
       if (!element?.isConnected) continue;
       const tag = element.localName || element.tagName?.toLowerCase();
       if (tag === 'tab-group' && !element.hasAttribute('split-view-group')) {
-        if (!element.id) return null; // Exact restoration requires group identity.
+        if (!element.id) reject('現有群組沒有可還原的 ID');
         const members = [...element.querySelectorAll('tab')]
-          .filter(t => t.isConnected && t.group === element);
+          .filter(t => t.isConnected && (t.group === element || t.closest('tab-group') === element));
         const ids = [];
         for (const tab of members) {
           const id = tabUID(tab);
-          if (!id || seen.has(id)) return null;
+          if (!id) reject('群組內分頁無法保存識別碼');
+          if (seen.has(id)) reject('群組內分頁的識別碼重複');
           seen.add(id);
           ids.push(id);
           tabs.push({ id, group: element.id });
@@ -318,7 +325,8 @@
       } else if (tag === 'tab') {
         if (element.getAttribute('zen-workspace-id') !== current.id) continue;
         const id = tabUID(element);
-        if (!id || seen.has(id)) return null;
+        if (!id) reject('一般分頁無法保存識別碼');
+        if (seen.has(id)) reject('一般分頁的識別碼重複');
         seen.add(id);
         tabs.push({ id, group: null });
         elements.push({ type: 'tab', id });
@@ -330,7 +338,11 @@
     // incomplete snapshot. Only normal non-pinned/non-split tabs count here.
     const needsBackup = allWorkspaceTabs(current.node, current.id).filter(t =>
       eligible(t) && !t.closest('tab-group[split-view-group]'));
-    if (needsBackup.some(t => !seen.has(tabUID(t)))) return null;
+    const missing = needsBackup.filter(t => !seen.has(tabUID(t)));
+    if (missing.length) {
+      reject('有 ' + missing.length + ' 個分頁無法完整備份；可能位於特殊資料夾');
+    }
+    if (!elements.length && needsBackup.length) reject('沒有找到可還原的原始分頁順序');
     return { version: 1, workspaceId: current.id, capturedAt: Date.now(), elements, tabs };
   }
 
@@ -551,31 +563,68 @@
     }
   }
 
-  function toast(message) {
-    console.log(TAG, message);
-    try { window.gZenUIManager?.showToast?.(message); } catch (_) {}
+  function toast(message, isError = false) {
+    // gZenUIManager.showToast() expects a Fluent translation ID. Passing a
+    // literal Chinese sentence produces the blank black notification the
+    // user observed. Render our own text under Zen's existing toast host.
+    const text = String(message);
+    (isError ? console.warn : console.log)(TAG, text);
+    const container = document.getElementById('zen-toast-container');
+    if (!container) {
+      if (isError) window.alert(text);
+      return;
+    }
+    let box = container.querySelector('#zsf-notification');
+    if (!box) {
+      box = document.createXULElement('hbox');
+      box.id = 'zsf-notification';
+      box.classList.add('zen-toast');
+      const inner = document.createXULElement('vbox');
+      const label = document.createXULElement('label');
+      label.classList.add('zsf-notification-text');
+      inner.appendChild(label);
+      box.appendChild(inner);
+    }
+    box.querySelector('.zsf-notification-text').setAttribute('value', text);
+    box.setAttribute('tooltiptext', text);
+    box.toggleAttribute('zsf-error', isError);
+    box.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+    container.appendChild(box);
+    container.removeAttribute('hidden');
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => {
+      box.remove();
+      if (!container.querySelector(':scope > .zen-toast')) container.setAttribute('hidden', 'true');
+      noticeTimer = null;
+    }, isError ? 6500 : 4200);
   }
 
   async function organize() {
     if (running) return;
     const current = workspace();
-    if (!current || !window.gBrowser?.addTabGroup || !window.gBrowser?.moveTabToExistingGroup ||
-        !window.gBrowser?.ungroupTab || !window.gBrowser?.moveTabBefore) {
-      toast('無法取得目前 Zen 工作區或分頁群組 API');
+    if (!current) {
+      toast('無法取得目前 Zen Space，沒有移動分頁', true);
       return;
     }
-    const snapshots = readSnapshots();
-    if (!snapshots[current.id]) {
-      const backup = captureSnapshot(current);
-      if (!backup || !writeSnapshots({ ...snapshots, [current.id]: backup })) {
-        toast('無法完整保存整理前狀態，已取消整理（沒有移動分頁）');
-        return;
-      }
-    }
+    // The wave confirms that the click was received, including when a
+    // safety preflight rejects the request before any tab is moved.
     running = true;
-    startWave();
+    try { startWave(); } catch (e) { console.warn(TAG, 'Wave unavailable:', e); }
     updateButtons();
     try {
+      const requiredAPIs = ['addTabGroup', 'moveTabToExistingGroup', 'ungroupTab', 'moveTabBefore'];
+      const missingAPIs = requiredAPIs.filter(name => typeof window.gBrowser?.[name] !== 'function');
+      if (missingAPIs.length) {
+        throw new Error('Zen 缺少必要 API：' + missingAPIs.join('、'));
+      }
+      const snapshots = readSnapshots();
+      if (!snapshots[current.id]) {
+        const backup = captureSnapshot(current);
+        if (!backup) throw new Error('整理前快照無法建立');
+        if (!writeSnapshots({ ...snapshots, [current.id]: backup })) {
+          throw new Error('無法將整理前快照寫入 SessionStore');
+        }
+      }
       const all = allWorkspaceTabs(current.node, current.id);
       const buckets = new Map();
       const skipped = [];
@@ -624,8 +673,15 @@
           if (tab.isConnected && siteOfGroup(tab.group) !== site) missing++;
         }
       }
-      toast(`網站整理：${beforeCount} 個分頁、${buckets.size} 個網站群組；未完成 ${missing}、略過 ${skipped.length}`);
+      if (!beforeCount) {
+        toast('目前 Space 沒有可整理的一般網頁分頁');
+      } else {
+        toast(`網站整理：${beforeCount} 個分頁、${buckets.size} 個網站群組；未完成 ${missing}`, Boolean(missing || errors));
+      }
       if (missing || errors) console.warn(TAG, { missing, errors, skipped: skipped.length });
+    } catch (error) {
+      console.error(TAG, 'Organize cancelled/failed:', error);
+      toast('整理已停止：' + String(error?.message || error), true);
     } finally {
       running = false;
       endWave();
@@ -699,7 +755,7 @@
       setTimeout(() => { addButton(); reapplyAppearance(); }, 50);
     });
     window.gBrowser.tabContainer.addEventListener('TabGroupCreate', () => setTimeout(reapplyAppearance, 200));
-    window.__zenSiteFoldersV015 = { organize, undo, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV016 = { organize, undo, reapplyAppearance, readSnapshots };
   }
 
   if (document.readyState === 'complete') initialize();
@@ -707,5 +763,6 @@
   window.addEventListener('unload', () => {
     clearTimeout(initTimer);
     if (waveFrame != null) cancelAnimationFrame(waveFrame);
+    if (noticeTimer) clearTimeout(noticeTimer);
   }, { once: true });
 })();
