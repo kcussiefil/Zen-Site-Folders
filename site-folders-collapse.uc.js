@@ -69,6 +69,13 @@
           tab.removeAttribute('folder-active');
           tab.style.removeProperty('--zen-folder-indent');
         }
+        // Removing folder-active alone is insufficient: Zen's previously
+        // selected row can retain a natural height even after the native
+        // collapse skips it. Retire its layout box immediately; if the user
+        // reselects it, styleCleanup(newlySelected) restores native sizing.
+        tab.style.setProperty('height', '0px');
+        tab.style.setProperty('min-height', '0px');
+        tab.style.setProperty('opacity', '0');
       }
       // The new selected tab may still have native height:0 / opacity:0 left
       // by the previous collapse; clear only its old inline native styles.
