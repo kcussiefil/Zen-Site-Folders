@@ -89,6 +89,9 @@ async function main() {
   });
   const first = makeTab('YouTube video 1', true);
   const second = makeTab('YouTube video 2');
+  const originalZiaWave = 'url("data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%2016%2016%22%3E%3C%2Fsvg%3E#3")';
+  first.style = { getPropertyValue: name =>
+    name === '--zia-sound-wave' ? originalZiaWave : '' };
   first.hasAttribute = name => name === 'soundplaying';
   group.tabs = [first, second];
   const tabContainer = new FakeNode('tab-container');
@@ -118,8 +121,8 @@ async function main() {
     createElementNS: (_ns, type) => new FakeNode(type),
   };
   vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
-  const api = window.__zsfGroupHoverV032;
-  assert.equal(api.version, '0.3.2');
+  const api = window.__zsfGroupHoverV033;
+  assert.equal(api.version, '0.3.3');
 
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
@@ -132,12 +135,16 @@ async function main() {
   assert.equal(rows[2].dataset.action, 'new');
   assert.equal(rows[0].getAttribute('zia-selected'), 'true', 'selected row uses Zia highlight');
   assert(rows[0].className.includes('zia-folder-card-row'), 'Zia list styling is inherited');
-  assert.equal(rows[0].children.length, 4, 'native Zia row uses favicon, speaker, title, action');
-  assert(rows[0].children[1].className.includes('zia-folder-card-sound'),
-    'speaker follows favicon exactly as Zia native list');
-  assert(rows[0].children[1].src.endsWith('/volume.svg'),
-    'audio icon uses original Zia sound-playing glyph');
-  assert(css.includes('.zsf-hover-action[zia-act="mute"]'), 'speaker size/spacing override must exist');
+  assert.equal(rows[0].children.length, 4, 'row has favicon, animated sound bars, title, close');
+  const audio = rows[0].children[1];
+  assert.equal(audio.tag, 'span', 'native four-bar sound indicator, not static speaker image');
+  assert(audio.className.includes('zsf-hover-sound'));
+  assert.equal(audio.style['--zsf-audio-image'], originalZiaWave,
+    'animated SVG must come unchanged from the Zia variable on the original tab');
+  assert.equal(audio.getAttribute('zia-act'), 'mute', 'sound bar retains the mute action');
+  assert(css.includes('margin-inline: -3px -3px !important'),
+    'sound bars should not add speaker margins to the row gap');
+  assert(!audio.src, 'static volume.svg must not be used');
   assert(popup.hasAttribute('data-open'), 'first show plays Zia-style entry animation');
   assert.equal(popup.style.maxHeight, '884px', 'card height limited by window geometry');
   window.innerHeight = 330;
@@ -167,6 +174,7 @@ async function main() {
   assert(tabSelectHandler, 'TabSelect refresh listener registered');
   tabSelectHandler();
   assert.equal(popup.querySelector('.zsf-hover-list').scrollTop, 97, 'scroll preserved across selected-tab refresh');
+  assert.equal(audio.getAttribute('zia-act'), 'mute', 'audio control remains explicitly clickable');
   api.closeNow();
 
   // Only our own groups trigger a preview, never Zia native folders.
