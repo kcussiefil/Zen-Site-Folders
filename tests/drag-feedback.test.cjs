@@ -6,8 +6,10 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'site-folders-drag.uc.js'
 const core = fs.readFileSync(path.join(__dirname, '..', 'site-folders.uc.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 new vm.Script(src);
-assert(!/\bpreventDefault\(|\bstopPropagation\(|\bsetDragImage\(|dropEffect\s*=/.test(src),
-  'must never interrupt native Zen/Zia events');
+assert(!/\bpreventDefault\(|\bstopPropagation\(|dropEffect\s*=/.test(src),
+  'must never interrupt native Zen/Zia drop events');
+assert((src.match(/\.setDragImage\(/g)||[]).length===1,
+  'only the ZSF-scoped OS preview may be overwritten, not native drop events');
 assert(!/\.(?:pinTab|unpinTab|removeTab)\s*\(/.test(src),
   'drag must not pin or close tabs');
 assert(!core.includes("window.addEventListener('TabGrouped'"),
