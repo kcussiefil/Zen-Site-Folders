@@ -30,7 +30,7 @@ jobs:
           node --check site-folders-drag.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.5.5' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.5.6' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -83,7 +83,13 @@ jobs:
             echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/Zen.app/Contents/MacOS/zen" >> "$GITHUB_ENV"
           fi
       - name: Verify isolated Zia group landing first
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "Zia single-controller group drop" --output native-results/zia-landing
+        run: |
+          python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot up tab" --output native-results/zia-landing-up-tab
+          python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down tab" --output native-results/zia-landing-down-tab
+          python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot up folder" --output native-results/zia-landing-up-folder
+          python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down folder" --output native-results/zia-landing-down-folder
+      - name: Verify native member takeover stays visible during scroll
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "native member drag edge scroll" --output native-results/member-scroll
       - name: Verify legacy pointer-only group fallback separately
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "whole group drag animates neighbour avoidance" --output native-results/group-fallback
       - name: Prove regressions fail on v0.3.8
