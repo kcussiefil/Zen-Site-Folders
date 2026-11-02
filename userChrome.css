@@ -38,7 +38,7 @@
   margin-inline-start: 1px !important;
 }
 .pinned-tabs-container-separator > toolbarbutton.zsf-undo-button {
-  list-style-image: url('chrome://global/skin/icons/undo.svg') !important;
+  list-style-image: url('chrome://browser/skin/zen-icons/arrow-rotate-anticlockwise.svg') !important;
   margin-inline-end: 11px !important;
 }
 .pinned-tabs-container-separator > toolbarbutton.zsf-undo-button[hidden] {
@@ -54,6 +54,10 @@
   padding: 0 !important;
   margin: 0 !important;
   opacity: .9 !important;
+  /* Both separator controls use native Zen SVGs with the toolbar foreground. */
+  color: inherit !important;
+  fill: currentColor !important;
+  -moz-context-properties: fill, fill-opacity !important;
 }
 .pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button) > .toolbarbutton-text {
   display: none !important;

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.6.0
+// @version      0.6.1
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -81,8 +81,11 @@
     // after browser selection moved. Zen considers it active alongside the
     // newly selected tab, leaving TWO rows visible (caught by native CI).
     // Retire only the former selected rows, preserving nested/folder state.
-    if (collapsed && prior?.collapsed) {
-      for (const tab of prior.selected) {
+    if (collapsed && prior?.collapsed && selected.length) {
+      // Native Zen keeps the last exposed row when selection moves to a
+      // DIFFERENT group. Retire old rows only when this group gets another
+      // selection, including a row retained across an earlier group switch.
+      for (const tab of new Set([...prior.selected, ...(group.activeTabs || [])])) {
         // A former selection may already belong to another group or be standalone.
         // Never retire an element after it has left this group's membership.
         if (selected.includes(tab) || !tab.isConnected || !members.includes(tab)) continue;
@@ -103,14 +106,20 @@
       const newlySelected = selected.filter(tab => !prior.selected.includes(tab));
       if (newlySelected.length) zen.styleCleanup?.(newlySelected);
     }
-    if (collapsed && selected.length === 0 && group.hasAttribute('has-active')) {
+    const retained = collapsed && !selected.length && (group.activeTabs || []).some(tab =>
+      members.includes(tab) && tab.isConnected && tab.hasAttribute('folder-active'));
+    if (collapsed && selected.length === 0 && !retained && group.hasAttribute('has-active')) {
       group.removeAttribute('has-active');
       group.activeTabs = [];
     }
     // Exactly one native animation path per state transition. Zia decorates
     // this same native path; no competing WAAPI timeline is introduced.
     let job;
-    if (membership === 'leave' && collapsed && !selected.length && !group.activeTabs.length) {
+    if (retained) {
+      // No layout or new animation on cross-group selection. Keep the same
+      // native active row and closed state, so the next target stays put.
+      job = prior?.finished === false ? prior.done : Promise.resolve();
+    } else if (membership === 'leave' && collapsed && !selected.length && !group.activeTabs.length) {
       // The dragged active row has already left this closed group. Its other
       // rows are hidden already; a second collapse would animate the empty
       // container's margin and move every following group after the landing.
@@ -334,7 +343,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.2', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.1-native-selection', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });

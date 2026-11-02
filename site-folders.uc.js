@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.6.0
+// @version      0.6.1
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -237,7 +237,7 @@
   function sourceFaviconURL(tab) {
     const raw = tabURL(tab);
     if (!raw) return null;
-    if (/^about:/i.test(raw)) return 'chrome://browser/skin/zen-icons/folder.svg';
+    if (/^about:/i.test(raw)) return 'chrome://global/skin/icons/settings.svg';
     // page-icon resolves through Firefox's own favicon cache, not a third-party API.
     return 'page-icon:' + raw;
   }
@@ -302,7 +302,7 @@
 
   // Persist tab identity in Firefox's own SessionStore. The document's tab
   // nodes can be recreated on restart; DOM references cannot serve as backup.
-  function tabUID(tab) {
+  function tabUID(tab, claimed = null) {
     // Persisted ID is mandatory for undo. Try the Zen window API first.
     const stores = sessionStores().filter(store =>
       typeof store?.getCustomTabValue === 'function' &&
@@ -315,7 +315,10 @@
     for (const store of stores) {
       try {
         const saved = store.getCustomTabValue(tab, TAB_UID_KEY);
-        if (typeof saved === 'string' && saved) return saved;
+        // Native Duplicate Tab can copy our custom SessionStore value.
+        // Keep the first captured tab's ID; persist a fresh ID only for the
+        // distinct copied tab, before any new snapshot or sorting can occur.
+        if (typeof saved === 'string' && saved && !claimed?.has(saved)) return saved;
       } catch (e) { errors.push('read: ' + String(e?.message || e)); }
     }
     const id = 'tab-' + (Services.uuid?.generateUUID?.()?.toString?.() ||
@@ -370,6 +373,7 @@
     const elements = [];
     const tabs = [];
     const seen = new Set();
+    const seenTabs = new Set();
     for (const element of root.children) {
       if (!element?.isConnected) continue;
       const tag = element.localName || element.tagName?.toLowerCase();
@@ -380,7 +384,9 @@
             (t.group === element || t.closest('tab-group') === element));
         const ids = [];
         for (const tab of members) {
-          const id = tabUID(tab);
+          if (seenTabs.has(tab)) reject('同一分頁被重複收錄，沒有移動任何分頁');
+          seenTabs.add(tab);
+          const id = tabUID(tab, seen);
           if (!id) reject('群組內分頁無法保存識別碼');
           if (seen.has(id)) reject('群組內分頁的識別碼重複');
           seen.add(id);
@@ -398,7 +404,9 @@
         // Synthetic empty/Glance/pinned tabs are excluded from sorting and
         // may have no SessionStore identity; do not back them up as movable tabs.
         if (!eligible(element)) continue;
-        const id = tabUID(element);
+        if (seenTabs.has(element)) reject('同一分頁被重複收錄，沒有移動任何分頁');
+        seenTabs.add(element);
+        const id = tabUID(element, seen);
         if (!id) reject('一般分頁無法保存識別碼');
         if (seen.has(id)) reject('一般分頁的識別碼重複');
         seen.add(id);
@@ -1358,7 +1366,8 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
-    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots };
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.1' };
+    console.info?.(TAG, '0.6.1 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }
 
   if (document.readyState === 'complete') initialize();

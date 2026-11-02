@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — header drop joins first
-// @version      0.6.0
+// @version      0.6.1
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
@@ -8,7 +8,6 @@
   window.__zsfTopDrop?.destroy?.();
   const OWN = 'tab-group[data-zsf-site]:not([split-view-group])';
   let source = null, intent = null, cleanup = 0;
-  const startUndo = [];
   const unclipNodes = new Set();
   const listeners = [];
   const bind = (name, fn) => { window.addEventListener(name, fn, true);listeners.push([name, fn]); };
@@ -28,7 +27,6 @@
   }
   function reset() {
     clearTimeout(cleanup);cleanup = 0;clearIntent();
-    for (const undo of startUndo.splice(0).reverse()) undo();
     for (const node of unclipNodes) {
       node.removeAttribute('data-zsf-drag-unclip');node.removeAttribute('data-zsf-drag-unclip-part');
     }
@@ -55,41 +53,6 @@
       if (node.nodeType !== 1) continue;
       remember(node);remember(node.shadowRoot?.querySelector?.('[part~="scrollbox"]'),node);
     }
-  }
-  function anchorNativeStart() {
-    if (!own(source?.origin) || typeof Cc === 'undefined' || typeof Ci === 'undefined') return;
-    try {
-      const service = Cc['@mozilla.org/eventlistenerservice;1'].getService(Ci.nsIEventListenerService);
-      for (const host of [window, document.getElementById('tabbrowser-tabs')].filter(Boolean)) {
-        for (const info of service.getListenerInfoFor(host)) {
-          const original = info.listenerObject;
-          if (info.type !== 'dragstart' || !info.capturing || typeof original !== 'function') continue;
-          const code = String(original);
-          if (!code.includes('begin(tab, event)') || !code.includes('pending?.tab') || !code.includes('inLibrary(event)')) continue;
-          const wrapped = event => {
-            if (!ordinary(source?.tab)) return original.call(host,event);
-            // Selecting this row can remove the active row from a CLOSED
-            // group above it between mousedown and dragstart. Rebase only
-            // Zia's starting coordinate by that layout shift; actual events,
-            // subsequent pointer coordinates and edge scrolling stay native.
-            const delta = source.tab.getBoundingClientRect().top - source.startTop;
-            if (Math.abs(delta) < 1) return original.call(host,event);
-            const anchored = new Proxy(event, { get(target,key) {
-              const value = Reflect.get(target,key,target);
-              if (key === 'clientY' || key === 'screenY') return value + delta;
-              return typeof value === 'function' ? value.bind(target) : value;
-            } });
-            return original.call(host,anchored);
-          };
-          host.removeEventListener('dragstart',original,true);
-          host.addEventListener('dragstart',wrapped,true);
-          startUndo.push(() => {
-            host.removeEventListener('dragstart',wrapped,true);
-            host.addEventListener('dragstart',original,true);
-          });
-        }
-      }
-    } catch(error) { console.warn('[ZenSiteFolders] Native drag anchor unavailable:',error); }
   }
   function arm(group, tab) {
     if (!own(group) || !group.collapsed || !ordinary(tab) || tab.group === group) return null;
@@ -173,7 +136,6 @@
     source = {tab, origin:tab.group, startTop:tab.getBoundingClientRect().top,
       workspace:window.gZenWorkspaces?.activeWorkspace};
     rememberDragClips();
-    anchorNativeStart();
     // Zia registers after deferred startup; run after its live capture handlers.
     for (const [type, fn] of [['dragover', over], ['drop', drop]]) {
       window.removeEventListener(type, fn, true);window.addEventListener(type, fn, true);

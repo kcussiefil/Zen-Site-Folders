@@ -31,7 +31,7 @@ jobs:
           node --check site-folders-top-drop.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.6.0' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.6.1' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -40,6 +40,8 @@ jobs:
           node tests/member-handoff.test.cjs
           node tests/header-top-drop.test.cjs
           node tests/native-grab-anchor.test.cjs
+          node tests/cross-group-selection.test.cjs
+          node tests/snapshot-duplicate-id.test.cjs
           node tests/selected-color-age.test.cjs
           node tests/undo-secondary-click.test.cjs
           node tests/drag-feedback.test.cjs

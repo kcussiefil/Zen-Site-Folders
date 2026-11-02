@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Native Zen/Zia site-folder dragging, closed-group top entry, selected-tab colors and wider previews.",
+  "description": "Native Zen/Zia selection and dragging, stable cross-group rows, selected-tab colors and wider previews.",
   "author": "kcussiefil",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -54,5 +54,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-02T16:13:27.748Z"
+  "updatedAt": "2026-11-02T20:59:17.726Z"
 }
