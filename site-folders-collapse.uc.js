@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.5.6
+// @version      0.5.7
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -51,7 +51,8 @@
     if (!force && prior && prior.collapsed === collapsed &&
         prior.selected.length === selected.length &&
         prior.selected.every((tab, i) => tab === selected[i])) return;
-    const state = { collapsed, selected, done: null };
+    const state = { collapsed, selected, done: null, finished: false,
+      deferredComplete: prior?.deferredComplete === true };
     states.set(group, state);
     // A selected-tab change inside an already-closed group is not an
     // expansion. The previous bridge started expand AND collapse together,
@@ -99,7 +100,14 @@
       if (group.collapsed && !shown) group.groupContainer.hidden = true;
       else group.groupContainer.hidden = false;
       window.gBrowser?.tabContainer?._invalidateCachedVisibleTabs?.();
-    }).catch(error => console.warn('[ZenSiteFoldersMotion]', error));
+    }).catch(error => console.warn('[ZenSiteFoldersMotion]', error)).finally(() => {
+      if (dead || !ours(group) || states.get(group) !== state) return;
+      state.finished = true;
+      if (state.deferredComplete) {
+        state.deferredComplete = false;
+        group.dispatchEvent(new window.CustomEvent('TabGroupAnimationComplete', { bubbles: true }));
+      }
+    });
   }
   function scan() {
     if (dead) return;
@@ -167,6 +175,17 @@
     }
     if (structural) scheduleScan();
   }
+  function onAnimationComplete(event) {
+    const group = event.target;
+    const state = states.get(group);
+    if (!ours(group) || !state || state.finished) return;
+    // Ordinary groups report width-transition completion independently of
+    // this bridge's native vertical animation. Keep Zen's auto-scroll guard
+    // alive until that SAME vertical animation finishes. No scrollTop repair,
+    // selection change, or suppression of wheel/drag scrolling is involved.
+    state.deferredComplete = true;
+    event.stopImmediatePropagation();
+  }
   function onTabSelect(event) {
     const previous = lastSelected;
     const current = event?.target?.localName === 'tab' ?
@@ -194,6 +213,7 @@
     bind(window, 'TabGroupCollapse', event => scheduleGroupSync(event.target), true);
     bind(window, 'TabGroupExpand', event => scheduleGroupSync(event.target), true);
     bind(window, 'TabSelect', onTabSelect, true);
+    bind(window, 'TabGroupAnimationComplete', onAnimationComplete, true);
     observer = new MutationObserver(onMutations);
     observer.observe(tabs, { subtree: true, childList: true,
       attributes: true, attributeFilter: [

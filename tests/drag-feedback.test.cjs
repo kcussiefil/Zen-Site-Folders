@@ -8,10 +8,10 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8'
 new vm.Script(src);
 assert(!/dropEffect\s*=/.test(src), 'never alter native drag effect');
 assert((src.match(/event\.preventDefault\?\.\(\)/g)||[]).length===2 &&
-       (src.match(/event\.stopPropagation\?\.\(\)/g)||[]).length===2,
-  'Zen interception is scoped to Zia-delegated group dragover/drop only');
+       (src.match(/event\.stopPropagation\?\.\(\)/g)||[]).length===1,
+  'group cancellation/drop may prevent default; native dragover is not stopped');
 assert(src.includes('if (ziaDelegate)') &&
-  src.includes('Zia already painted the displaced rows'),
+  src.includes('Let native dragover reach'),
   'normal Zen/Zia drop events must not be intercepted');
 assert((src.match(/\.setDragImage\(/g)||[]).length===1,
   'only the ZSF-scoped OS preview may be overwritten, not native drop events');
@@ -134,7 +134,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.5.6');
+assert(api&&api.version==='0.5.7');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -243,8 +243,8 @@ async function main(){
   assert.equal(api.chooseSlot(subject,900,170),null,'invalid x must refuse reorder');
 
   // Real pointer gesture for a member, without pin or group changes.
-  emit(strip,'mousedown',tabEvent(100,175,C));
-  emit(window,'mousemove',tabEvent(100,202,C));
+  emit(strip,'mousedown',tabEvent(100,245,C));
+  emit(window,'mousemove',tabEvent(100,180,C));
   const memberGhost=root.querySelector('.zsf-drag-ghost');
   assert(memberGhost,'member drag should also have a visible preview');
   assert(root.hasAttribute('data-zsf-hide-native-indicator'),
@@ -319,14 +319,13 @@ async function main(){
   root.removeAttribute('zia-dragging-tab');
   A.removeAttribute('zia-dragging');
 
-  // Privileged synthetic events can be trusted: no dragstart means the
-  // pointer fallback must own the preview immediately, without a frame.
+  // Zia mode waits for native dragstart without a competing hidden source.
   window.__ziaLoaded = true;
   emit(strip,'mousedown',{...gEvent(160,160),isTrusted:true});
   emit(window,'mousemove',{...gEvent(160,120),isTrusted:true});
-  assert.equal(api.debugDrag(source).activeKind,'group');
+  assert.equal(api.debugDrag(source).activeKind,null);
   assert.equal(api.debugDrag(source).ziaDelegate,false);
-  assert(source.hasAttribute('data-zsf-drag-source'));
+  assert(!source.hasAttribute('data-zsf-drag-source'));
   root.setAttribute('zia-dragging-tab','true');
   emit(window,'dragstart',{...gEvent(160,120),dataTransfer:{}});
   assert.equal(api.debugDrag(source).ziaDelegate,true);
@@ -355,8 +354,8 @@ async function main(){
   await new Promise(resolve=>setTimeout(resolve,60));
   assert(source.isZenFolder !== true,
     'temporary native folder identity must be restored after drop');
-  assert(moveLog.length===nativeBefore || moveLog.length===nativeBefore+1,
-    'native delegated path can make at most one safety-only reorder for an incorrect destination');
+  assert.equal(moveLog.length,nativeBefore,
+    'without a native insertion there must be no delayed safety reorder');
   root.removeAttribute('zia-dragging-tab');
   window.__ziaLoaded = false;
 

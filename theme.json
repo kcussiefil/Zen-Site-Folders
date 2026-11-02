@@ -3,7 +3,7 @@
   "name": "Zen Site Folders",
   "description": "Whole site folders delegate to Zia's native row-shift and drop controller, with scoped identity restore and safe fallback.",
   "author": "kcussiefil",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -48,5 +48,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-02T05:28:07.461Z"
+  "updatedAt": "2026-11-02T07:04:52.901Z"
 }
