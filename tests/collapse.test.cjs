@@ -63,3 +63,18 @@ assert(!oldActive.has('folder-active'), 'former selected tab must not remain act
 assert.deepEqual(retiredStyles, [['height', '0px'], ['min-height', '0px'], ['opacity', '0']],
   'former selected tab must release its layout box');
 console.log('PASS: single-path audio/selection motion and native row cleanup');
+
+// Moving the formerly selected tab out must never hide it again.
+const foreignWrites=[];
+second.selected=false;second.group=null;
+second.style={getPropertyValue:k=>k==='height'?'0px':k==='opacity'?'0':'',setProperty:(k,v)=>foreignWrites.push([k,v])};
+second.removeAttribute=()=>{};second.hasAttribute=()=>false;group.hasAttribute=()=>false;group.tabs=[first];
+bridge.sync(group);
+assert.deepEqual(foreignWrites,[],'a departed selection must not be retired by its former group');
+assert(cleaned.includes(second),'stranded native hiding on a departed ordinary tab is cleaned');
+// Membership changes matter even when selection/collapsed state stays the same.
+group.collapsed=false;bridge.sync(group);const beforeMembers=calls.length;
+group.tabs.push({selected:false,multiselected:false,isConnected:true,getAttribute:()=>null});bridge.sync(group);
+assert.equal(calls.length,beforeMembers+1,'expanded membership change must refresh native layout');
+console.log('PASS: departed selection is not hidden; stale moved-row styles and membership-only layout changes are reconciled.');
+

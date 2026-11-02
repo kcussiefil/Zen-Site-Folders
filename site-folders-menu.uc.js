@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.5.9
+// @version      0.6.0
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -12,13 +12,78 @@
   const ARCHIVE_KEY = 'zsf-archived-snapshots-v1';
   const ICONS_KEY = 'zsf-custom-icons-v1';
   const GROUP_SELECTOR = 'tab-group[data-zsf-site]:not([split-view-group])';
-  const COLOR_CHOICES = [
-    ['grey', '灰色', ''], ['blue', '藍色', '#4d91df'],
-    ['cyan', '青色', '#25a9b5'], ['green', '綠色', '#54af83'],
-    ['yellow', '黃色', '#d4ae4d'], ['orange', '橘色', '#d08a4e'],
-    ['red', '紅色', '#d76463'], ['pink', '粉紅色', '#ce72a8'],
-    ['purple', '紫色', '#9f83d9']
-  ];
+  const COLOR_PREF = 'zsf.selected-tab-color.v1';
+  const COLOR_TOPIC = 'zsf-selected-tab-color-changed';
+  const DEFAULT_COLOR = { hex: '#ffffff', alpha: 8 };
+  let colorDialog = null, tabColorItem = null;
+  function validColor(value) {
+    return value && /^#[0-9a-f]{6}$/i.test(value.hex) &&
+      Number.isFinite(value.alpha) && value.alpha >= 0 && value.alpha <= 100;
+  }
+  function readColor() {
+    try {
+      const value = JSON.parse(Services.prefs.getStringPref(COLOR_PREF, 'null'));
+      if (validColor(value)) return value;
+    } catch (_) {}
+    return { ...DEFAULT_COLOR };
+  }
+  function applySelectedColor(value = readColor()) {
+    if (!validColor(value)) return;
+    const rgb = [1, 3, 5].map(i => parseInt(value.hex.slice(i, i + 2), 16));
+    document.documentElement.style.setProperty('--zsf-selected-tab-fill',
+      `rgba(${rgb.join(', ')}, ${value.alpha / 100})`);
+  }
+  function chooseSelectedColor() {
+    if (colorDialog?.isConnected) { colorDialog.focus(); return; }
+    const html = (tag, text) => {
+      const node = document.createElementNS('http://www.w3.org/1999/xhtml', tag);
+      if (text) node.textContent = text;
+      return node;
+    };
+    const dialog = html('dialog');dialog.id = 'zsf-color-dialog';
+    dialog.setAttribute('aria-labelledby', 'zsf-color-heading');
+    const heading = html('h3', '變更選取分頁顏色');heading.id = 'zsf-color-heading';
+    const note = html('p', '所有一般分頁共用；展開、收合與點選後保持一致。');
+    const colorLabel = html('label', '顏色');
+    const color = html('input');color.type = 'color';color.setAttribute('aria-label', '選取分頁顏色');colorLabel.append(color);
+    const alphaLabel = html('label', '不透明度');
+    const alpha = html('input');alpha.type = 'range';alpha.min = '0';alpha.max = '100';alpha.step = '1';alpha.setAttribute('aria-label', '底色不透明度');
+    const output = html('output');alphaLabel.append(alpha, output);
+    const actions = html('div');actions.className = 'zsf-color-actions';
+    const nativeButton = text => {
+      const button = document.createXULElement('button');
+      button.setAttribute('label', text);button.classList.add('dialog-button');
+      return button;
+    };
+    const reset = nativeButton('還原預設'), cancel = nativeButton('取消'), save = nativeButton('儲存');
+    save.setAttribute('default', 'true');
+    const left = html('div');left.className = 'zsf-color-reset';left.append(reset);
+    const right = html('div');right.className = 'zsf-color-confirm';right.append(cancel, save);
+    actions.append(left, right);dialog.append(heading, note, colorLabel, alphaLabel, actions);
+    const preview = () => {
+      output.textContent = alpha.value + '%';
+      applySelectedColor({ hex: color.value, alpha: Number(alpha.value) });
+    };
+    const set = value => { color.value = value.hex;alpha.value = String(value.alpha);output.textContent = alpha.value + '%'; };
+    set(readColor());
+    color.addEventListener('input', preview);alpha.addEventListener('input', preview);
+    reset.addEventListener('click', () => { set(DEFAULT_COLOR);preview(); });
+    cancel.addEventListener('click', () => dialog.close());
+    save.addEventListener('click', () => {
+      const value = { hex: color.value, alpha: Number(alpha.value) };
+      if (!validColor(value)) return;
+      try {
+        Services.prefs.setStringPref(COLOR_PREF, JSON.stringify(value));
+        Services.obs.notifyObservers(null, COLOR_TOPIC);
+        dialog.close();
+      } catch (_) { alertUser('無法儲存顏色，請再試一次。'); }
+    });
+    dialog.addEventListener('close', () => {
+      applySelectedColor();dialog.remove();if (colorDialog === dialog) colorDialog = null;
+    }, { once: true });
+    document.documentElement.appendChild(dialog);colorDialog = dialog;dialog.showModal();
+  }
+  const colorObserver = { observe() { applySelectedColor(); } };
   let menu = null;
   let activeGroup = null;
   let initialized = false;
@@ -172,19 +237,6 @@
     emitUpdate(group);
   }
 
-  function changeColor(group, name, hex) {
-    group.color = name;
-    if (hex) group.style.setProperty('--zsf-custom-accent', hex);
-    else group.style.removeProperty('--zsf-custom-accent');
-    const all = read('zsf-custom-colors-v1');
-    if (all) {
-      all[group.id] = name;
-      if (!write('zsf-custom-colors-v1', all))
-        console.warn(TAG, 'Could not persist custom color:', group.id);
-    }
-    emitUpdate(group);
-  }
-
   function validIcon(icon) {
     if (typeof icon !== 'string' || icon.length > 32768) return false;
     if (/^(chrome|resource):\/\//.test(icon)) return true;
@@ -269,14 +321,11 @@
   function restoreDecorations() {
     if (dead) return;
     const icons = read(ICONS_KEY) || {};
-    const colors = read('zsf-custom-colors-v1') || {};
     for (const group of document.querySelectorAll(GROUP_SELECTOR)) {
       if (!validGroup(group)) continue;
       if (icons[group.id]) applyIcon(group, icons[group.id]);
       else if (group.hasAttribute('data-zsf-custom-icon')) applyIcon(group, null);
-      const name = colors[group.id];
-      const entry = COLOR_CHOICES.find(choice => choice[0] === name);
-      if (entry?.[2]) group.style.setProperty('--zsf-custom-accent', entry[2]);
+      group.style.removeProperty('--zsf-custom-accent');
     }
   }
 
@@ -414,9 +463,6 @@
     if (menu?.isConnected) return menu;
     menu = xul('menupopup');
     menu.id = 'zsf-site-group-menu';
-    const colors = sub(menu, '變更顏色');
-    for (const [name, label, hex] of COLOR_CHOICES)
-      colors.appendChild(xul('menuitem', label, group => changeColor(group, name, hex)));
     menu.appendChild(xul('menuitem', '重新命名', rename));
     menu.appendChild(xul('menuitem', '變更圖示', chooseIcon));
     menu.appendChild(xul('menuitem', '移除圖示', removeIcon));
@@ -458,10 +504,35 @@
     menu.openPopupAtScreen(event.screenX, event.screenY, false);
   }
 
+  function ordinaryContextTab() {
+    const tab = window.TabContextMenu?.contextTab;
+    return tab?.isConnected && tab.localName === 'tab' &&
+      !tab.hasAttribute('zen-essential') && !tab.hasAttribute('zen-empty-tab') ? tab : null;
+  }
+  function installTabColorMenu() {
+    const popup = document.getElementById('tabContextMenu');
+    if (!popup || tabColorItem?.isConnected) return;
+    tabColorItem = document.createXULElement('menuitem');
+    tabColorItem.id = 'zsf-change-selected-tab-color';
+    tabColorItem.setAttribute('label', '變更選取分頁顏色');
+    tabColorItem.hidden = true;
+    // Keep the native tab context menu and its normal commands intact.
+    const anchor = document.getElementById('context_duplicateTab');
+    popup.insertBefore(tabColorItem, anchor?.parentElement === popup ? anchor : null);
+    bind(popup, 'popupshowing', event => {
+      if (event.target === popup) tabColorItem.hidden = !ordinaryContextTab();
+    });
+    bind(tabColorItem, 'command', () => {
+      if (ordinaryContextTab()) chooseSelectedColor();
+    });
+  }
   function init() {
     if (initialized || dead) return;
     if (!window.gBrowser?.tabContainer) return;
     initialized = true;
+    applySelectedColor();
+    installTabColorMenu();
+    Services.obs.addObserver(colorObserver, COLOR_TOPIC);
     bind(window, 'contextmenu', onContextMenu, true);
     restoreDecorations();
     const container = window.gBrowser.tabContainer;
@@ -477,6 +548,9 @@
 
   function destroy() {
     dead = true;
+    colorDialog?.close();
+    tabColorItem?.remove();tabColorItem = null;
+    try { Services.obs.removeObserver(colorObserver, COLOR_TOPIC); } catch (_) {}
     clearTimeout(init._timer);
     observer?.disconnect();
     for (const [node, type, callback, capture] of listeners)

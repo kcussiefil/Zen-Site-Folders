@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.5.9
+// @version      0.6.0
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -174,6 +174,8 @@
     } catch (_) {}
     const stamp = Date.now() + (++seq / 1000);
     tab.__zsfOpenedAt = stamp;
+    tab.__zsfReliableOpenedAt = stamp;
+    try { getSessionStore('setCustomTabValue')?.setCustomTabValue(tab, 'zsf-opened-at-real-v1', String(stamp)); } catch (_) {}
     try { getSessionStore('setCustomTabValue')?.setCustomTabValue(tab, STORE_KEY, String(stamp)); } catch (_) {}
   }
 
@@ -235,7 +237,7 @@
   function sourceFaviconURL(tab) {
     const raw = tabURL(tab);
     if (!raw) return null;
-    if (/^about:/i.test(raw)) return 'chrome://global/skin/icons/settings.svg';
+    if (/^about:/i.test(raw)) return 'chrome://browser/skin/zen-icons/folder.svg';
     // page-icon resolves through Firefox's own favicon cache, not a third-party API.
     return 'page-icon:' + raw;
   }

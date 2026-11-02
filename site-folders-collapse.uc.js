@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.5.9
+// @version      0.6.0
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -27,7 +27,7 @@
     }
   }
   // Only copy the state accessors required by the native animation routines.
-  // Do not change the element's type, isZenFolder, pinned state or tab objects.
+  // Keep the element's type, pinned state and actual tab objects intact.
   function prepare(group) {
     const proto = window.customElements?.get('zen-folder')?.prototype;
     if (!proto) return false;
@@ -40,18 +40,36 @@
     group._activeTabs ??= [];
     return true;
   }
-  function sync(group, force = false) {
+  function sync(group, force = false, membership = null) {
     if (dead || !ours(group) || !prepare(group)) return;
     const zen = window.gZenFolders;
     if (typeof zen?.animateCollapse !== 'function' ||
         typeof zen?.animateExpand !== 'function') return;
     const collapsed = group.collapsed;
-    const selected = [...group.tabs].filter(tab => tab.selected || tab.multiselected);
+    const members = [...group.tabs];
+    const selected = members.filter(tab => tab.selected || tab.multiselected);
     const prior = states.get(group);
+    const clearStranded = tab => {
+      if (!tab?.isConnected || tab.pinned ||
+          (tab.group && (!ours(tab.group) || tab.group.collapsed))) return;
+      const style = tab.style;
+      if (style?.getPropertyValue?.('height') !== '0px' ||
+          style.getPropertyValue('opacity') !== '0' ||
+          (tab.getAnimations?.() || []).some(a => a.playState === 'running' || a.pending)) return;
+      zen.styleCleanup?.([tab]);
+      tab.removeAttribute?.('folder-active');
+      tab.removeAttribute?.('zia-kept-tab');
+    };
+    for (const tab of prior?.members || [])
+      if (!members.includes(tab)) clearStranded(tab);
+    if (!collapsed) for (const tab of members)
+      if (!prior?.members?.includes(tab)) clearStranded(tab);
     if (!force && prior && prior.collapsed === collapsed &&
+        prior.members.length === members.length &&
+        prior.members.every((tab, i) => tab === members[i]) &&
         prior.selected.length === selected.length &&
         prior.selected.every((tab, i) => tab === selected[i])) return;
-    const state = { collapsed, selected, done: null, finished: false,
+    const state = { collapsed, selected, members, done: null, finished: false,
       deferredComplete: prior?.deferredComplete === true };
     states.set(group, state);
     // A selected-tab change inside an already-closed group is not an
@@ -65,7 +83,9 @@
     // Retire only the former selected rows, preserving nested/folder state.
     if (collapsed && prior?.collapsed) {
       for (const tab of prior.selected) {
-        if (selected.includes(tab) || !tab.isConnected) continue;
+        // A former selection may already belong to another group or be standalone.
+        // Never retire an element after it has left this group's membership.
+        if (selected.includes(tab) || !tab.isConnected || !members.includes(tab)) continue;
         if (tab.hasAttribute('folder-active')) {
           tab.removeAttribute('folder-active');
           tab.style.removeProperty('--zen-folder-indent');
@@ -89,7 +109,49 @@
     }
     // Exactly one native animation path per state transition. Zia decorates
     // this same native path; no competing WAAPI timeline is introduced.
-    const job = collapsed ? zen.animateCollapse(group) : zen.animateExpand(group);
+    let job;
+    if (membership === 'leave' && collapsed && !selected.length && !group.activeTabs.length) {
+      // The dragged active row has already left this closed group. Its other
+      // rows are hidden already; a second collapse would animate the empty
+      // container's margin and move every following group after the landing.
+      group.groupContainer.hidden = true;
+      group.groupStartElement?.style.removeProperty('margin-top');
+      window.gBrowser?.tabContainer?._invalidateCachedVisibleTabs?.();
+      job = Promise.resolve();
+    } else if (membership === 'join' && collapsed && selected.length && typeof zen.animateSelect === 'function') {
+      // TabGrouped is synchronous. Establish the native selected-row layout
+      // BEFORE Zia measures the landing, rather than collapsing natural-height
+      // siblings a microtask later. Pre-register selection so native Zen keeps
+      // even an all-selected group closed during this membership operation.
+      for (const tab of members) if (!selected.includes(tab)) {
+        tab.removeAttribute('folder-active');
+        tab.style.removeProperty('--zen-folder-indent');
+      }
+      group.setAttribute('has-active', 'true');
+      group.activeTabs = selected;
+      // A closed group's start spacer can still carry the negative height of
+      // its entire hidden list. The dropped row is already at its preview:
+      // do not animate that old spacer height while Zia animates the landing.
+      const start = group.groupStartElement;
+      for (const animation of start?.getAnimations?.() || []) {
+        if (animation.effect?.getKeyframes?.().some(frame => 'marginTop' in frame)) animation.cancel();
+      }
+      if (start) start.style.setProperty('margin-top', '0px');
+      group.groupContainer.hidden = false;
+      // Native animateSelect's sole entry gate requires this capability. Its
+      // synchronous portion supplies visibility, sizing and native animations.
+      // Restore BEFORE any native membership listener runs; no DOM move, pin
+      // operation, or persistent folder conversion occurs under this flag.
+      const descriptor = Object.getOwnPropertyDescriptor(group, 'isZenFolder');
+      try {
+        Object.defineProperty(group, 'isZenFolder', { value: true, configurable: true });
+        job = zen.animateSelect(group);
+      } finally {
+        if (descriptor) Object.defineProperty(group, 'isZenFolder', descriptor);
+        else delete group.isZenFolder;
+      }
+      window.gBrowser?.tabContainer?._invalidateCachedVisibleTabs?.();
+    } else job = collapsed ? zen.animateCollapse(group) : zen.animateExpand(group);
     state.done = Promise.resolve(job).then(() => {
       if (dead || !ours(group) || states.get(group) !== state) return;
       // Zen's shared animation counter skips finalization for all but the
@@ -203,6 +265,23 @@
     for (const group of affected)
       if (ours(group) && group.collapsed) scheduleGroupSync(group);
   }
+  function onTabGrouped(event) {
+    const tab = event.detail, group = tab?.group;
+    if (!ours(group) || !group.collapsed || !(tab.selected || tab.multiselected)) return;
+    sync(group, true, 'join');
+  }
+  function onTabUngrouped(event) {
+    const group = event.target, tab = event.detail;
+    if (!ours(group) || !tab || tab.group === group || !prepare(group)) return;
+    // A departing active row is already in its new DOM position. Letting the
+    // old owner's native unload animate it would hide/move that same row again.
+    tab.removeAttribute('folder-active');
+    tab.removeAttribute('zia-kept-tab');
+    tab.style.removeProperty('--zen-folder-indent');
+    window.gZenFolders?.styleCleanup?.([tab]);
+    group.activeTabs = (group.activeTabs || []).filter(member => member !== tab);
+    sync(group, true, 'leave');
+  }
   function start() {
     const tabs = window.gBrowser?.tabContainer;
     if (!tabs || dead || observer) return;
@@ -213,6 +292,8 @@
     bind(window, 'TabGroupCollapse', event => scheduleGroupSync(event.target), true);
     bind(window, 'TabGroupExpand', event => scheduleGroupSync(event.target), true);
     bind(window, 'TabSelect', onTabSelect, true);
+    bind(window, 'TabGrouped', onTabGrouped, true);
+    bind(window, 'TabUngrouped', onTabUngrouped, true);
     bind(window, 'TabGroupAnimationComplete', onAnimationComplete, true);
     observer = new MutationObserver(onMutations);
     observer.observe(tabs, { subtree: true, childList: true,

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.5.9
+// @version      0.6.0
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -728,10 +728,25 @@
       attempted = true;
       const before = context.landingBefore;
       if (!valid(before)) return group; // Cancel in place; never correct later.
-      if (group.nextElementSibling !== before)
+      if (group.nextElementSibling !== before) {
+        // Zia has already pinned its landing row at the release position.
+        // Preserve that visual position across the single DOM insertion;
+        // its existing repin/glide callback still owns the landing motion.
+        const held = group.hasAttribute?.('zia-landing') &&
+          group.getBoundingClientRect?.();
         originalInsert.call(parent, group, before || null);
+        if (held && group.style) {
+          group.style.removeProperty('transform');
+          const at = group.getBoundingClientRect();
+          group.style.setProperty('transform',
+            `translate(${held.left - at.left}px, ${held.top - at.top}px)`, 'important');
+        }
+      }
       return group;
     };
+    // Commit before this drop dispatch can paint cleared preview offsets.
+    // Zia's queued placement reaches the same one-shot guard and is a no-op.
+    context.commitNativeLanding = land;
     const wrap = (host, key, intercept) => {
       if (!host || typeof host[key] !== 'function') return;
       const descriptor = Object.getOwnPropertyDescriptor(host, key);
@@ -788,6 +803,7 @@
       // Zia can clear painted shifts in its drop listeners. Keep the gap
       // captured after its last dragover; do not recalculate during drop.
       ziaDelegate.accepted = ziaDelegate.previewAllowed === true;
+      ziaDelegate.commitNativeLanding?.();
       event.preventDefault?.();
       event.stopPropagation?.();
       pending = null;
@@ -1043,7 +1059,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.5.9', chooseSlot, commit,
+  const api = { start, destroy, version: '0.6.0', chooseSlot, commit,
     beforeMutation, nativeIdle,
     // Explicit probe for isolated native Zen+Zia regression tests.
     prepareZiaGroupDrag(group) {

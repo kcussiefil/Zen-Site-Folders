@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.5.9
+// @version      0.6.0
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -118,6 +118,27 @@
     return value;
   }
 
+  let ageTimer = null, timeStore = null;
+  function realOpenedAt(tab) {
+    if (Number.isFinite(tab?.__zsfReliableOpenedAt)) return tab.__zsfReliableOpenedAt;
+    try {
+      timeStore ||= window.SessionStore || ChromeUtils.importESModule('resource:///modules/sessionstore/SessionStore.sys.mjs').SessionStore;
+      const value = Number(timeStore.getCustomTabValue(tab, 'zsf-opened-at-real-v1'));
+      return Number.isFinite(value) && value > 0 ? value : null;
+    } catch (_) { return null; }
+  }
+  function ageText(stamp, now = Date.now()) {
+    if (!Number.isFinite(stamp) || stamp <= 0 || stamp > now + 60000) return '—';
+    const minutes = Math.floor(Math.max(0, now - stamp) / 60000);
+    if (minutes < 1) return '<1 min';
+    if (minutes < 60) return `${minutes} min`;
+    if (minutes < 1440) return `${Math.floor(minutes / 60)} h`;
+    return `${Math.floor(minutes / 1440)} d`;
+  }
+  function updateAge(node, tab) {
+    const stamp = realOpenedAt(tab);node.textContent = ageText(stamp);
+    node.title = stamp ? '開啟時間：' + new Date(stamp).toLocaleString() : '原始開啟時間未知';
+  }
   function makeRow(tab) {
     const row = el('div', 'zia-folder-card-row zsf-hover-row');
     row.setAttribute('role', 'button');
@@ -147,6 +168,7 @@
       row.appendChild(bars);
     }
     row.appendChild(title);
+    const age = el('span', 'zsf-hover-age');updateAge(age, tab);row.appendChild(age);
     const close = el('img', 'zia-folder-card-act zsf-hover-action');
     close.src = 'chrome://sine/content/zia/icons/ui/x.svg';
     close.setAttribute('zia-act', 'close');
@@ -218,7 +240,7 @@
     // when the group header is near the bottom of a short window.
     popup.style.maxHeight = available + 'px';
     if (list) list.style.maxHeight = available + 'px';
-    const width = popup.offsetWidth || 222;
+    const width = popup.offsetWidth || 360;
     const height = Math.min(popup.offsetHeight || 60, available);
     let x = onRight ? sidebar.left - width - GAP : sidebar.right + GAP;
     x = Math.max(8, Math.min(x, viewportW - width - 8));
@@ -423,6 +445,12 @@
     const tabContainer = window.gBrowser?.tabContainer;
     if (!toolbox || !tabContainer) return false;
     started = true;
+    ageTimer = setInterval(() => {
+      if (!card || card.hidden) return;
+      for (const row of card.querySelectorAll('.zsf-hover-row')) {
+        const age = row.querySelector('.zsf-hover-age');if (age && row.zsfTab) updateAge(age, row.zsfTab);
+      }
+    }, 60000);
     hoverHost = toolbox;
     bind(toolbox, 'mouseover', onMouseOver);
     bind(toolbox, 'mouseout', onMouseOut);
@@ -469,6 +497,7 @@
   function destroy() {
     if (destroyed) return;
     destroyed = true;
+    clearInterval(ageTimer);ageTimer = null;
     closeNow();
     for (const [target, type, handler, options] of handlers) {
       try { target.removeEventListener(type, handler, options); } catch (_) {}

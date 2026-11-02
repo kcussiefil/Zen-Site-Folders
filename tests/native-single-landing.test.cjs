@@ -97,6 +97,8 @@ for(const allowed of [true,false]){
   // Zia clears its shifts during drop before the adapter runs.
   row.hasAttribute=()=>false;
   p.finish({clientX:120,clientY:20,preventDefault(){},stopPropagation(){}});
+  // No intermediate paint of the old order after native preview cleanup.
+  assert.equal(f.calls.length,allowed?1:0,'landing must finish in the drop dispatch');
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(f.calls.length,allowed?1:0);
   if(allowed)assert.equal(f.group.nextElementSibling,f.rows[3]);

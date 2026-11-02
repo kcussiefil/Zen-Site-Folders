@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Whole site folders delegate to Zia's native row-shift and drop controller, with scoped identity restore and safe fallback.",
+  "description": "Native Zen/Zia site-folder dragging, closed-group top entry, selected-tab colors and wider previews.",
   "author": "kcussiefil",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -36,6 +36,12 @@
         "chrome://browser/content/browser.xhtml"
       ],
       "loadOrder": 40
+    },
+    "site-folders-top-drop.uc.js": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ],
+      "loadOrder": 50
     }
   },
   "tags": [
@@ -48,5 +54,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-02T12:13:34.214Z"
+  "updatedAt": "2026-11-02T16:13:27.748Z"
 }
