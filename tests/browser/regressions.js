@@ -53,7 +53,8 @@ const finish = arguments[arguments.length - 1];
     // Zia's native whole-folder drop is stateful, so validate it in the
     // dedicated, fresh-profile CI step rather than after 21 fixtures have
     // left native animations and workspace history in the same process.
-    if (!selectedCase && name === 'Zia single-controller group drop lands at the displayed slot')
+    if (!selectedCase && (name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
+        name.startsWith('native member drag edge scroll')))
       return;
     try {
       const h = await fixture(name);
@@ -519,6 +520,38 @@ const finish = arguments[arguments.length - 1];
     assert(same([...root().querySelectorAll('tab')].filter(tab => h.tabs.includes(tab)), h.tabs), 'undo must restore captured A B C D');
     assert(!core.readSnapshots()[stored.workspaceId], 'successful verified undo may clear its snapshot');
   });
+  await test('native member drag edge scroll keeps the source visible at takeover', async h => {
+    const tab=h.tabs[1], box=tab.getBoundingClientRect();
+    const x=box.left+24, y=box.top+12;
+    tab.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,composed:true,
+      button:0,buttons:1,clientX:x,clientY:y}));
+    window.dispatchEvent(new MouseEvent('mousemove',{buttons:1,clientX:x,clientY:y+15}));
+    assert(tab.hasAttribute('data-zsf-drag-member'), 'fixture must enter pointer fallback');
+    const transfer=new DataTransfer();
+    tab.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y+15}));
+    assert(document.documentElement.hasAttribute('zia-dragging-tab'), 'native tab must be accepted by Zia');
+    assert(!tab.hasAttribute('data-zsf-drag-member') &&
+      !document.querySelector('.zsf-drag-ghost'),
+      'takeover must remove fallback source hiding and card BEFORE any dragover');
+    const space=gZenWorkspaces.activeWorkspaceElement;
+    const port=space.scrollbox?.scrollbox || space.scrollbox;
+    const initial=port.scrollTop;
+    for (const dy of [80,160,80,0]) {
+      port.scrollTop=initial+dy;
+      tab.dispatchEvent(new DragEvent('dragover',{bubbles:true,composed:true,
+        dataTransfer:transfer,clientX:x,clientY:y+45}));
+      await delay(25);
+      const style=getComputedStyle(tab), r=tab.getBoundingClientRect();
+      assert(style.visibility !== 'hidden' && Number(style.opacity)>.9 && r.height>5,
+        'native member must stay drawn during down/up scrolling');
+      assert(!tab.hasAttribute('data-zsf-drag-member'), 'no fallback opacity may return');
+    }
+    window.dispatchEvent(new DragEvent('dragend',{bubbles:true,composed:true}));
+    await delay(150);
+    assert(tab.group===h.group && same(order(h.group),h.tabs),
+      'cancelled native scroll must retain all members and their order');
+  });
   await test('Zia shared folder adapter probe', async h => {
     const g = h.group;
     const before = Object.getOwnPropertyDescriptor(g, 'isZenFolder');
@@ -573,9 +606,19 @@ const finish = arguments[arguments.length - 1];
       else delete g.isZenFolder;
     }
   });
-  await test('Zia single-controller group drop lands at the displayed slot', async h => {
-    const g = h.group, prefix = h.prefix;
-    gBrowser.moveTabAfter(g, prefix);
+  for (const targetKind of ['tab','folder']) for (const direction of ['up','down'])
+  await test('Zia single-controller group drop lands at the displayed slot ' + direction + ' ' + targetKind, async h => {
+    const g = h.group;
+    const prefix = targetKind === 'folder' ? gBrowser.addTabGroup([h.prefix], {
+      label:'About',showCreateUI:false,insertBefore:h.prefix
+    }) : h.prefix;
+    if (targetKind === 'folder') {
+      prefix.setAttribute('data-zsf-site','about');
+      prefix.collapsed=true;
+      await motion.whenIdle(prefix);
+    }
+    if (direction === 'up') gBrowser.moveTabAfter(g, prefix);
+    else gBrowser.moveTabBefore(g, prefix);
     g.collapsed = true;
     await idle(g);
     prefix.scrollIntoView({block:'nearest'});
@@ -585,7 +628,7 @@ const finish = arguments[arguments.length - 1];
     const sep=root().querySelector('.pinned-tabs-container-separator') ||
       gZenWorkspaces.activeWorkspaceElement.querySelector('.pinned-tabs-container-separator');
     const sepRect=sep?.getBoundingClientRect();
-    const x=to.left+Math.min(25,to.width/2), y=to.top+Math.max(5,to.height*.2);
+    const x=to.left+Math.min(25,to.width/2), y=to.top+Math.max(5,to.height*(direction === 'up' ? .2 : .8));
     const initial={fromTop:from.top,fromHeight:from.height,fromBottom:from.bottom,
       targetTop:to.top,targetHeight:to.height,releaseY:y,
       sepTop:sepRect?.top,sepBottom:sepRect?.bottom,
@@ -611,14 +654,27 @@ const finish = arguments[arguments.length - 1];
     const ziaShifted = prefix.hasAttribute('zia-shift') ||
       /translateY\([^)]*[1-9]/.test(prefix.style.getPropertyValue('transform'));
     assert(ziaShifted, 'Zia must visibly displace the target BEFORE release');
+    const insertDescriptor=Object.getOwnPropertyDescriptor(sep.parentNode,'insertBefore');
+    const landings=[];
+    const landingObserver=new MutationObserver(records => {
+      for (const record of records)
+        if ([...record.addedNodes].includes(g)) landings.push(record.target);
+    });
+    landingObserver.observe(gZenWorkspaces.activeWorkspaceElement,{childList:true,subtree:true});
     prefix.dispatchEvent(new DragEvent('drop',{bubbles:true,composed:true,
       dataTransfer:transfer,clientX:x,clientY:y}));
     window.dispatchEvent(new DragEvent('dragend',{bubbles:true,composed:true,
       dataTransfer:transfer,clientX:x,clientY:y}));
     await delay(350);
+    landingObserver.disconnect();
+    assert(Object.getOwnPropertyDescriptor(sep.parentNode,'insertBefore')?.value === insertDescriptor?.value,
+      'scoped native insertion adapter must be restored after landing');
+    assert(landings.length <= 1 && landings.every(parent => parent === root()),
+      'folder must never land in a pinned/wrong container, even transiently: ' +
+      JSON.stringify(landings.map(parent => parent.className)));
     const topLevel=[...root().children].filter(n =>
       n.localName==='tab-group'||gBrowser.isTab(n));
-    assert(topLevel.indexOf(g)===topLevel.indexOf(prefix)-1,
+    assert(topLevel.indexOf(g)===topLevel.indexOf(prefix)+(direction === 'up' ? -1 : 1),
       'group must land exactly before target, not jump to a delayed second slot: ' +
       JSON.stringify({topLevel:topLevel.map(n=>({id:n.id,kind:n.localName,
         label:n.getAttribute('label'),site:n.getAttribute('data-zsf-site')})),

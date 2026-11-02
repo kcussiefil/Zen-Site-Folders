@@ -134,7 +134,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.5.5');
+assert(api&&api.version==='0.5.6');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -303,6 +303,21 @@ async function main(){
     composedPath:()=>[outsideTab,strip],
     dataTransfer:{setDragImage(){unrelatedBlanked=true;}}});
   assert(!unrelatedBlanked,'unrelated native drag preview must stay intact');
+
+  // Native takeover must clear the pointer fallback synchronously, even
+  // if no dragover follows before the scrollport moves.
+  emit(strip,'mousedown',tabEvent(100,180,A));
+  emit(window,'mousemove',tabEvent(100,215,A));
+  assert(A.hasAttribute('data-zsf-drag-member'));
+  root.setAttribute('zia-dragging-tab','true');
+  A.setAttribute('zia-dragging','true');
+  emit(window,'dragstart',{...tabEvent(100,215,A),dataTransfer:{}});
+  assert(!A.hasAttribute('data-zsf-drag-member'),
+    'native dragstart must immediately unhide the tab without waiting for dragover');
+  assert(!root.querySelector('.zsf-drag-ghost'), 'native tab must have only Zia visuals');
+  emit(window,'dragend',{});
+  root.removeAttribute('zia-dragging-tab');
+  A.removeAttribute('zia-dragging');
 
   // Privileged synthetic events can be trusted: no dragstart means the
   // pointer fallback must own the preview immediately, without a frame.
