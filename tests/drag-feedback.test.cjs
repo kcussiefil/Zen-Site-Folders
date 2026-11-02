@@ -134,7 +134,7 @@ const doc={readyState:'complete',documentElement:root,
   createElementNS:(ns,name)=>new Node(name)};
 vm.runInNewContext(src,{window,document:doc,console,setTimeout,clearTimeout});
 const api=window.__zsfDragV037;
-assert(api&&api.version==='0.5.8');
+assert(api&&api.version==='0.5.9');
 const gEvent=(x,y,target=sourceLabel)=>({
   button:0,buttons:1,clientX:x,clientY:y,target,composedPath:()=>[target,source]
 });
@@ -334,6 +334,29 @@ async function main(){
   root.removeAttribute('zia-dragging-tab');
   emit(window,'keydown',{key:'Escape'});
   assert(!source.isZenFolder);
+
+  // Zia's deferred startup can register its capture handler AFTER ours.
+  window.__ziaLoaded = true;
+  const lateZiaStart = () => { if(source.isZenFolder)root.setAttribute('zia-dragging-tab','true'); };
+  window.addEventListener('dragstart',lateZiaStart,true);
+  const originalMoveBefore=window.gBrowser.moveTabBefore;
+  let lateLandingGuarded=false;
+  const lateZiaDrop=()=>setTimeout(()=>{lateLandingGuarded=window.gBrowser.moveTabBefore!==originalMoveBefore;},0);
+  window.addEventListener('drop',lateZiaDrop,true);
+  emit(strip,'mousedown',gEvent(160,160,sourceLabel));
+  let cancelledLateStart=false;
+  emit(window,'dragstart',{...gEvent(160,160,sourceLabel),
+    composedPath:()=>[sourceLabel,source,strip],
+    preventDefault(){cancelledLateStart=true;},dataTransfer:{}});
+  assert.equal(cancelledLateStart,false,'late Zia listener must run before the handoff can cancel');
+  assert.equal(api.debugDrag(source).ziaDelegate,true,'late-installed Zia must claim the prepared group');
+  emit(window,'drop',gEvent(160,140,sourceLabel));
+  await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(lateLandingGuarded,true,'late-installed Zia landing must run before adapter cleanup');
+  emit(window,'keydown',{key:'Escape'});
+  root.removeAttribute('zia-dragging-tab');
+  window.removeEventListener('dragstart',lateZiaStart,true);
+  window.removeEventListener('drop',lateZiaDrop,true);
 
   // Temporary Zia group hand-off: the normal JS unit fixture emulates
   // the flag Zia sets during its own window-capture dragstart.

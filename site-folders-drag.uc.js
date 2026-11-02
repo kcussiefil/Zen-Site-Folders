@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.5.8
+// @version      0.5.9
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -19,6 +19,91 @@
   let generation = 0;
   let lastWorkspace = window.gZenWorkspaces?.activeWorkspace;
   let ziaShim = null, ziaDelegate = null, ziaCleanupTimer = 0;
+  let ziaScrollBridge = null;
+
+  function stopZiaScrollBridge() {
+    const bridge = ziaScrollBridge;
+    ziaScrollBridge = null;
+    if (bridge) for (const undo of bridge.undo.reverse()) undo();
+    if (!active && autoFrame) window.cancelAnimationFrame?.(autoFrame);
+    if (!active) { autoFrame = 0; autoPointer = null; }
+  }
+  function installZiaScrollBridge(context) {
+    stopZiaScrollBridge();
+    const port = context?.scrollPort;
+    if (!port || !context.item?.isConnected) return false;
+    if (typeof Cc === 'undefined' || typeof Ci === 'undefined') return false;
+    const bridge = { context, initialTop: port.scrollTop, expectedTop: port.scrollTop,
+      contentHeight: port.scrollHeight,
+      nativeUntil: 0, undo: [], repaint: null };
+    try {
+      const service = Cc['@mozilla.org/eventlistenerservice;1']
+        .getService(Ci.nsIEventListenerService);
+      for (const host of [window, document.getElementById('tabbrowser-tabs')].filter(Boolean)) {
+        for (const info of service.getListenerInfoFor(host)) {
+          const original = info.listenerObject;
+          if (info.type !== 'dragover' || !info.capturing || typeof original !== 'function') continue;
+          const code = String(original);
+          // Fail closed if Zia changes this private coordinate calculation.
+          if (!code.includes('event.clientY - drag.clientY') ||
+              !code.includes('pointerOf(event)') || !code.includes('apply(dy)') ||
+              !code.includes('drag.firstTop')) continue;
+          const wrapped = event => {
+            bridge.lastEvent = event;
+            const delta = port.scrollTop - bridge.initialTop;
+            if (!delta || !withinSidebar(event.clientX, event.clientY))
+              return original.call(host, event);
+            const undo = [];
+            try {
+              // Zia's cached rows stay in starting-content coordinates.
+              // Translate physical UI hit boxes into the same frame only
+              // during its callback; the actual DOM event stays unchanged.
+              const boxes = new Set([document.getElementById('navigator-toolbox'),
+                document.getElementById('zen-essentials'),
+                window.gZenWorkspaces?.getCurrentEssentialsContainer?.(),
+                document.querySelector?.('.zen-essentials-container')].filter(Boolean));
+              for (const node of boxes) {
+                const descriptor = Object.getOwnPropertyDescriptor(node, 'getBoundingClientRect');
+                const getBox = node.getBoundingClientRect;
+                Object.defineProperty(node, 'getBoundingClientRect', {configurable:true, value() {
+                  const r = getBox.call(node);
+                  return {x:r.x,y:r.y+delta,left:r.left,right:r.right,
+                    top:r.top+delta,bottom:r.bottom+delta,width:r.width,height:r.height};
+                }});
+                undo.push(() => {
+                  if (descriptor) Object.defineProperty(node, 'getBoundingClientRect', descriptor);
+                  else delete node.getBoundingClientRect;
+                });
+              }
+              const translated = new Proxy(event, {get(target, key) {
+                const value = Reflect.get(target, key, target);
+                if (key === 'clientY' || key === 'screenY') return value + delta;
+                return typeof value === 'function' ? value.bind(target) : value;
+              }});
+              return original.call(host, translated);
+            } finally { for (const restore of undo.reverse()) restore(); }
+          };
+          host.removeEventListener('dragover', original, true);
+          host.addEventListener('dragover', wrapped, true);
+          bridge.undo.push(() => {
+            host.removeEventListener('dragover', wrapped, true);
+            host.addEventListener('dragover', original, true);
+          });
+          bridge.repaint ||= () => bridge.lastEvent && wrapped(bridge.lastEvent);
+        }
+      }
+      if (!bridge.undo.length) return false;
+      ziaScrollBridge = bridge;
+      // Capture the native preview only after its translated update.
+      window.removeEventListener('dragover', onOver, true);
+      window.addEventListener('dragover', onOver, true);
+      return true;
+    } catch (error) {
+      for (const undo of bridge.undo.reverse()) undo();
+      console.warn('[ZenSiteFoldersDrag] Native scroll adapter unavailable:', error);
+      return false;
+    }
+  }
 
   // Zia detects a whole native folder by isZenFolder in its tabFromEvent()
   // and begin() functions. That flag must NEVER be stored on our normal
@@ -90,6 +175,7 @@
     return document.documentElement.hasAttribute?.('zia-dragging-tab') === true;
   }
   function releaseZiaAfterDrop() {
+    stopZiaScrollBridge();
     ziaDelegate = null;
     if (ziaCleanupTimer) clearTimeout(ziaCleanupTimer);
     // Zia's finishFolderDrop is queued via setTimeout(0). Restore native
@@ -209,13 +295,31 @@
   }
   function autoScrollTick() {
     autoFrame = 0;
-    if (!active || !autoPointer || !active.scrollPort) return;
+    const subject = active || (ziaScrollBridge?.context === ziaDelegate ? ziaDelegate : null);
+    if (!subject || !autoPointer || !subject.scrollPort) return;
+    if (!active && (!ziaIsDragging() || !subject.item.isConnected ||
+        subject.workspace !== window.gZenWorkspaces?.activeWorkspace)) return;
     const { x, y } = autoPointer;
-    const speed = scrollSpeed(active, x, y);
+    const speed = scrollSpeed(subject, x, y);
     if (!speed) return;
-    const port = active.scrollPort;
+    const port = subject.scrollPort;
+    if (!active) {
+      // Yield while Zen or the user is already changing this scrollport.
+      if (Math.abs(port.scrollTop - ziaScrollBridge.expectedTop) > .1) {
+        ziaScrollBridge.expectedTop = port.scrollTop;
+        ziaScrollBridge.nativeUntil = Date.now() + 120;
+      }
+      if (Date.now() < ziaScrollBridge.nativeUntil) {
+        autoFrame = window.requestAnimationFrame?.(autoScrollTick) || 0;
+        return;
+      }
+    }
     const before = port.scrollTop;
-    const max = Math.max(0, port.scrollHeight - port.clientHeight);
+    // The translated dragged row can enlarge scrollable overflow. It is
+    // not new content and must never extend the scrolling destination.
+    const contentHeight = active ? port.scrollHeight :
+      Math.min(port.scrollHeight, ziaScrollBridge.contentHeight);
+    const max = Math.max(0, contentHeight - port.clientHeight);
     const next = Math.min(max, Math.max(0, before + speed));
     try {
       // Zen can enable smooth scrolling on the arrowscrollbox. Override it
@@ -226,12 +330,20 @@
     } catch (_) { port.scrollTop = next; }
     if (Math.abs(port.scrollTop - before) <= .1) return;
     // Recompute against actual scrollTop; never move any tab in this loop.
-    update({ clientX: x, clientY: y }, false);
+    if (active) update({ clientX: x, clientY: y }, false);
+    else {
+      ziaScrollBridge.expectedTop = port.scrollTop;
+      // Reuse Zia's renderer with the last real OS event. No synthetic
+      // drag event, competing row shifts, or tab movement is generated.
+      ziaScrollBridge.repaint?.();
+      if (subject.kind === 'group') captureZiaGap(subject);
+    }
     autoFrame = window.requestAnimationFrame?.(autoScrollTick) || 0;
   }
   function scheduleAutoScroll(x, y) {
     autoPointer = { x, y };
-    if (!autoFrame && active?.scrollPort && scrollSpeed(active, x, y))
+    const subject = active || (ziaScrollBridge?.context === ziaDelegate ? ziaDelegate : null);
+    if (!autoFrame && subject?.scrollPort && scrollSpeed(subject, x, y))
       autoFrame = window.requestAnimationFrame?.(autoScrollTick) || 0;
   }
   function captureAvoidRows(subject) {
@@ -562,6 +674,7 @@
     return true;
   }
   function reset() {
+    stopZiaScrollBridge();
     if (autoFrame) window.cancelAnimationFrame?.(autoFrame);
     autoFrame = 0;
     autoPointer = null;
@@ -672,7 +785,8 @@
       // Zia's folder path inserts before the pinned separator for a
       // below-separator drop. Accept the guarded insertion before Zia measures
       // its landing animation, rather than moving it back in a later task.
-      captureZiaGap(ziaDelegate); // freeze the last painted frame, never release coordinates
+      // Zia can clear painted shifts in its drop listeners. Keep the gap
+      // captured after its last dragover; do not recalculate during drop.
       ziaDelegate.accepted = ziaDelegate.previewAllowed === true;
       event.preventDefault?.();
       event.stopPropagation?.();
@@ -734,6 +848,7 @@
 
   function onDown(event) {
     if (event.button !== 0) return;
+    stopZiaScrollBridge();
     restoreZiaShim(); ziaDelegate = null;
     const source = sourceFromEvent(event);
     generation++;
@@ -746,6 +861,15 @@
     // Prepare recognition regardless of event provenance. Ownership is
     // established only by dragstart and Zia's actual running state.
     if (source?.kind === 'group') primeZiaShim(source);
+    if (source && window.__ziaLoaded === true) {
+      // Zia installs its drag listeners during deferred startup. Script
+      // load order therefore does not guarantee capture-listener order.
+      // Run handoff after Zia, and queue cleanup AFTER its landing job.
+      for (const [type, handler] of [['dragstart', onStart], ['dragover', onOver], ['drop', finish]]) {
+        window.removeEventListener(type, handler, true);
+        window.addEventListener(type, handler, true);
+      }
+    }
   }
   function onMove(event) {
     if (ziaDelegate || window.__ziaLoaded === true) return;
@@ -766,8 +890,7 @@
     } else if (event.buttons & 1) update(event);
   }
   function onStart(event) {
-    // Zia was loaded before this script; its window-capture dragstart
-    // has already called begin() if our temporary folder flag worked.
+    // onDown orders this handler after Zia's deferred capture listeners.
     const path = event.composedPath?.() || [];
     if (ziaShim && ziaIsDragging() &&
         (path.includes(ziaShim.group) ||
@@ -779,6 +902,7 @@
         layout: context?.layout || captureLayout({kind:'group',item:ziaShim.group}),
         scrolls: context?.scrolls || [], scrollPort: context?.scrollPort || findScrollPort({item:ziaShim.group}) });
       pending = null;
+      installZiaScrollBridge(ziaDelegate);
       return;
     }
     if (window.__ziaLoaded === true && sourceFromEvent(event)?.kind === 'group') {
@@ -803,7 +927,12 @@
       // blank image and edge-scroll loop during dragstart, not on the
       // next dragover (which scrolling need not deliver).
       reset();
-      if (ziaIsDragging()) ziaDelegate = { kind: 'tab', item: source.item };
+      if (ziaIsDragging()) {
+        ziaDelegate = { ...source, kind: 'tab', item: source.item,
+          workspace: window.gZenWorkspaces?.activeWorkspace,
+          scrollPort: source.scrollPort || findScrollPort(source) };
+        installZiaScrollBridge(ziaDelegate);
+      }
       return;
     }
     if (source) {
@@ -812,7 +941,10 @@
     }
   }
   function onOver(event) {
-    if (ziaDelegate?.kind === 'tab') return;
+    if (ziaDelegate?.kind === 'tab') {
+      scheduleAutoScroll(event.clientX, event.clientY);
+      return;
+    }
     if (ziaDelegate) {
       captureZiaGap(ziaDelegate);
       const {x, y} = point(event);
@@ -821,8 +953,9 @@
         ?.querySelector?.('.pinned-tabs-container-separator')?.getBoundingClientRect?.();
       ziaDelegate.previewAllowed = !!nav && !!separator &&
         x >= nav.left && x <= nav.right && y >= separator.bottom && y <= nav.bottom;
-      // Let native dragover reach Zen's edge scrolling. This adapter does
-      // not start a second scroll loop or paint a competing preview.
+      scheduleAutoScroll(x, y);
+      // Let native dragover reach Zen. The edge assist yields to existing
+      // native scrolling; Zia keeps ownership of the preview and ordering.
       // The scoped landing guards keep premature native insertions in place.
       return;
     }
@@ -910,7 +1043,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.5.8', chooseSlot, commit,
+  const api = { start, destroy, version: '0.5.9', chooseSlot, commit,
     beforeMutation, nativeIdle,
     // Explicit probe for isolated native Zen+Zia regression tests.
     prepareZiaGroupDrag(group) {

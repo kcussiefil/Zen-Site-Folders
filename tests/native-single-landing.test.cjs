@@ -94,6 +94,8 @@ for(const allowed of [true,false]){
     window.gBrowser.moveTabBefore(f.group,f.separator);
     f.pinned.insertBefore(f.group,f.separator);
   },0);
+  // Zia clears its shifts during drop before the adapter runs.
+  row.hasAttribute=()=>false;
   p.finish({clientX:120,clientY:20,preventDefault(){},stopPropagation(){}});
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(f.calls.length,allowed?1:0);
