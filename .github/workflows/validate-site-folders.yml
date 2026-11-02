@@ -30,7 +30,7 @@ jobs:
           node --check site-folders-drag.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.5.7' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.5.8' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -39,6 +39,7 @@ jobs:
           node tests/undo-secondary-click.test.cjs
           node tests/drag-feedback.test.cjs
           node tests/native-single-landing.test.cjs
+          node tests/nested-drop.test.cjs
           node tests/expand-scroll-lifecycle.test.cjs
           node tests/ordered-rescue.test.cjs
 

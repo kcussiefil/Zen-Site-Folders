@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.5.7
+// @version      0.5.8
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -640,6 +640,23 @@
         wrap(host, 'insertBefore', land);
       wrap(window.gBrowser, 'moveTabBefore', land);
       wrap(window.gBrowser, 'moveTabAfter', land);
+      // canNest() rejects inside previews, but Zia's queued finish can
+      // still carry an inside target. Guard its DOM fallback paths too:
+      // empty-folder appendChild, open-folder insertBefore and row.after.
+      // Every path uses the same accepted painted gap, never a later repair.
+      const folders = workspace?.querySelectorAll?.(
+        'zen-folder, tab-group:not([split-view-group])') || [];
+      for (const folder of folders) {
+        const box = folder.querySelector?.(':scope > .tab-group-container');
+        for (const host of new Set([folder, box].filter(Boolean))) {
+          wrap(host, 'insertBefore', land);
+          wrap(host, 'appendChild', land);
+          for (const row of [...(host.children || [])]) {
+            wrap(row, 'before', land);
+            wrap(row, 'after', land);
+          }
+        }
+      }
     } catch (error) {
       for (const undo of shim.landingUndo.reverse()) undo();
       shim.landingUndo = [];
@@ -893,7 +910,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.5.7', chooseSlot, commit,
+  const api = { start, destroy, version: '0.5.8', chooseSlot, commit,
     beforeMutation, nativeIdle,
     // Explicit probe for isolated native Zen+Zia regression tests.
     prepareZiaGroupDrag(group) {
