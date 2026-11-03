@@ -118,7 +118,9 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
     alert(_win, _title, msg) { alerts.push(msg); }
   };
   class FakeMutationObserver { observe() {} disconnect() {} }
-  vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
+  vm.runInNewContext(script, { window, document: doc, Services: {
+    prompt, obs: { addObserver() {}, removeObserver() {} }
+  }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
   const api = window.__zsfMenuV037;
   assert.equal(api.version, '0.4.1');
