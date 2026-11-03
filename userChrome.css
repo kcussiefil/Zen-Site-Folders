@@ -719,3 +719,11 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
   translate: 0 var(--zsf-native-grab-offset, 0px) !important;
   z-index: 40 !important;
 }
+
+/* Zia shifts website folders as tab-group elements. Match its tab easing. */
+@media (prefers-reduced-motion: no-preference) {
+  #tabbrowser-tabs[movingtab]:not([zia-settling])
+    tab-group[data-zsf-site][zia-shift]:not([zia-dragging], [zia-drop-lock], [zia-landing]) {
+    transition: transform 100ms ease-out !important;
+  }
+}

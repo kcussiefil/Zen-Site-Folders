@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.6.7
+// @version      0.6.8
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -50,17 +50,18 @@
     const port = context?.scrollPort;
     if (!port || !context.item?.isConnected) return false;
     if (typeof Cc === 'undefined' || typeof Ci === 'undefined') return false;
-    const bridge = { context, initialTop: port.scrollTop, expectedTop: port.scrollTop,
+    const grab = context.kind === 'group' ? context.bottomGrab : null;
+    const bridge = { context, initialTop: grab?.scrollTop ?? port.scrollTop, expectedTop: port.scrollTop,
       contentHeight: port.scrollHeight,
       // Only a stable-height dragged folder needs extra layout compensation.
       // Keep ordinary tab drag on the pre-existing scroll-only path.
-      sourceTop: context.kind === 'group' ? dragSourceLayoutTop(context.item) : null,
-      sourceHeight: context.item.getBoundingClientRect?.()?.height ?? null,
+      sourceTop: grab?.top ?? (context.kind === 'group' ? dragSourceLayoutTop(context.item) : null),
+      sourceHeight: grab?.height ?? context.item.getBoundingClientRect?.()?.height ?? null,
       lastCorrection: 0, nativeUntil: 0, undo: [], repaint: null,
       // Only the bottom-most scroll state needs first-frame event fallback.
-      watchBottomPointer: context.kind === 'group' &&
-        port.scrollHeight - port.clientHeight > 40 &&
-        port.scrollTop >= port.scrollHeight - port.clientHeight - 2,
+      watchBottomPointer: context.kind === 'group' && (!!grab ||
+        (port.scrollHeight - port.clientHeight > 40 &&
+         port.scrollTop >= port.scrollHeight - port.clientHeight - 2)),
       pointerFrame: 0, nativeOverSeen: false, lastPointer: null, nativeOnOver: null,
       pointerUpdates: 0 };
     try {
@@ -959,7 +960,16 @@
     const source = sourceFromEvent(event);
     generation++;
     const port = source ? findScrollPort(source) : null;
-    pending = source ? { ...source, x: event.clientX, y: event.clientY,
+    const max = port?.scrollTopMax ?? (port ? port.scrollHeight - port.clientHeight : 0);
+    // At the bottom, native dragstart can reflow and clamp the scrollport
+    // before Zia hands the gesture to the bridge. Keep the actual grab origin.
+    const bottomGrab = source?.kind === 'group' &&
+      max > 0 && port.scrollTop >= max - 2 ? {
+        scrollTop: port.scrollTop,
+        top: dragSourceLayoutTop(source.item),
+        height: source.item.getBoundingClientRect().height
+      } : null;
+    pending = source ? { ...source, bottomGrab, x: event.clientX, y: event.clientY,
       workspace: window.gZenWorkspaces?.activeWorkspace,
       scrollPort: port, scrolls: captureScrolls(event, port),
       layout: captureLayout(source), root: source.parent.parentElement,
@@ -1005,6 +1015,7 @@
       if (active) reset();
       ziaDelegate = ziaShim.landingContext;
       Object.assign(ziaDelegate, { item: ziaShim.group, kind: 'group',
+        bottomGrab: context?.item === ziaShim.group ? context.bottomGrab : null,
         layout: context?.layout || captureLayout({kind:'group',item:ziaShim.group}),
         scrolls: context?.scrolls || [], scrollPort: context?.scrollPort || findScrollPort({item:ziaShim.group}) });
       pending = null;
@@ -1149,7 +1160,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.6.7', chooseSlot, commit,
+  const api = { start, destroy, version: '0.6.8', chooseSlot, commit,
     beforeMutation, nativeIdle,
     // Explicit probe for isolated native Zen+Zia regression tests.
     prepareZiaGroupDrag(group) {
