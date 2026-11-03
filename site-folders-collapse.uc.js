@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.6.3
+// @version      0.6.4
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -14,6 +14,30 @@
   let queuedScan = false;
   const queuedGroups = new Set();
   let lastSelected = null;
+  const deferredRows = new Map();
+  let sidebarObserver;
+  function retireHiddenRows() {
+    if (dead || !deferredRows.size) return;
+    const root = document.documentElement;
+    const toolbox = document.getElementById?.('navigator-toolbox');
+    const titlebar = toolbox?.querySelector('#titlebar');
+    const drag = window.__zsfDragV037?.debugDrag?.();
+    if (root.getAttribute('zen-compact-mode') !== 'true' || !titlebar ||
+        toolbox.matches(':hover') || toolbox.hasAttribute('data-zsf-preview-sidebar-hold') ||
+        grab?.dragging || root.hasAttribute('zia-dragging-tab') ||
+        drag?.activeKind || drag?.ziaDelegate ||
+        window.getComputedStyle(titlebar).visibility !== 'hidden') return;
+    // Zen hides #titlebar and translates its toolbox on separate CSS
+    // transitions. Both must finish, including when hover cancels the hide.
+    if (toolbox.getAnimations().some(animation =>
+      ['running', 'pending'].includes(animation.playState) &&
+      ['translate', 'visibility'].includes(animation.transitionProperty))) return;
+    for (const group of deferredRows.keys()) {
+      deferredRows.delete(group);
+      if (ours(group) && group.collapsed && window.gBrowser.selectedTab?.group !== group)
+        sync(group, false, 'hidden-sidebar');
+    }
+  }
   let grab = null;
   function clearGrab() {
     document.documentElement?.removeAttribute?.('data-zsf-grab-pending');
@@ -90,6 +114,12 @@
     const members = [...group.tabs];
     const selected = members.filter(tab => tab.selected || tab.multiselected);
     const prior = states.get(group);
+    const held = deferredRows.get(group);
+    if (held && (!collapsed || selected.length || !members.includes(held)))
+      deferredRows.delete(group);
+    else if (held && prior?.collapsed && !membership &&
+             prior.members.length === members.length &&
+             prior.members.every((tab, i) => tab === members[i])) return;
     const clearStranded = tab => {
       if (!tab?.isConnected || tab.pinned ||
           (tab.group && (!ours(tab.group) || tab.group.collapsed))) return;
@@ -125,10 +155,9 @@
     const oldActive = (group.activeTabs || []).some(tab =>
       members.includes(tab) && tab.isConnected && tab.hasAttribute('folder-active'));
     const retiring = collapsed && !selected.length && oldActive;
-    const restoreAnchor = retiring ? scrollAnchor(group) : null;
+    const restoreAnchor = retiring && membership !== 'hidden-sidebar' ? scrollAnchor(group) : null;
     if (collapsed && prior?.collapsed) {
-      // Retire A immediately, including during a gesture. Keep the target
-      // screen position with scroll range compensation, not an exposed A row.
+      // Retire old native rows after the sidebar hides or the group changes.
       for (const tab of new Set([...prior.selected, ...(group.activeTabs || [])])) {
         // A former selection may already belong to another group or be standalone.
         // Never retire an element after it has left this group's membership.
@@ -236,7 +265,10 @@
       if (space.hasAttribute('data-zsf-scroll-stable') !== enabled)
         space.toggleAttribute('data-zsf-scroll-stable', enabled);
     }
-    for (const group of states.keys()) if (!ours(group)) states.delete(group);
+    for (const group of states.keys()) if (!ours(group)) {
+      states.delete(group);
+      deferredRows.delete(group);
+    }
   }
   function scheduleGroupSync(group) {
     if (dead || !ours(group) || queuedGroups.has(group)) return;
@@ -305,6 +337,13 @@
     const current = event?.target?.localName === 'tab' ?
       event.target : window.gBrowser?.selectedTab || null;
     lastSelected = current;
+    const oldGroup = previous?.group;
+    if (current && current.group !== oldGroup && ours(oldGroup) && oldGroup.collapsed &&
+        previous.hasAttribute('folder-active')) {
+      deferredRows.set(oldGroup, previous);
+      queueMicrotask(retireHiddenRows);
+    }
+    deferredRows.delete(current?.group);
     // Only the previous and current owners can have changed active rows.
     // Remembered state catches workspace/restore transitions where a tab's
     // .group pointer has already changed by the time TabSelect fires.
@@ -359,7 +398,26 @@
       queueMicrotask(() => document.documentElement.removeAttribute('data-zsf-grab-pending'));
     }, true);
     bind(window, 'mouseup', () => { if (!grab?.dragging) clearGrab(); }, true);
-    bind(window, 'dragend', clearGrab, true);
+    bind(window, 'dragend', () => {
+      clearGrab();
+      queueMicrotask(retireHiddenRows);
+    }, true);
+    const toolbox = document.getElementById?.('navigator-toolbox');
+    if (toolbox) {
+      const onSidebarTransition = event => {
+        if ((event.target === toolbox || event.target.id === 'titlebar') &&
+            ['translate', 'visibility'].includes(event.propertyName)) retireHiddenRows();
+      };
+      bind(toolbox, 'transitionend', onSidebarTransition);
+      bind(toolbox, 'transitioncancel', onSidebarTransition);
+      sidebarObserver = new MutationObserver(retireHiddenRows);
+      sidebarObserver.observe(toolbox, { attributes: true, attributeFilter: [
+        'zen-has-hover', 'zen-user-show', 'zen-compact-mode-active', 'flash-popup',
+        'data-zsf-preview-sidebar-hold', 'has-popup-menu', 'movingtab', 'animate'
+      ] });
+      sidebarObserver.observe(document.documentElement, { attributes: true,
+        attributeFilter: ['zen-compact-mode', 'zia-dragging-tab'] });
+    }
     observer = new MutationObserver(onMutations);
     observer.observe(tabs, { subtree: true, childList: true,
       attributes: true, attributeFilter: [
@@ -393,6 +451,8 @@
     dead = true;
     clearGrab();
     observer?.disconnect();
+    sidebarObserver?.disconnect();
+    deferredRows.clear();
     for (const space of window.gBrowser?.tabContainer?.querySelectorAll('zen-workspace') || [])
       space.removeAttribute('data-zsf-scroll-stable');
     for (const [node, type, fn, options] of listeners) node.removeEventListener(type, fn, options);
@@ -400,7 +460,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.3', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.4', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });

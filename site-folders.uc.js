@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.6.3
+// @version      0.6.4
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -65,6 +65,52 @@
     return sessionStores().find(store => methods.every(name =>
       typeof store?.[name] === 'function')) || null;
   }
+
+  // Capture Zen's original session data before native TabGrouped events
+  // expand ordinary groups as their restored members connect.
+  let startupGroupStates = null;
+  function captureStartupGroupStates(startup) {
+    if (!startup.willRestore()) return;
+    const states = new Map();
+    for (const savedWindow of startup.state?.windows || []) {
+      let owned;
+      try { owned = JSON.parse(savedWindow.extData?.[OWNED_GROUPS_KEY] || '{}'); }
+      catch (_) { continue; }
+      for (const group of savedWindow.groups || []) {
+        const site = owned?.[group.id];
+        if (typeof site !== 'string' || typeof group.collapsed !== 'boolean') continue;
+        const prior = states.get(group.id);
+        // Synced windows can contain the same group. Only restore an
+        // unambiguous state shared by their saved copies.
+        if (states.has(group.id) && (prior?.site !== site || prior.collapsed !== group.collapsed))
+          states.set(group.id, null);
+        else states.set(group.id, {site, collapsed: group.collapsed});
+      }
+    }
+    startupGroupStates = states;
+  }
+
+  function restoreStartupGroupStates() {
+    const states = startupGroupStates;
+    startupGroupStates = null;
+    if (!states?.size) return;
+    for (const group of window.gBrowser?.tabContainer?.querySelectorAll('tab-group') || []) {
+      const state = states.get(group.id);
+      if (!state || group.isZenFolder || group.pinned || group.hasAttribute('split-view-group') ||
+          siteOfGroup(group) !== state.site) continue;
+      if (group.collapsed !== state.collapsed) group.collapsed = state.collapsed;
+    }
+  }
+
+  try {
+    const {SessionStartup} = ChromeUtils.importESModule('moz-src:///browser/components/sessionstore/SessionStartup.sys.mjs');
+    if (SessionStartup.state) captureStartupGroupStates(SessionStartup);
+    else SessionStartup.onceInitialized.then(() => captureStartupGroupStates(SessionStartup));
+  } catch (_) {} // Keep native restore behavior when the startup API is unavailable.
+  window.addEventListener('AfterWorkspacesSessionRestore', () => {
+    // Finish native and Zia restore listeners before changing the group.
+    queueMicrotask(restoreStartupGroupStates);
+  }, {once:true});
 
   function workspace() {
     const ws = window.gZenWorkspaces;
@@ -229,10 +275,6 @@
     return site;
   }
 
-  function findGroup(node, site) {
-    // Only native Zen folders are valid new site-folder destinations.
-    return getGroups(node).find(g => !g.isZenFolder && siteOfGroup(g) === site && g.parentElement === node.tabsContainer) || null;
-  }
 
   function sourceFaviconURL(tab) {
     const raw = tabURL(tab);
@@ -1167,12 +1209,19 @@
           throw new Error('整理前備份寫入失敗，沒有移動任何分頁');
         }
       }
+      const folders = new Map();
+      for (const group of getGroups(current.node)) {
+        if (group.isZenFolder || group.pinned || group.parentElement !== current.node.tabsContainer) continue;
+        const site = siteOfGroup(group);
+        if (site && !folders.has(site)) folders.set(site, group);
+      }
       const buckets = new Map();
       for (const tab of allWorkspaceTabs(current.node, current.id)) {
-        if (!eligible(tab) || (tab.group && !siteOfGroup(tab.group))) continue;
-        if (tab.pinned || tab.closest('zen-folder')) continue;
+        if (!eligible(tab) || tab.closest('zen-folder')) continue;
+        const owner = tab.group;
+        if (owner && (!siteOfGroup(owner) || owner.parentElement !== current.node.tabsContainer)) continue;
         const site = siteFor(tabURL(tab));
-        if (!site) continue;
+        if (!site || (owner && folders.has(site))) continue;
         if (!buckets.has(site)) buckets.set(site, []);
         buckets.get(site).push({ tab, order: openedAt(tab) });
       }
@@ -1182,7 +1231,7 @@
         // Sort newest to oldest. Legacy tabs without timestamps use their
         // recorded original tab position as a stable approximate baseline.
         items.sort((a, b) => b.order - a.order);
-        let folder = findGroup(current.node, site);
+        let folder = folders.get(site);
         try {
           if (!folder) {
             // Persist the planned folder ID BEFORE creating any node.
@@ -1194,7 +1243,10 @@
             snapshot.createdFolders.push(id);
             if (!writeSnapshots(saved)) throw new Error('資料夾 ID 無法保存');
             const first = items[0]?.tab;
-            if (!first?.isConnected || first.pinned || first.group) throw new Error('來源分頁不適合建立群組');
+            if (!first?.isConnected || first.pinned) throw new Error('來源分頁不適合建立群組');
+            if (first.group) browser.ungroupTab(first);
+            if (first.group || first.parentElement !== current.node.tabsContainer)
+              throw new Error('無法從來源群組安全移出分頁');
             folder = browser.addTabGroup([first], {
               id, label: nameFor(site), color: 'grey',
               insertBefore: first, showCreateUI: false
@@ -1230,8 +1282,10 @@
             errors++;
             console.warn(TAG, 'Newest-first order verification failed', site);
           }
-          decorate(folder, site, items[0]?.tab);
-          try { folder.collapsed = true; } catch (_) {}
+          if (!folders.has(site)) {
+            decorate(folder, site, items[0]?.tab);
+            folder.collapsed = true;
+          }
         } catch (e) {
           errors++;
           console.warn(TAG, 'Ordinary site group creation failed:', site, e);
@@ -1386,8 +1440,8 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
-    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.3' };
-    console.info?.(TAG, '0.6.3 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.4' };
+    console.info?.(TAG, '0.6.4 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }
 
   if (document.readyState === 'complete') initialize();
