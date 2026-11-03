@@ -100,6 +100,8 @@ jobs:
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down tab" --output native-results/zia-landing-down-tab
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot up folder" --output native-results/zia-landing-up-folder
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down folder" --output native-results/zia-landing-down-folder
+      - name: Verify incremental site grouping preserves newest-first and manual order
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "incremental organize puts incoming tabs" --output native-results/incremental-organize
       - name: Verify bottom-up group pointer anchor with Zia
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "bottom-up group pointer" --output native-results/bottom-up-group-anchor
       - name: Verify native member takeover stays visible during scroll

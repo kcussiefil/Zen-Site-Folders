@@ -55,11 +55,16 @@ const finish = arguments[arguments.length - 1];
     // left native animations and workspace history in the same process.
     if (!selectedCase && (name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
         name.startsWith('native member drag edge scroll') ||
-        (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance'))))
+        (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance')) ||
+        name.startsWith('incremental organize puts incoming tabs above existing members')))
       return;
     try {
       const h = await fixture(name);
-      await guarded(h, () => fn(h));
+      // This integration case must create actual unpinned browser tabs.
+      // Every ordinary case still retains the strict no-add/remove guard.
+      if (name.startsWith('incremental organize puts incoming tabs above existing members'))
+        await fn(h);
+      else await guarded(h, () => fn(h));
       results.push({ name, status: 'PASS' });
     } catch (error) { results.push({ name, status: 'FAIL', error: String(error.message || error) + '\n' + (error.stack || '') }); }
   }
@@ -84,6 +89,46 @@ const finish = arguments[arguments.length - 1];
     return { workspaceId, value };
   }
   // Real custom element click -> native setter -> native event -> native animations -> computed layout.
+  await test('incremental organize puts incoming tabs above existing members', async h => {
+    const principal = Services.scriptSecurityManager.getSystemPrincipal();
+    const add = uri => gBrowser.addTab(uri, { triggeringPrincipal: principal });
+    const initial = [add('about:robots'), add('about:license')];
+    await delay(350);
+    const group = gBrowser.addTabGroup(initial, { id:'zsf-incremental-'+serial,
+      label:'About', insertBefore:initial[0], showCreateUI:false });
+    group.setAttribute('data-zsf-site','internal:about');
+    group.collapsed=false;
+    await delay(150);
+    assert(initial.every(t=>t.group===group),'baseline site group must contain original members');
+    const site = tab => tab.linkedBrowser?.currentURI?.spec || '';
+    assert(initial.every(t=>/^about:(robots|license)/.test(site(t))),
+      'actual internal page URLs are required for this test: '+initial.map(site));
+    // User manually reorders existing group members; incremental organize
+    // must not sort them just to bring new arrivals to the top.
+    gBrowser.moveTabBefore(initial[1],initial[0]);
+    const preserved=[initial[1],initial[0]];
+    assert(same(order(group),preserved),'manual order must be established');
+    const incoming=[add('about:about'),add('about:mozilla')];
+    await delay(400);
+    assert(incoming.every(t=>/^about:(about|mozilla)/.test(site(t))),
+      'new tabs must expose their actual internal URLs: '+incoming.map(site));
+    const stamps=[Date.now()+2,Date.now()+3];
+    for(let i=0;i<incoming.length;i++)
+      SessionStore.setCustomTabValue(incoming[i], 'zsf-created-at-v1',String(stamps[i]));
+    const originalBrowsers=[...initial,...incoming].map(t=>t.linkedBrowser);
+    await core.organize();
+    await delay(120);
+    assert(same(order(group),[incoming[1],incoming[0],...preserved]),
+      'newest incoming tab must be at group top, existing manual order preserved: '+
+      JSON.stringify(order(group).map(site)));
+    assert([...initial,...incoming].every((t,i)=>t.isConnected && !t.pinned &&
+      t.linkedBrowser===originalBrowsers[i] && t.group===group),
+      'organize must preserve original tab objects, ownership and pin status');
+    // No new eligible tab: idempotent run must not disturb manual ordering.
+    await core.organize();
+    assert(same(order(group),[incoming[1],incoming[0],...preserved]),
+      'second organize with no newcomers must be a no-op');
+  });
   await test('native collapse/expand, rapid reversal and selected row', async h => {
     const expanded = h.group.groupContainer.getBoundingClientRect().height;
     assert(expanded > 60, 'expanded group must have real row geometry');
