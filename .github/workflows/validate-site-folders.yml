@@ -102,7 +102,7 @@ jobs:
       - name: Verify native member takeover stays visible during scroll
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "native member drag edge scroll" --output native-results/member-scroll
       - name: Verify legacy pointer-only group fallback separately
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "whole group drag animates neighbour avoidance" --output native-results/group-fallback
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --case "whole group drag animates neighbour avoidance" --output native-results/group-fallback
       - name: Prove regressions fail on v0.3.8
         shell: bash
         run: |
