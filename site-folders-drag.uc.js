@@ -28,6 +28,22 @@
     if (!active && autoFrame) window.cancelAnimationFrame?.(autoFrame);
     if (!active) { autoFrame = 0; autoPointer = null; }
   }
+  // Zia moves its drag source using `transform`; subtract only that own
+  // transform to recover the underlying layout position in viewport space.
+  // Scroll and a different folder changing height both shift this baseline.
+  function dragSourceLayoutTop(node) {
+    if (!node?.isConnected) return null;
+    try {
+      const rect = node.getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      const transform = style.transform && style.transform !== 'none'
+        ? new DOMMatrix(style.transform).m42 : 0;
+      const translated = style.translate && style.translate !== 'none'
+        ? (parseFloat(style.translate.split(/\\s+/)[1]) || 0) : 0;
+      const top = rect.top - transform - translated;
+      return Number.isFinite(top) ? top : null;
+    } catch (_) { return null; }
+  }
   function installZiaScrollBridge(context) {
     stopZiaScrollBridge();
     const port = context?.scrollPort;
@@ -35,7 +51,11 @@
     if (typeof Cc === 'undefined' || typeof Ci === 'undefined') return false;
     const bridge = { context, initialTop: port.scrollTop, expectedTop: port.scrollTop,
       contentHeight: port.scrollHeight,
-      nativeUntil: 0, undo: [], repaint: null };
+      // Only a stable-height dragged folder needs extra layout compensation.
+      // Keep ordinary tab drag on the pre-existing scroll-only path.
+      sourceTop: context.kind === 'group' ? dragSourceLayoutTop(context.item) : null,
+      sourceHeight: context.item.getBoundingClientRect().height,
+      lastCorrection: 0, nativeUntil: 0, undo: [], repaint: null };
     try {
       const service = Cc['@mozilla.org/eventlistenerservice;1']
         .getService(Ci.nsIEventListenerService);
@@ -51,7 +71,22 @@
           const wrapped = event => {
             bridge.lastEvent = event;
             const delta = port.scrollTop - bridge.initialTop;
-            if (!delta || !withinSidebar(event.clientX, event.clientY))
+            let correction = delta;
+            if (context.kind === 'group' && bridge.sourceTop != null &&
+                Math.abs(context.item.getBoundingClientRect().height - bridge.sourceHeight) < 3) {
+              const currentTop = dragSourceLayoutTop(context.item);
+              // A selected folder above the source may expand or collapse
+              // during the drag. ScrollTop alone misses that 38px shift.
+              // Map into Zia's starting-content coordinates using the
+              // source's untransformed layout top, without taking over drag.
+              if (currentTop != null) {
+                const compensated = bridge.sourceTop - currentTop;
+                if (Math.abs(compensated - delta) <= 512) correction = compensated;
+              }
+            }
+            bridge.lastCorrection = correction;
+            if (Math.abs(correction) < .1 ||
+                !withinSidebar(event.clientX, event.clientY))
               return original.call(host, event);
             const undo = [];
             try {
@@ -67,8 +102,8 @@
                 const getBox = node.getBoundingClientRect;
                 Object.defineProperty(node, 'getBoundingClientRect', {configurable:true, value() {
                   const r = getBox.call(node);
-                  return {x:r.x,y:r.y+delta,left:r.left,right:r.right,
-                    top:r.top+delta,bottom:r.bottom+delta,width:r.width,height:r.height};
+                  return {x:r.x,y:r.y+correction,left:r.left,right:r.right,
+                    top:r.top+correction,bottom:r.bottom+correction,width:r.width,height:r.height};
                 }});
                 undo.push(() => {
                   if (descriptor) Object.defineProperty(node, 'getBoundingClientRect', descriptor);
@@ -77,7 +112,7 @@
               }
               const translated = new Proxy(event, {get(target, key) {
                 const value = Reflect.get(target, key, target);
-                if (key === 'clientY' || key === 'screenY') return value + delta;
+                if (key === 'clientY' || key === 'screenY') return value + correction;
                 return typeof value === 'function' ? value.bind(target) : value;
               }});
               return original.call(host, translated);
@@ -1069,6 +1104,7 @@
     debugDrag(group) {
       return { activeKind: active?.kind || null, pendingKind: pending?.kind || null,
         ziaDelegate: !!ziaDelegate, ziaShim: !!ziaShim,
+        ziaLayoutCorrection: ziaScrollBridge?.lastCorrection ?? null,
         groupIsZenFolder: !!group?.isZenFolder, ownGroup: ownGroup(group),
         rootZia: ziaIsDragging(), ghost: !!ghost?.isConnected };
     }
