@@ -663,8 +663,21 @@ const finish = arguments[arguments.length - 1];
       tab.group !== group && !tab.pinned && !tab.hasAttribute('zen-empty-tab')).at(-1);
     assert(after, 'ordinary tab below group required');
     gBrowser.moveTabAfter(group, after);
+    // Match the reported bottom-of-sidebar gesture: the group immediately
+    // above the dragged last group still shows its one selected member.
+    const selectedAbove = gBrowser.addTabGroup([h.prefix], {
+      id:'zsf-active-above-'+serial, label:'Active', insertBefore:h.prefix,
+      showCreateUI:false
+    });
+    selectedAbove.setAttribute('data-zsf-site','active.example');
+    gBrowser.moveTabBefore(selectedAbove, group);
+    gBrowser.selectedTab = h.prefix;
+    selectedAbove.collapsed = true;
     group.collapsed = true;
     await idle(group);
+    assert(h.prefix.getBoundingClientRect().height > 12 &&
+      selectedAbove.getBoundingClientRect().height > group.getBoundingClientRect().height,
+      'active group immediately above last dragged group must show its selected row');
     const max = Math.max(0, port.scrollHeight - port.clientHeight);
     assert(max >= 180, 'need 180px scroll range from bottom');
     port.scrollTo({ top:max, behavior:'instant' });
