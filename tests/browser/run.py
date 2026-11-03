@@ -96,7 +96,7 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                     move([{'type':'pointerMove','origin':'viewport','x':x,'y':y,'duration':50}])
                     move([{'type':'pointerDown','button':0}])
                     for dy in [12,28,48,72]:
-                        move([{'type':'pointerMove','origin':'viewport','x':x,'y':y-dy,'duration':80}])
+                        move([{'type':'pointerMove','origin':'viewport','x':x,'y':y-dy,'duration':260}])
                         time.sleep(.06)
                         probe(y-dy)
                 finally:
