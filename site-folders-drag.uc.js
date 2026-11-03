@@ -61,7 +61,7 @@
       watchBottomPointer: context.kind === 'group' &&
         port.scrollHeight - port.clientHeight > 40 &&
         port.scrollTop >= port.scrollHeight - port.clientHeight - 2,
-      pointerFrame: 0, lastNativeOverAt: 0, lastPointer: null, nativeOnOver: null,
+      pointerFrame: 0, nativeOverSeen: false, lastPointer: null, nativeOnOver: null,
       pointerUpdates: 0 };
     try {
       const service = Cc['@mozilla.org/eventlistenerservice;1']
@@ -78,7 +78,7 @@
           const wrapped = event => {
             bridge.lastEvent = event;
             if (event?.isTrusted) {
-              bridge.lastNativeOverAt = performance.now();
+              bridge.nativeOverSeen = true;
               bridge.lastPointer = { x: event.clientX, y: event.clientY };
             }
             const delta = port.scrollTop - bridge.initialTop;
@@ -152,7 +152,8 @@
           typeof window.windowUtils?.getLastOverWindowPointerLocationInCSSPixels === 'function') {
         const follow = () => {
           bridge.pointerFrame = 0;
-          if (ziaScrollBridge !== bridge || !context.item?.isConnected || !ziaIsDragging()) return;
+          if (ziaScrollBridge !== bridge || bridge.nativeOverSeen ||
+              !context.item?.isConnected || !ziaIsDragging()) return;
           try {
             const x = { value: NaN }, y = { value: NaN };
             window.windowUtils.getLastOverWindowPointerLocationInCSSPixels(x, y);
@@ -160,7 +161,7 @@
                 withinSidebar(x.value, y.value)) {
               const prior = bridge.lastPointer;
               const moved = !prior || Math.hypot(x.value - prior.x, y.value - prior.y) > 1;
-              if (moved && performance.now() - bridge.lastNativeOverAt > 60) {
+              if (moved && !bridge.nativeOverSeen) {
                 bridge.lastPointer = { x: x.value, y: y.value };
                 const target = document.elementFromPoint(x.value, y.value) || context.item;
                 bridge.nativeOnOver({
