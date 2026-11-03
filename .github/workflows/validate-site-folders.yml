@@ -43,6 +43,7 @@ jobs:
           node tests/cross-group-selection.test.cjs
           node tests/snapshot-duplicate-id.test.cjs
           node tests/selected-color-age.test.cjs
+          node tests/color-editor.test.cjs
           node tests/undo-secondary-click.test.cjs
           node tests/drag-feedback.test.cjs
           node tests/native-single-landing.test.cjs
