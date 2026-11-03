@@ -102,6 +102,8 @@ jobs:
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down folder" --output native-results/zia-landing-down-folder
       - name: Verify incremental site grouping preserves newest-first and manual order
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "incremental organize puts incoming tabs" --output native-results/incremental-organize
+      - name: Test native WebDriver pointer from bottom boundary
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "real-bottom-pointer" --output native-results/real-bottom-pointer
       - name: Diagnose first upward drag at scrollTopMax
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "bottom-edge first upward motion" --output native-results/bottom-edge-first-motion
       - name: Verify bottom-up group pointer anchor with Zia

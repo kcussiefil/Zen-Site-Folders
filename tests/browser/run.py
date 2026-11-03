@@ -75,8 +75,45 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                 client.js(script.read_text())
             if client.js("return !!document.getElementById('zia-welcome')?.matches(':popover-open');")['value']:
                 raise RuntimeError('Zia first-install overlay covers native input targets')
-            result = client.async_js(pathlib.Path(__file__).with_name('regressions.js').read_text(), [args.case])['value']
-            report.update(result)
+            if args.case == 'real-bottom-pointer':
+                setup = client.async_js(pathlib.Path(__file__).with_name('real-bottom-setup.js').read_text(), [])['value']
+                if setup.get('error'): raise RuntimeError('Pointer fixture: '+setup['error'])
+                report['pointerFixture'] = setup
+                def move(actions):
+                    return client.call('WebDriver:PerformActions', {
+                        'actions':[{'type':'pointer','id':'zsf-mouse','parameters':{'pointerType':'mouse'},
+                                    'actions':actions}]
+                    })
+                samples = []
+                def probe(target_y):
+                    snap = client.js(pathlib.Path(__file__).with_name('real-bottom-snapshot.js').read_text())['value']
+                    snap['targetY'] = target_y
+                    if snap.get('error'): raise RuntimeError(str(snap['error']))
+                    snap['error'] = round(snap['headerTop']+snap['grabOffset']-target_y,2)
+                    samples.append(snap)
+                x,y=int(setup['x']),int(setup['y'])
+                try:
+                    move([{'type':'pointerMove','origin':'viewport','x':x,'y':y,'duration':50}])
+                    move([{'type':'pointerDown','button':0}])
+                    for dy in [12,28,48,72]:
+                        move([{'type':'pointerMove','origin':'viewport','x':x,'y':y-dy,'duration':80}])
+                        time.sleep(.06)
+                        probe(y-dy)
+                finally:
+                    try: move([{'type':'pointerUp','button':0}])
+                    finally:
+                        try: client.call('WebDriver:ReleaseActions',{})
+                        except Exception: pass
+                report['pointerSamples'] = samples
+                moved = any(any(e.get('type')=='dragstart' for e in s['events']) for s in samples)
+                anchored = moved and all(abs(s['error'])<8 for s in samples if s['zia'])
+                report['results'] = [{'name':'real bottom pointer starts anchored',
+                                      'status':'PASS' if anchored else 'FAIL',
+                                      'reason':None if anchored else 'No real dragstart or >8px drift'}]
+                report['eventMode']='WebDriver pointer actions through native browser input, not synthetic dispatchEvent'
+            else:
+                result = client.async_js(pathlib.Path(__file__).with_name('regressions.js').read_text(), [args.case])['value']
+                report.update(result)
             if any(item['status'] != 'PASS' for item in result.get('results', [])):
                 import base64
                 try:
