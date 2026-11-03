@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.6.6
+// @version      0.6.7
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -24,6 +24,7 @@
   function stopZiaScrollBridge() {
     const bridge = ziaScrollBridge;
     ziaScrollBridge = null;
+    if (bridge?.pointerFrame) window.cancelAnimationFrame?.(bridge.pointerFrame);
     if (bridge) for (const undo of bridge.undo.reverse()) undo();
     if (!active && autoFrame) window.cancelAnimationFrame?.(autoFrame);
     if (!active) { autoFrame = 0; autoPointer = null; }
@@ -55,7 +56,13 @@
       // Keep ordinary tab drag on the pre-existing scroll-only path.
       sourceTop: context.kind === 'group' ? dragSourceLayoutTop(context.item) : null,
       sourceHeight: context.item.getBoundingClientRect?.()?.height ?? null,
-      lastCorrection: 0, nativeUntil: 0, undo: [], repaint: null };
+      lastCorrection: 0, nativeUntil: 0, undo: [], repaint: null,
+      // Only the bottom-most scroll state needs first-frame event fallback.
+      watchBottomPointer: context.kind === 'group' &&
+        port.scrollHeight - port.clientHeight > 40 &&
+        port.scrollTop >= port.scrollHeight - port.clientHeight - 2,
+      pointerFrame: 0, nativeOverSeen: false, lastPointer: null, nativeOnOver: null,
+      pointerUpdates: 0 };
     try {
       const service = Cc['@mozilla.org/eventlistenerservice;1']
         .getService(Ci.nsIEventListenerService);
@@ -70,6 +77,10 @@
               !code.includes('drag.firstTop')) continue;
           const wrapped = event => {
             bridge.lastEvent = event;
+            if (event?.isTrusted) {
+              bridge.nativeOverSeen = true;
+              bridge.lastPointer = { x: event.clientX, y: event.clientY };
+            }
             const delta = port.scrollTop - bridge.initialTop;
             let correction = delta;
             if (context.kind === 'group' && bridge.sourceTop != null &&
@@ -126,10 +137,52 @@
             host.addEventListener('dragover', original, true);
           });
           bridge.repaint ||= () => bridge.lastEvent && wrapped(bridge.lastEvent);
+          bridge.nativeOnOver ||= wrapped;
         }
       }
       if (!bridge.undo.length) return false;
       ziaScrollBridge = bridge;
+      // Firefox's native dragover is not guaranteed for every mouse movement.
+      // At the scroll bottom this can strand a newly grabbed last folder at
+      // its old position. Read Gecko's real cursor (no synthetic DOM event),
+      // then invoke the SAME existing Zia renderer only while real dragover
+      // has not arrived. The native renderer remains the only source of
+      // transforms, drop preview and insertion order.
+      if (bridge.watchBottomPointer && bridge.nativeOnOver &&
+          typeof window.windowUtils?.getLastOverWindowPointerLocationInCSSPixels === 'function') {
+        const follow = () => {
+          bridge.pointerFrame = 0;
+          if (ziaScrollBridge !== bridge || bridge.nativeOverSeen ||
+              !context.item?.isConnected || !ziaIsDragging()) return;
+          try {
+            const x = { value: NaN }, y = { value: NaN };
+            window.windowUtils.getLastOverWindowPointerLocationInCSSPixels(x, y);
+            if (Number.isFinite(x.value) && Number.isFinite(y.value) &&
+                withinSidebar(x.value, y.value)) {
+              const prior = bridge.lastPointer;
+              const moved = !prior || Math.hypot(x.value - prior.x, y.value - prior.y) > 1;
+              if (moved && !bridge.nativeOverSeen) {
+                bridge.lastPointer = { x: x.value, y: y.value };
+                const target = document.elementFromPoint(x.value, y.value) || context.item;
+                bridge.nativeOnOver({
+                  type: 'dragover', target, isTrusted: false,
+                  clientX: x.value, clientY: y.value,
+                  screenX: (window.mozInnerScreenX || 0) + x.value,
+                  screenY: (window.mozInnerScreenY || 0) + y.value,
+                  preventDefault() {}, stopPropagation() {}
+                });
+                bridge.pointerUpdates++;
+                captureZiaGap(context);
+              }
+            }
+          } catch (_) {
+            // Pointer polling is optional; native dragover remains authoritative.
+          }
+          if (ziaScrollBridge === bridge)
+            bridge.pointerFrame = window.requestAnimationFrame?.(follow) || 0;
+        };
+        bridge.pointerFrame = window.requestAnimationFrame?.(follow) || 0;
+      }
       // Capture the native preview only after its translated update.
       window.removeEventListener('dragover', onOver, true);
       window.addEventListener('dragover', onOver, true);
@@ -1096,7 +1149,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.6.6', chooseSlot, commit,
+  const api = { start, destroy, version: '0.6.7', chooseSlot, commit,
     beforeMutation, nativeIdle,
     // Explicit probe for isolated native Zen+Zia regression tests.
     prepareZiaGroupDrag(group) {
@@ -1106,6 +1159,7 @@
       return { activeKind: active?.kind || null, pendingKind: pending?.kind || null,
         ziaDelegate: !!ziaDelegate, ziaShim: !!ziaShim,
         ziaLayoutCorrection: ziaScrollBridge?.lastCorrection ?? null,
+        ziaBottomPointerUpdates: ziaScrollBridge?.pointerUpdates ?? 0,
         groupIsZenFolder: !!group?.isZenFolder, ownGroup: ownGroup(group),
         rootZia: ziaIsDragging(), ghost: !!ghost?.isConnected };
     }

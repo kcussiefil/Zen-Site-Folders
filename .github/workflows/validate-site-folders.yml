@@ -31,7 +31,7 @@ jobs:
           node --check site-folders-top-drop.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.6.6' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.6.7' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: z1n-k/zia
-          ref: 4bbd6c57338970765b18eb54de162267ae115dfa
+          ref: 68ce963e35746d8424e910c574497d34ae4e5415
           path: .runtime/zia
           persist-credentials: false
       - name: Install pinned Zen 1.24b
@@ -102,6 +102,27 @@ jobs:
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down folder" --output native-results/zia-landing-down-folder
       - name: Verify incremental site grouping preserves newest-first and manual order
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "incremental organize puts incoming tabs" --output native-results/incremental-organize
+      - name: Compare original v0.6.7 bottom-pointer behaviour
+        shell: bash
+        run: |
+          mkdir -p .runtime/original-v066
+          git archive 90064c638473dadace4c447e43a20900ab900166 | tar -x -C .runtime/original-v066
+          python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --repo .runtime/original-v066 --case "real-bottom-pointer" --output native-results/real-bottom-v066 || test -s native-results/real-bottom-v066/results.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('native-results/real-bottom-v066/results.json'))
+          p=d.get('pointerSamples') or []
+          print('BASELINE POINTER v0.6.7:', {
+            'platform':d.get('browser',{}).get('platform'),
+            'errors':[q.get('error') for q in p],
+            'nativeEvents':sum(len([e for e in q.get('events',[]) if e.get('type')=='dragover']) for q in p),
+            'runnerError':d.get('runnerError')
+          })
+          PY
+      - name: Test native WebDriver pointer from bottom boundary
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "real-bottom-pointer" --output native-results/real-bottom-pointer
+      - name: Diagnose first upward drag at scrollTopMax
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "bottom-edge first upward motion" --output native-results/bottom-edge-first-motion
       - name: Verify bottom-up group pointer anchor with Zia
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "bottom-up group pointer" --output native-results/bottom-up-group-anchor
       - name: Verify native member takeover stays visible during scroll

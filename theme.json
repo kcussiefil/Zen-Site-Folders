@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Zen-native site folders with scroll-aware dragging, narrower preview cards and consistent pointer hit targets.",
+  "description": "Zen-native site folders with bottom-edge native drag-pointer synchronization, stable grouping and compact hover cards.",
   "author": "kcussiefil",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -54,5 +54,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-03T14:35:43.000Z"
+  "updatedAt": "2026-11-03T16:06:57.000Z"
 }

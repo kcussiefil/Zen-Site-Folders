@@ -24,7 +24,7 @@ const finish = arguments[arguments.length - 1];
     const prefix = make('prefix'), tabs = ['A', 'B', 'C', 'D'].map(make), suffix = make('suffix');
     // Only the scroll stability test needs a guaranteed overflowing real
     // arrowscrollbox even when run alone with --case.
-    if (caseName.includes('scroll offset') || caseName.includes('drag edge') || caseName.includes('bottom-up group pointer')) {
+    if (caseName.includes('scroll offset') || caseName.includes('drag edge') || caseName.includes('bottom-up group pointer') || caseName.includes('bottom-edge first upward motion')) {
       for (let i = 0; i < 34; i++) make('overflow-' + i);
     }
     const group = gBrowser.addTabGroup(tabs, { id: 'zsf-native-test-' + id,
@@ -651,6 +651,61 @@ const finish = arguments[arguments.length - 1];
       else Services.prefs.setStringPref(key, original);
       Services.obs.notifyObservers(null, 'zsf-selected-tab-color-changed');
     }
+  });
+  await test('bottom-edge first upward motion preserves grab point', async h => {
+    assert(window.__ziaLoaded === true, 'must load real Zia');
+    const group = h.group;
+    const space = gZenWorkspaces.activeWorkspaceElement;
+    const port = space.scrollbox?.scrollbox || space.scrollbox;
+    const after = [...root().querySelectorAll('tab')].filter(tab =>
+      tab.group !== group && !tab.pinned && !tab.hasAttribute('zen-empty-tab')).at(-1);
+    assert(port && after, 'must have real scrollport and trailing tab');
+    gBrowser.moveTabAfter(group, after);
+    group.collapsed = true;
+    await idle(group);
+    const max = Math.max(0, port.scrollHeight - port.clientHeight);
+    assert(max > 150, 'scrollport needs a meaningful bottom boundary');
+    port.scrollTo({top:max, behavior:'instant'});
+    await delay(120);
+    const head = group.querySelector(':scope > .tab-group-label-container');
+    const from = head.getBoundingClientRect();
+    assert(from.height > 8 && from.bottom <= innerHeight+5, 'last group header visible at scroll bottom');
+    assert(Math.abs(port.scrollTop - (port.scrollHeight-port.clientHeight)) < 2,
+      'fixture must be truly at scrollTopMax');
+    const x = from.left+Math.min(24,from.width/2), downY=from.top + from.height/2;
+    const grabOffset=downY-from.top;
+    const before={scrollTop:port.scrollTop, max:port.scrollHeight-port.clientHeight,
+      scrollHeight:port.scrollHeight, clientHeight:port.clientHeight,
+      headerTop:from.top, headerBottom:from.bottom};
+    const transfer = new DataTransfer();
+    head.dispatchEvent(new MouseEvent('mousedown', {bubbles:true,composed:true,
+      button:0,buttons:1,clientX:x,clientY:downY}));
+    head.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
+      dataTransfer:transfer,buttons:1,clientX:x,clientY:downY}));
+    assert(drag.debugDrag(group)?.ziaDelegate, 'Zia must own dragged group');
+    const samples=[];
+    try {
+      for(const move of [24,58,85]) {
+        const y=downY-move;
+        head.dispatchEvent(new DragEvent('dragover',{bubbles:true,composed:true,
+          dataTransfer:transfer,buttons:1,clientX:x,clientY:y}));
+        await delay(25);
+        const rect=head.getBoundingClientRect();
+        samples.push({dy:move,scrollTop:port.scrollTop,
+          max:port.scrollHeight-port.clientHeight,
+          scrollHeight:port.scrollHeight, visualTop:rect.top,
+          pointerY:y, error:Math.round((rect.top+grabOffset-y)*100)/100,
+          cssTransform:group.style.getPropertyValue('transform'),
+          bridge:drag.debugDrag(group)?.ziaLayoutCorrection});
+      }
+    } finally {
+      window.dispatchEvent(new DragEvent('dragend',{bubbles:true,composed:true,
+        dataTransfer:transfer,buttons:1,clientX:x,clientY:downY-85}));
+      await delay(90);
+    }
+    assert(samples.every(x=>Math.abs(x.error)<8),
+      'bottom boundary may not consume the first pointer movement: '+
+      JSON.stringify({before,samples}));
   });
   await test('bottom-up group pointer remains anchored during upward sidebar scroll', async h => {
     assert(window.__ziaLoaded === true, 'requires actual Zia native group drag');
