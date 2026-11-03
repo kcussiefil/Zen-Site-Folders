@@ -133,7 +133,8 @@ async function main() {
     getElementById: id => id === 'navigator-toolbox' ? host : null,
     createElementNS: (_ns, type) => new FakeNode(type),
   };
-  vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
+  vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout,
+    setInterval: () => 1, clearInterval: () => {} });
   const api = window.__zsfGroupHoverV037;
   assert.equal(api.version, '0.5.6');
 
@@ -147,7 +148,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.5.6');
+  assert.equal(manifest.version, '0.6.5');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
