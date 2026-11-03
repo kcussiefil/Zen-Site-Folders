@@ -554,6 +554,59 @@ const finish = arguments[arguments.length - 1];
     assert(tab.group===h.group && same(order(h.group),h.tabs),
       'cancelled native scroll must retain all members and their order');
   });
+  await test('selected color editor anchors, previews and releases compact sidebar', async h => {
+    const menu = window.__zsfMenuV037;
+    const toolbox = document.getElementById('navigator-toolbox');
+    assert(typeof menu?.openSelectedColor === 'function', 'color editor must be available');
+    const tab = h.tabs[1];
+    const key = 'zsf.selected-tab-color.v1';
+    const original = Services.prefs.prefHasUserValue(key) ?
+      Services.prefs.getStringPref(key) : null;
+    try {
+      menu.openSelectedColor(tab);
+      let dialog = document.getElementById('zsf-color-dialog');
+      assert(dialog?.open && dialog.isConnected, 'real HTML color dialog must open');
+      assert(toolbox.hasAttribute('data-zsf-color-sidebar-hold'),
+        'editor must hold compact sidebar open');
+      const side = toolbox.getBoundingClientRect();
+      const panel = dialog.getBoundingClientRect();
+      const rightSide = document.documentElement.getAttribute('zen-right-side') === 'true';
+      assert(panel.width > 250 && panel.width < 330,
+        'compact editor must use intended width: ' + panel.width);
+      assert(rightSide ? panel.right <= side.left + 1 : panel.left >= side.right - 1,
+        'editor should sit outside sidebar: ' + JSON.stringify({ side:side.toJSON(), panel:panel.toJSON() }));
+      assert(panel.top >= 0 && panel.bottom <= innerHeight + 1, 'editor must stay inside window');
+      const color = dialog.querySelector('input[type="color"]');
+      const alpha = dialog.querySelector('input[type="range"]');
+      color.value = '#224466'; alpha.value = '43';
+      alpha.dispatchEvent(new Event('input', { bubbles:true }));
+      const live = document.documentElement.style.getPropertyValue('--zsf-selected-tab-fill');
+      assert(live === 'rgba(34, 68, 102, 0.43)', 'real selected tab fill must preview immediately: ' + live);
+      assert(!Services.prefs.prefHasUserValue(key) || Services.prefs.getStringPref(key) === original,
+        'preview must not persist until save');
+      dialog.querySelector('.zsf-color-cancel').click();
+      await delay(20);
+      assert(!dialog.isConnected && !toolbox.hasAttribute('data-zsf-color-sidebar-hold'),
+        'cancel closes editor and releases the sidebar without leaving a hold');
+      menu.openSelectedColor(tab);
+      dialog = document.getElementById('zsf-color-dialog');
+      const reset = dialog.querySelector('.zsf-color-reset');
+      reset.click();
+      assert(document.documentElement.style.getPropertyValue('--zsf-selected-tab-fill') ===
+        'rgba(255, 255, 255, 0.08)', 'reset must preview default');
+      const save = dialog.querySelector('.zsf-color-save');
+      save.click();
+      await delay(20);
+      const stored = JSON.parse(Services.prefs.getStringPref(key));
+      assert(stored.hex === '#ffffff' && stored.alpha === 8, 'save persists reset defaults');
+      assert(!toolbox.hasAttribute('data-zsf-color-sidebar-hold'), 'save releases sidebar hold');
+    } finally {
+      document.getElementById('zsf-color-dialog')?.close();
+      if (original === null) Services.prefs.clearUserPref(key);
+      else Services.prefs.setStringPref(key, original);
+      Services.obs.notifyObservers(null, 'zsf-selected-tab-color-changed');
+    }
+  });
   await test('Zia shared folder adapter probe', async h => {
     const g = h.group;
     const before = Object.getOwnPropertyDescriptor(g, 'isZenFolder');

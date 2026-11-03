@@ -611,7 +611,8 @@
     menu?.remove();
   }
 
-  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.4.1' };
+  const api = { init, destroy, validGroup, members, restoreDecorations,
+    openSelectedColor: chooseSelectedColor, version: '0.4.1' };
   window.__zsfMenuV037 = api;
   if (document.readyState === 'complete') init();
   else bind(window, 'load', init, { once: true });
