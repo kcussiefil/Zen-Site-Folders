@@ -706,7 +706,10 @@ const finish = arguments[arguments.length - 1];
       // Zia keeps the same native drag gesture active.
       if (scrollUp === 130) {
         selectedAbove.collapsed = false;
-        await idle(selectedAbove);
+        // The native drag is intentionally still running: nativeIdle()
+        // must not be called during it. Only await the folder animation.
+        if (motion.whenIdle) await motion.whenIdle(selectedAbove);
+        else await delay(180);
       }
       port.scrollTo({top:Math.max(0,initialTop-scrollUp),behavior:'instant'});
       await delay(32);
