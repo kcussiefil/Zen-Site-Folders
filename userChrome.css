@@ -275,7 +275,7 @@
   display: block;
   z-index: 2147483646 !important;
   box-sizing: border-box !important;
-  width: min(330px, calc(100vw - 16px)) !important;
+  width: min(310px, calc(100vw - 16px)) !important;
   padding: 0 !important;
   overflow: hidden !important;
   background-color: var(--zia-tab-card-bg, rgb(38, 38, 42)) !important;
@@ -335,7 +335,7 @@
 /* Use Zia's actual row spacing, not a second additive gap. Group-owned
    audio indicators share the exact original icon size and padding. */
 #zsf-folder-hover-card .zia-folder-card-row {
-  gap: 8px !important;
+  gap: 6px !important;
   padding-inline: 9px 6px !important;
 }
 /* Four-bar sound-wave resource comes from the original tab's Zia CSS
@@ -363,6 +363,15 @@
 #zsf-folder-hover-card .zsf-hover-sound:active { scale: .9; }
 #zsf-folder-hover-card .zsf-hover-row {
   outline-offset: -2px;
+  cursor: pointer !important;
+}
+/* Keep text, icon and age in the same pointer target as the parent row. */
+#zsf-folder-hover-card .zsf-hover-row > :is(.zsf-hover-icon, .zsf-hover-title, .zsf-hover-age) {
+  cursor: pointer !important;
+}
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site] > .tab-group-label-container > .tab-group-label {
+  cursor: pointer !important;
 }
 #zsf-folder-hover-card .zsf-hover-row:focus-visible {
   outline: 2px solid currentColor;
@@ -592,7 +601,7 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
 }
 :root[zia-light] #zsf-folder-hover-card::after { border-color: rgba(0,0,0,.12); }
 #zsf-folder-hover-card .zsf-hover-age {
-  flex: 0 0 42px;min-width: 42px;text-align: end;
+  flex: 0 0 40px;min-width: 40px;text-align: end;
   font-size: .9em;font-variant-numeric: tabular-nums;opacity: .65;
   white-space: nowrap;
 }

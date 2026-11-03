@@ -59,6 +59,14 @@ async function main() {
       'collapsed compatibility must not add another geometry or animation controller');
   }
   assert(css.includes('#zsf-folder-hover-card'));
+  assert(css.includes('width: min(310px, calc(100vw - 16px))'), 'preview card width 310px');
+  assert(css.includes('flex: 0 0 40px;min-width: 40px'), 'age column width 40px');
+  assert(css.includes('gap: 6px !important;'), 'compact horizontal row gap');
+  assert(css.includes('.zsf-hover-row > :is(.zsf-hover-icon, .zsf-hover-title, .zsf-hover-age)'),
+    'title, icon and time inherit clickable cursor');
+  assert(source.includes('const GAP = 8;'), 'fixed sidebar gap preserved');
+  assert(source.includes('popup.offsetWidth || 310'), 'card anchored using measured width');
+
   assert(css.includes('@media -moz-pref("zia.cards.blur")'), 'Zia glass preference is honored');
   assert(css.includes('blur(24px) saturate(1.6)'), 'Zia glass blur matches');
   assert(css.includes('max-height: calc(100vh - 16px)'), 'viewport clamp required');
@@ -148,7 +156,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.6.5');
+  assert.equal(manifest.version, '0.6.6');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;

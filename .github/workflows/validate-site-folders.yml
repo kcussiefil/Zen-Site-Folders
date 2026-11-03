@@ -31,7 +31,7 @@ jobs:
           node --check site-folders-top-drop.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.6.5' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.6.6' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -100,6 +100,8 @@ jobs:
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down tab" --output native-results/zia-landing-down-tab
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot up folder" --output native-results/zia-landing-up-folder
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down folder" --output native-results/zia-landing-down-folder
+      - name: Verify bottom-up group pointer anchor with Zia
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "bottom-up group pointer" --output native-results/bottom-up-group-anchor
       - name: Verify native member takeover stays visible during scroll
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "native member drag edge scroll" --output native-results/member-scroll
       - name: Verify legacy pointer-only group fallback separately
