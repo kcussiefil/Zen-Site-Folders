@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.6.2
+// @version      0.6.3
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -282,7 +282,8 @@
     for (let i = alive.length - 2; i >= 0; i--) {
       const left = alive[i];
       const right = alive[i + 1];
-      if (left === right || left.group !== group || right.group !== group) continue;
+      if (left === right || left.group !== group || right.group !== group ||
+          right.previousElementSibling === left) continue;
       try { window.gBrowser.moveTabBefore(left, right); }
       catch (e) { console.warn(TAG, 'Group reorder failed:', e); }
     }
@@ -428,11 +429,10 @@
     return { version: 4, workspaceId: current.id, capturedAt: Date.now(), elements, tabs, createdFolders: [] };
   }
 
-  function findTabMap(current) {
+  function findTabMap(tabs) {
     const map = new Map();
     // Read existing IDs without assigning new ones during recovery. A newly
     // generated ID cannot match the snapshot and obscures the diagnosis.
-    const tabs = allWorkspaceTabs(current.node, current.id);
     for (const tab of tabs) {
       let id = null;
       for (const store of sessionStores()) {
@@ -452,7 +452,7 @@
   // Never infer matches from site, title, position or duplicate URLs.
   function matchSnapshotTabs(current, snapshot) {
     const all = allWorkspaceTabs(current.node, current.id);
-    const existing = findTabMap(current);
+    const existing = findTabMap(all);
     const map = new Map();
     const used = new Set();
     for (const original of snapshot.tabs) {
@@ -789,8 +789,12 @@
     }
   }
 
-  function findGroupByID(current, id) {
-    return getGroups(current.node).find(g => g.id === id) || null;
+  function indexGroups(current) {
+    const groups = new Map();
+    for (const group of getGroups(current.node)) {
+      if (!groups.has(group.id)) groups.set(group.id, group);
+    }
+    return groups;
   }
 
   // Undo restores only identities in the snapshot. Tabs opened afterwards are
@@ -838,8 +842,11 @@
 
       // 1) Re-create lost manual groups with their original stable ID, label,
       // colour and members. This also covers groups emptied by sorting.
-      for (const original of snapshot.elements.filter(x => x.type === 'group')) {
-        let group = findGroupByID(current, original.id);
+      const originalGroups = snapshot.elements.filter(item => item.type === 'group');
+      let groups = indexGroups(current);
+      for (const original of originalGroups) {
+        let group = groups.get(original.id);
+        if (!group?.isConnected) group = null;
         const desired = original.tabs.map(id => tabMap.get(id)).filter(t => t?.isConnected);
         if (!group && desired.length) {
           try {
@@ -869,29 +876,40 @@
         }
         reorderGroup(group, desired);
       }
-      // 2) Put formerly standalone tabs back outside any created site group.
-      for (const item of snapshot.tabs.filter(x => x.group === null)) {
-        const tab = tabMap.get(item.id);
-        if (tab?.isConnected && tab.group) {
-          try { window.gBrowser.ungroupTab(tab); }
-          catch (error) { errors++; console.warn(TAG, 'Cannot ungroup original tab:', error); }
+      // Walk the snapshot backward. A native move next to a restored
+      // top-level anchor can detach a site tab and position it in one call.
+      const root = current.node.tabsContainer;
+      groups = indexGroups(current);
+      let anchor = null;
+      for (let i = snapshot.elements.length - 1; i >= 0; i--) {
+        const item = snapshot.elements[i];
+        const element = item.type === 'group' ? groups.get(item.id) : tabMap.get(item.id);
+        if (!element?.isConnected) continue;
+        try {
+          const sourceGroup = item.type === 'tab' ? element.group : null;
+          if (sourceGroup) {
+            const canMoveDirectly = anchor?.parentElement === root &&
+              !anchor.pinned && !element.pinned && !element.splitview &&
+              sourceGroup.parentElement === root && !sourceGroup.isZenFolder &&
+              !sourceGroup.pinned && siteOfGroup(sourceGroup) &&
+              window.gZenFolders?.canDropElement?.(element, anchor);
+            if (canMoveDirectly) window.gBrowser.moveTabBefore(element, anchor);
+            if (element.group) window.gBrowser.ungroupTab(element);
+          }
+          if (anchor && anchor.previousElementSibling !== element)
+            window.gBrowser.moveTabBefore(element, anchor);
+        } catch (error) {
+          errors++;
+          console.warn(TAG, 'Cannot restore top-level order:', error);
         }
-      }
-      // 3) Original top-level order (including groups) is restored by native
-      // element moves, not by touching browser session DOM directly.
-      const activeElements = snapshot.elements.map(item => item.type === 'group'
-        ? findGroupByID(current, item.id) : tabMap.get(item.id))
-        .filter(el => el?.isConnected);
-      for (let i = activeElements.length - 2; i >= 0; i--) {
-        try { window.gBrowser.moveTabBefore(activeElements[i], activeElements[i + 1]); }
-        catch (error) { errors++; console.warn(TAG, 'Cannot restore top-level order:', error); }
+        anchor = element;
       }
       // 4) Match collapsed state after moving tabs; some native operations
       // expand groups as they receive tabs.
-      for (const item of snapshot.elements.filter(x => x.type === 'group')) {
-        const group = findGroupByID(current, item.id);
-        if (!group) continue;
-        group.collapsed = !!item.collapsed;
+      for (const item of originalGroups) {
+        const group = groups.get(item.id);
+        if (!group?.isConnected) continue;
+        if (group.collapsed !== !!item.collapsed) group.collapsed = !!item.collapsed;
       }
       // Empty ordinary site groups are removed automatically by Firefox.
       const pendingFolders = 0;
@@ -911,16 +929,16 @@
         return (tab.group?.id || null) !== item.group ||
           (!!tab.pinned !== !!item.pinned);
       }).length;
-      const wrongSequence = snapshot.elements.filter(item => {
-        if (item.type !== 'group') return false;
-        const group = findGroupByID(current, item.id);
+      groups = indexGroups(current);
+      const wrongSequence = originalGroups.filter(item => {
+        const group = groups.get(item.id);
         if (!group) return item.tabs.some(id => tabMap.has(id));
+        const memberIds = new Set(item.tabs);
         const actual = [...group.querySelectorAll('tab')].filter(t => t.group === group)
-          .map(t => originalIdForTab.get(t)).filter(id => item.tabs.includes(id));
+          .map(t => originalIdForTab.get(t)).filter(id => memberIds.has(id));
         const intended = item.tabs.filter(id => tabMap.has(id));
         return actual.join('|') !== intended.join('|');
       }).length;
-      const root = current.node.tabsContainer;
       const topLevel = [...(root.children || [])].map(el => {
         const tag = el.localName || el.tagName?.toLowerCase();
         if (tag === 'tab-group') return 'group:' + el.id;
@@ -930,9 +948,11 @@
         }
         return null;
       });
+      const liveOrderIds = new Set(topLevel);
       const intended = snapshot.elements.map(e => e.type + ':' + e.id)
-        .filter(id => topLevel.includes(id));
-      const actual = topLevel.filter(id => intended.includes(id));
+        .filter(id => liveOrderIds.has(id));
+      const intendedIds = new Set(intended);
+      const actual = topLevel.filter(id => intendedIds.has(id));
       const wrongTopLevel = intended.join('|') !== actual.join('|');
       if (errors || missing || wrong || wrongSequence || wrongTopLevel || pendingFolders || invisible) {
         toast(`部分還原：遺失 ${missing}、分組／釘選不符 ${wrong}、順序不符 ${wrongSequence + Number(wrongTopLevel)}、空資料夾未清除 ${pendingFolders}、不可見分頁 ${invisible}；保留備份`, true);
@@ -1366,8 +1386,8 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
-    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.2' };
-    console.info?.(TAG, '0.6.2 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.3' };
+    console.info?.(TAG, '0.6.3 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }
 
   if (document.readyState === 'complete') initialize();

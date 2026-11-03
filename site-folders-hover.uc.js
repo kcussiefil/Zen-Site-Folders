@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.6.2
+// @version      0.6.3
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -267,6 +267,8 @@
   }
 
   function closeNow() {
+    if (ageTimer !== null) clearInterval(ageTimer);
+    ageTimer = null;
     clearOpen();
     clearClose();
     holdSidebar(false);
@@ -334,6 +336,12 @@
     activeGroup = group;
     activeLabel = label;
     card.hidden = false;
+    ageTimer ??= setInterval(() => {
+      if (!card || card.hidden) return;
+      for (const row of card.querySelectorAll('.zsf-hover-row')) {
+        const age = row.querySelector('.zsf-hover-age');if (age && row.zsfTab) updateAge(age, row.zsfTab);
+      }
+    }, 60000);
     card.removeAttribute('data-open');
     // Pin the flyout before measuring the anchor. Otherwise compact mode
     // starts sliding the toolbox away during the 8px mouse transition
@@ -445,18 +453,12 @@
     const tabContainer = window.gBrowser?.tabContainer;
     if (!toolbox || !tabContainer) return false;
     started = true;
-    ageTimer = setInterval(() => {
-      if (!card || card.hidden) return;
-      for (const row of card.querySelectorAll('.zsf-hover-row')) {
-        const age = row.querySelector('.zsf-hover-age');if (age && row.zsfTab) updateAge(age, row.zsfTab);
-      }
-    }, 60000);
     hoverHost = toolbox;
     bind(toolbox, 'mouseover', onMouseOver);
     bind(toolbox, 'mouseout', onMouseOut);
     bind(toolbox, 'wheel', event => {
       // Scrolling the card must not close it; sidebar scrolling may.
-      if (card?.contains?.(event.target)) return;
+      if ((!activeGroup && !pendingLabel) || card?.contains?.(event.target)) return;
       closeNow();
     }, { passive: true, capture: true });
     bind(toolbox, 'mousedown', closeNow, true);

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.6.2
+// @version      0.6.3
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -536,11 +536,17 @@
     bind(window, 'contextmenu', onContextMenu, true);
     restoreDecorations();
     const container = window.gBrowser.tabContainer;
-    observer = new MutationObserver(() => {
+    observer = new MutationObserver(records => {
+      const addedGroup = records.some(record => record.type === 'attributes'
+        ? record.target.matches?.(GROUP_SELECTOR)
+        : [...record.addedNodes].some(node =>
+          node.matches?.(GROUP_SELECTOR) || node.querySelector?.(GROUP_SELECTOR)));
+      if (!addedGroup) return;
       clearTimeout(init._timer);
       init._timer = setTimeout(restoreDecorations, 120);
     });
-    observer.observe(container, { childList: true, subtree: true });
+    observer.observe(container, { childList: true, subtree: true,
+      attributes: true, attributeFilter: ['data-zsf-site'] });
     bind(window, 'ZenWorkspacesUIUpdate', () => setTimeout(restoreDecorations, 100));
     bind(window, 'AfterWorkspacesSessionRestore', () => setTimeout(restoreDecorations, 100));
     bind(container, 'TabGroupCreate', () => setTimeout(restoreDecorations, 150));

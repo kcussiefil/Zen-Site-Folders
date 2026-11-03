@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.6.2
+// @version      0.6.3
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -262,25 +262,29 @@
   function onMutations(records) {
     let structural = false;
     for (const record of records) {
-      if (record.type === 'attributes' &&
-          record.attributeName === 'collapsed' && ours(record.target)) {
-        // Never scan every tab in the whole sidebar for a single folder.
+      if (record.type === 'childList') {
+        scheduleGroupSync(record.target.closest?.(SELECTOR));
+        for (const nodes of [record.addedNodes, record.removedNodes]) {
+          for (const node of nodes) {
+            if (node.matches?.(SELECTOR) || node.querySelector?.(SELECTOR)) {
+              structural = true;
+              break;
+            }
+          }
+          if (structural) break;
+        }
+      } else if (record.attributeName === 'data-zsf-site') {
+        const group = record.target;
+        if (ours(group)) {
+          group.closest?.('zen-workspace')?.setAttribute('data-zsf-scroll-stable', 'true');
+          structural = true;
+        } else if (states.has(group)) {
+          structural = true;
+        }
+      } else if (record.attributeName === 'collapsed') {
         scheduleGroupSync(record.target);
-      } else if (record.type === 'attributes' &&
-                 (record.attributeName === 'selected' ||
-                  record.attributeName === 'multiselected')) {
-        // A selection change outside Site Folders is not structural.
-        // It must not rescan all groups during normal/video tab switches.
-        if (ours(record.target.group)) scheduleGroupSync(record.target.group);
-      } else if (record.type === 'attributes' &&
-                 record.attributeName === 'data-zsf-site' &&
-                 ours(record.target)) {
-        // Set the scroll guard immediately, not one animation frame late.
-        record.target.closest?.('zen-workspace')?.setAttribute(
-          'data-zsf-scroll-stable', 'true');
-        structural = true;
       } else {
-        structural = true;
+        scheduleGroupSync(record.target.group);
       }
     }
     if (structural) scheduleScan();
@@ -396,7 +400,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.2', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.3', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });

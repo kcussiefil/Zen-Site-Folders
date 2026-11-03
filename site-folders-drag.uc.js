@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.6.2
+// @version      0.6.3
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -275,14 +275,14 @@
     if (port && !found.includes(port)) found.push(port);
     return found.map(node => ({ node, top: node.scrollTop }));
   }
-  function scrollSpeed(subject, x, y) {
+  function scrollSpeed(subject, x, y, nav, sep) {
     const port = subject?.scrollPort;
     if (!port) return 0;
-    const nav = document.getElementById('navigator-toolbox')?.getBoundingClientRect?.();
+    nav ??= document.getElementById('navigator-toolbox')?.getBoundingClientRect?.();
     const box = port.getBoundingClientRect();
     if (!nav || x < nav.left || x > nav.right ||
         x < box.left - 8 || x > box.right + 8) return 0;
-    const sep = subject.item?.closest?.('zen-workspace')
+    sep ??= subject.item?.closest?.('zen-workspace')
       ?.querySelector?.('.pinned-tabs-container-separator')?.getBoundingClientRect?.();
     const top = Math.max(box.top, (sep?.bottom || box.top) + 3);
     const bottom = Math.min(box.bottom, nav.bottom);
@@ -321,6 +321,7 @@
       Math.min(port.scrollHeight, ziaScrollBridge.contentHeight);
     const max = Math.max(0, contentHeight - port.clientHeight);
     const next = Math.min(max, Math.max(0, before + speed));
+    if (Math.abs(next - before) <= .1) return;
     try {
       // Zen can enable smooth scrolling on the arrowscrollbox. Override it
       // for the animation frame so repeated drag-scroll ticks don't queue up.
@@ -340,10 +341,10 @@
     }
     autoFrame = window.requestAnimationFrame?.(autoScrollTick) || 0;
   }
-  function scheduleAutoScroll(x, y) {
+  function scheduleAutoScroll(x, y, nav, separator) {
     autoPointer = { x, y };
     const subject = active || (ziaScrollBridge?.context === ziaDelegate ? ziaDelegate : null);
-    if (!autoFrame && subject?.scrollPort && scrollSpeed(subject, x, y))
+    if (!autoFrame && subject?.scrollPort && scrollSpeed(subject, x, y, nav, separator))
       autoFrame = window.requestAnimationFrame?.(autoScrollTick) || 0;
   }
   function captureAvoidRows(subject) {
@@ -969,7 +970,7 @@
         ?.querySelector?.('.pinned-tabs-container-separator')?.getBoundingClientRect?.();
       ziaDelegate.previewAllowed = !!nav && !!separator &&
         x >= nav.left && x <= nav.right && y >= separator.bottom && y <= nav.bottom;
-      scheduleAutoScroll(x, y);
+      scheduleAutoScroll(x, y, nav, separator);
       // Let native dragover reach Zen. The edge assist yields to existing
       // native scrolling; Zia keeps ownership of the preview and ordering.
       // The scoped landing guards keep premature native insertions in place.
@@ -1059,7 +1060,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.6.2', chooseSlot, commit,
+  const api = { start, destroy, version: '0.6.3', chooseSlot, commit,
     beforeMutation, nativeIdle,
     // Explicit probe for isolated native Zen+Zia regression tests.
     prepareZiaGroupDrag(group) {
