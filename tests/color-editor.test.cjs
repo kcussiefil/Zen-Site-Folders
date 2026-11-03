@@ -50,8 +50,8 @@ class FakeNode {
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'site-folders-menu.uc.js'), 'utf8');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
-assert(css.includes('width: min(330px, calc(100vw - 16px))'), 'preview card must be 330px');
-assert(css.includes('flex: 0 0 42px;min-width: 42px'), 'opening age must have 42px column');
+assert(css.includes('width: min(310px, calc(100vw - 16px))'), 'preview card must be 310px');
+assert(css.includes('flex: 0 0 40px;min-width: 40px'), 'opening age must have 40px column');
 assert(css.includes('#navigator-toolbox[data-zsf-color-sidebar-hold]'), 'compact sidebar hold must be styled');
 assert(css.includes('width: min(310px, calc(100vw - 16px))'), 'color panel must be compact');
 assert(!source.includes('dialog.showModal()'), 'color editor must not dim the original selected tab');
