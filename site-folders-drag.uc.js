@@ -54,7 +54,7 @@
       // Only a stable-height dragged folder needs extra layout compensation.
       // Keep ordinary tab drag on the pre-existing scroll-only path.
       sourceTop: context.kind === 'group' ? dragSourceLayoutTop(context.item) : null,
-      sourceHeight: context.item.getBoundingClientRect().height,
+      sourceHeight: context.item.getBoundingClientRect?.()?.height ?? null,
       lastCorrection: 0, nativeUntil: 0, undo: [], repaint: null };
     try {
       const service = Cc['@mozilla.org/eventlistenerservice;1']
@@ -73,7 +73,8 @@
             const delta = port.scrollTop - bridge.initialTop;
             let correction = delta;
             if (context.kind === 'group' && bridge.sourceTop != null &&
-                Math.abs(context.item.getBoundingClientRect().height - bridge.sourceHeight) < 3) {
+                bridge.sourceHeight != null &&
+                Math.abs((context.item.getBoundingClientRect?.()?.height ?? Infinity) - bridge.sourceHeight) < 3) {
               const currentTop = dragSourceLayoutTop(context.item);
               // A selected folder above the source may expand or collapse
               // during the drag. ScrollTop alone misses that 38px shift.
