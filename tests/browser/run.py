@@ -106,7 +106,7 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         except Exception: pass
                 report['pointerSamples'] = samples
                 moved = any(any(e.get('type')=='dragstart' for e in s['events']) for s in samples)
-                anchored = moved and all(abs(s['error'])<8 for s in samples if s['zia'])
+                anchored = moved and any(s['zia'] for s in samples) and all(abs(s['error'])<8 for s in samples if s['zia'])
                 report['results'] = [{'name':'real bottom pointer starts anchored',
                                       'status':'PASS' if anchored else 'FAIL',
                                       'reason':None if anchored else 'No real dragstart or >8px drift'}]
@@ -114,7 +114,7 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
             else:
                 result = client.async_js(pathlib.Path(__file__).with_name('regressions.js').read_text(), [args.case])['value']
                 report.update(result)
-            if any(item['status'] != 'PASS' for item in result.get('results', [])):
+            if any(item['status'] != 'PASS' for item in report.get('results', [])):
                 import base64
                 try:
                     shot = client.call('WebDriver:TakeScreenshot', {'full': False, 'scroll': False})['value']
