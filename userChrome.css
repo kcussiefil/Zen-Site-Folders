@@ -552,9 +552,9 @@ tab-group[data-zsf-site][data-zsf-drag-source]
   display: none !important;
 }
 
-/* A fitting list must not clip the native dragged row at its content-sized
-   scrollbox edge. Markers are captured before dragging and never apply to
-   genuinely scrolling lists; scrolling and its native renderer stay intact. */
+/* Fitting inner group containers must not clip the native dragged row.
+   Markers stop before the workspace viewport so tabs cannot paint into
+   the adjacent media player, even when the list fitted before dragging. */
 :root[zia-dragging-tab] [data-zsf-drag-unclip],
 :root[zia-dragging-tab] [data-zsf-drag-unclip-part]::part(scrollbox) {
   overflow: visible !important;
@@ -655,4 +655,12 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
 
 #tabbrowser-tabs tab-group[data-zsf-entry-first] > .tab-group-label-container {
   translate: none !important;
+}
+
+/* Preserve the grabbed row across an old group retiring, without keeping
+   that group or adding a spacer. Zia owns transform; this independent
+   translate ends with its native drag state before native landing cleanup. */
+:root:is([data-zsf-grab-pending], [zia-dragging-tab]) tab[data-zsf-grab-offset] {
+  translate: 0 var(--zsf-native-grab-offset, 0px) !important;
+  z-index: 40 !important;
 }

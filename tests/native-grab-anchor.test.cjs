@@ -29,6 +29,18 @@ assert.equal(received.target,tab);assert.equal(event.clientY,353,'physical event
 assert.equal(boxTop-received.y,-20,'stable selection layout preserves the original native grab point');
 window.probe.reset();assert(listeners.get('dragstart').has(nativeStart),'native initializer restored at gesture end');
 assert(!fits.hasAttribute('data-zsf-drag-unclip'));assert(!fits.hasAttribute('data-zsf-drag-unclip-part'));
+// A fitting workspace viewport can become overflowing during native drag
+// avoidance. Its following media toolbar must never receive tab-list paint.
+const viewportInner=node(270,270),viewport=node(270,270,viewportInner),outside=node(270,270);
+viewport.classList={contains:k=>k==='workspace-arrowscrollbox'};
+fits.parentNode=viewport;viewport.parentNode=outside;
+down();
+assert(fits.hasAttribute('data-zsf-drag-unclip'),'inner group clipping can still be released');
+assert(!viewport.hasAttribute('data-zsf-drag-unclip'),'workspace viewport always retains its native clip');
+assert(!viewportInner.hasAttribute('data-zsf-drag-unclip'),'workspace shadow scrollbox retains its native clip');
+assert(!viewport.hasAttribute('data-zsf-drag-unclip-part'));
+assert(!outside.hasAttribute('data-zsf-drag-unclip'),'never release clips outside the workspace list');
+window.probe.reset();fits.parentNode=scrolling;
 boxTop=333;down();for(const fn of listeners.get('dragstart'))fn(event);
 assert.equal(received.y,353,'no layout shift means native coordinates pass through unchanged');
 window.probe.reset();tab.group={...group,isZenFolder:true};down();

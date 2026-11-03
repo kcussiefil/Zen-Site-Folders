@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.6.1
+// @version      0.6.2
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -14,6 +14,47 @@
   let queuedScan = false;
   const queuedGroups = new Set();
   let lastSelected = null;
+  let grab = null;
+  function clearGrab() {
+    document.documentElement?.removeAttribute?.('data-zsf-grab-pending');
+    if (grab?.tab) {
+      grab.tab.removeAttribute('data-zsf-grab-offset');
+      grab.tab.style.removeProperty('--zsf-native-grab-offset');
+    }
+    grab = null;
+  }
+  function scrollAnchor(group) {
+    const tab = window.gBrowser?.selectedTab;
+    const space = group.closest?.('zen-workspace');
+    const port = space?.scrollbox?.scrollbox;
+    if (!tab?.isConnected || tab.group === group || !space ||
+        tab.closest?.('zen-workspace') !== space || !port?.getBoundingClientRect ||
+        !tab.getBoundingClientRect) return null;
+    const y = tab.getBoundingClientRect().top, box = port.getBoundingClientRect();
+    if (y < box.top || y >= box.bottom) return null;
+    // A may retire immediately at the absolute top. A potential drag keeps
+    // the clicked row anchored until mouseup distinguishes click from drag.
+    const keep = port.scrollTop > .5;
+    if (!keep && grab?.tab !== tab) return null;
+    return () => {
+      if (!tab.isConnected || window.gBrowser.selectedTab !== tab) return;
+      const delta = tab.getBoundingClientRect().top - y;
+      if (keep && Math.abs(delta) > .1) {
+        const top = port.scrollTop + delta;
+        if (typeof port.scrollTo === 'function') port.scrollTo({top,behavior:'instant'});
+        else port.scrollTop = top;
+      }
+      // A is already gone. Preserve only the actual grabbed row's visual
+      // position until click/drag is known, before Zia measures dragstart.
+      const missing = y - tab.getBoundingClientRect().top;
+      if (grab?.tab === tab && missing > .5) {
+        grab.tab.setAttribute('data-zsf-grab-offset','true');
+        grab.tab.style.setProperty('--zsf-native-grab-offset', missing + 'px');
+        document.documentElement.setAttribute('data-zsf-grab-pending','true');
+      }
+
+    };
+  }
   const ours = group => group?.isConnected && group.matches?.(SELECTOR) &&
     !group.isZenFolder && !group.pinned;
   function bind(node, type, fn, options) {
@@ -81,10 +122,13 @@
     // after browser selection moved. Zen considers it active alongside the
     // newly selected tab, leaving TWO rows visible (caught by native CI).
     // Retire only the former selected rows, preserving nested/folder state.
-    if (collapsed && prior?.collapsed && selected.length) {
-      // Native Zen keeps the last exposed row when selection moves to a
-      // DIFFERENT group. Retire old rows only when this group gets another
-      // selection, including a row retained across an earlier group switch.
+    const oldActive = (group.activeTabs || []).some(tab =>
+      members.includes(tab) && tab.isConnected && tab.hasAttribute('folder-active'));
+    const retiring = collapsed && !selected.length && oldActive;
+    const restoreAnchor = retiring ? scrollAnchor(group) : null;
+    if (collapsed && prior?.collapsed) {
+      // Retire A immediately, including during a gesture. Keep the target
+      // screen position with scroll range compensation, not an exposed A row.
       for (const tab of new Set([...prior.selected, ...(group.activeTabs || [])])) {
         // A former selection may already belong to another group or be standalone.
         // Never retire an element after it has left this group's membership.
@@ -106,26 +150,21 @@
       const newlySelected = selected.filter(tab => !prior.selected.includes(tab));
       if (newlySelected.length) zen.styleCleanup?.(newlySelected);
     }
-    const retained = collapsed && !selected.length && (group.activeTabs || []).some(tab =>
-      members.includes(tab) && tab.isConnected && tab.hasAttribute('folder-active'));
-    if (collapsed && selected.length === 0 && !retained && group.hasAttribute('has-active')) {
+    if (collapsed && selected.length === 0 && group.hasAttribute('has-active')) {
       group.removeAttribute('has-active');
       group.activeTabs = [];
     }
     // Exactly one native animation path per state transition. Zia decorates
     // this same native path; no competing WAAPI timeline is introduced.
     let job;
-    if (retained) {
-      // No layout or new animation on cross-group selection. Keep the same
-      // native active row and closed state, so the next target stays put.
-      job = prior?.finished === false ? prior.done : Promise.resolve();
-    } else if (membership === 'leave' && collapsed && !selected.length && !group.activeTabs.length) {
+    if (retiring || (membership === 'leave' && collapsed && !selected.length && !group.activeTabs.length)) {
       // The dragged active row has already left this closed group. Its other
       // rows are hidden already; a second collapse would animate the empty
       // container's margin and move every following group after the landing.
       group.groupContainer.hidden = true;
       group.groupStartElement?.style.removeProperty('margin-top');
       window.gBrowser?.tabContainer?._invalidateCachedVisibleTabs?.();
+      restoreAnchor?.();
       job = Promise.resolve();
     } else if (membership === 'join' && collapsed && selected.length && typeof zen.animateSelect === 'function') {
       // TabGrouped is synchronous. Establish the native selected-row layout
@@ -304,6 +343,19 @@
     bind(window, 'TabGrouped', onTabGrouped, true);
     bind(window, 'TabUngrouped', onTabUngrouped, true);
     bind(window, 'TabGroupAnimationComplete', onAnimationComplete, true);
+    bind(window, 'mousedown', event => {
+      if (event.button !== 0) return;
+      clearGrab();
+      const tab = event.target?.closest?.('tab.tabbrowser-tab');
+      if (tab?.isConnected && !tab.pinned && !tab.multiselected)
+        grab = {tab,dragging:false};
+    }, true);
+    bind(window, 'dragstart', () => {
+      if (grab) grab.dragging = true;
+      queueMicrotask(() => document.documentElement.removeAttribute('data-zsf-grab-pending'));
+    }, true);
+    bind(window, 'mouseup', () => { if (!grab?.dragging) clearGrab(); }, true);
+    bind(window, 'dragend', clearGrab, true);
     observer = new MutationObserver(onMutations);
     observer.observe(tabs, { subtree: true, childList: true,
       attributes: true, attributeFilter: [
@@ -335,6 +387,7 @@
   }
   function destroy() {
     dead = true;
+    clearGrab();
     observer?.disconnect();
     for (const space of window.gBrowser?.tabContainer?.querySelectorAll('zen-workspace') || [])
       space.removeAttribute('data-zsf-scroll-stable');
@@ -343,7 +396,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.1-native-selection', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.2', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });

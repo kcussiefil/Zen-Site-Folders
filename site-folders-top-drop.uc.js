@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — header drop joins first
-// @version      0.6.1
+// @version      0.6.2
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
@@ -51,6 +51,11 @@
     for (let node = source.tab.parentNode; node && node !== stop && node !== document.documentElement;
          node = node.parentNode || node.host) {
       if (node.nodeType !== 1) continue;
+      // Only release clips INSIDE the tab list. The workspace viewport must
+      // continue clipping rows above the adjacent media controls, even if
+      // its contents fitted before the drag started.
+      if (node.localName === 'zen-workspace' || node.id === 'tabbrowser-arrowscrollbox' ||
+          node.classList?.contains('workspace-arrowscrollbox')) break;
       remember(node);remember(node.shadowRoot?.querySelector?.('[part~="scrollbox"]'),node);
     }
   }
