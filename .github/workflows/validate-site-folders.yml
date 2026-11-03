@@ -31,7 +31,7 @@ jobs:
           node --check site-folders-top-drop.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.6.6' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.6.7' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -102,7 +102,7 @@ jobs:
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down folder" --output native-results/zia-landing-down-folder
       - name: Verify incremental site grouping preserves newest-first and manual order
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "incremental organize puts incoming tabs" --output native-results/incremental-organize
-      - name: Compare original v0.6.6 bottom-pointer behaviour
+      - name: Compare original v0.6.7 bottom-pointer behaviour
         shell: bash
         run: |
           mkdir -p .runtime/original-v066
@@ -112,7 +112,7 @@ jobs:
           import json
           d=json.load(open('native-results/real-bottom-v066/results.json'))
           p=d.get('pointerSamples') or []
-          print('BASELINE POINTER v0.6.6:', {
+          print('BASELINE POINTER v0.6.7:', {
             'platform':d.get('browser',{}).get('platform'),
             'errors':[q.get('error') for q in p],
             'nativeEvents':sum(len([e for e in q.get('events',[]) if e.get('type')=='dragover']) for q in p),

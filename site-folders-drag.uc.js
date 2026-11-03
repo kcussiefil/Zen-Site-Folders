@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 實際拖放與位置提示
-// @version      0.6.6
+// @version      0.6.7
 // @description  Settle native drops once, using the layout captured before dragging.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -1149,7 +1149,7 @@
     listeners.length = 0;
     if (window.__zsfDragV037 === api) delete window.__zsfDragV037;
   }
-  const api = { start, destroy, version: '0.6.6', chooseSlot, commit,
+  const api = { start, destroy, version: '0.6.7', chooseSlot, commit,
     beforeMutation, nativeIdle,
     // Explicit probe for isolated native Zen+Zia regression tests.
     prepareZiaGroupDrag(group) {
