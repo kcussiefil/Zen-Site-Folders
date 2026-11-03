@@ -1257,6 +1257,14 @@
               folder.parentElement !== current.node.tabsContainer) {
             throw new Error('沒有建立出一般分頁群組');
           }
+          // The incoming batch is not the entire folder. Preserve existing
+          // members (including deliberate cross-site manual placements) in
+          // their current order, then insert newly organized tabs above them.
+          // Sorting only `items` leaves arrivals below the old members.
+          const incoming = new Set(items.map(item => item.tab));
+          const preserved = [...(folder.tabs || folder.querySelectorAll('tab'))]
+            .filter(tab => eligible(tab) && tab.group === folder &&
+              !tab.pinned && !incoming.has(tab));
           for (const {tab} of items) {
             if (!tab.isConnected) { errors++; continue; }
             try {
@@ -1274,11 +1282,14 @@
           // the normal workspace and never pins any member.
           const sorted = items.map(item => item.tab).filter(tab =>
             tab?.isConnected && tab.group === folder && !tab.pinned);
-          reorderGroup(folder, sorted);
+          const desired = [...sorted, ...preserved.filter(tab =>
+            tab.isConnected && tab.group === folder && !tab.pinned)];
+          reorderGroup(folder, desired);
+          const expected = new Set(desired);
           const visibleOrder = [...folder.querySelectorAll('tab')].filter(tab =>
-            sorted.includes(tab) && tab.group === folder);
-          if (visibleOrder.length !== sorted.length ||
-              visibleOrder.some((tab, index) => tab !== sorted[index])) {
+            expected.has(tab) && tab.group === folder);
+          if (visibleOrder.length !== desired.length ||
+              visibleOrder.some((tab, index) => tab !== desired[index])) {
             errors++;
             console.warn(TAG, 'Newest-first order verification failed', site);
           }
