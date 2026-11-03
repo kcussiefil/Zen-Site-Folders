@@ -25,7 +25,7 @@ const finish = arguments[arguments.length - 1];
   const y=Math.round(box.top+Math.min(16,box.height/2));
   const data={group,head,port,x,y,grabOffset:y-box.top,events:[]};
   const track=event=>{
-    if(!['dragstart','dragover','dragend','mousemove','mousedown','scroll'].includes(event.type))return;
+    if(!['dragstart','drag','dragenter','dragleave','dragover','dragend','mousemove','mousedown','scroll'].includes(event.type))return;
     const r=head.getBoundingClientRect();
     data.events.push({type:event.type,x:event.clientX,y:event.clientY,
       sourceTop:r.top,scrollTop:port.scrollTop,max:port.scrollHeight-port.clientHeight,
@@ -33,12 +33,12 @@ const finish = arguments[arguments.length - 1];
       bridge:window.__zsfDragV037?.debugDrag?.(group)?.ziaLayoutCorrection});
     if(data.events.length>250)data.events.shift();
   };
-  for(const type of ['mousedown','mousemove','dragstart','dragover','dragend']){
+  for(const type of ['mousedown','mousemove','dragstart','drag','dragenter','dragleave','dragover','dragend']){
     window.addEventListener(type,track,true);
   }
   port.addEventListener('scroll',track,true);
   data.cleanup=()=>{
-    for(const type of ['mousedown','mousemove','dragstart','dragover','dragend']){
+    for(const type of ['mousedown','mousemove','dragstart','drag','dragenter','dragleave','dragover','dragend']){
       window.removeEventListener(type,track,true);
     }
     port.removeEventListener('scroll',track,true);
