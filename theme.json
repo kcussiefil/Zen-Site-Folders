@@ -1,9 +1,9 @@
 {
   "id": "zen-site-folders",
   "name": "Zen Site Folders",
-  "description": "Native Zen/Zia selection and dragging, stable folder state, compact hover previews and a live color editor.",
+  "description": "Zen-native site folders with scroll-aware dragging, narrower preview cards and consistent pointer hit targets.",
   "author": "kcussiefil",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -54,5 +54,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-03T13:40:23.000Z"
+  "updatedAt": "2026-11-03T14:35:43.000Z"
 }

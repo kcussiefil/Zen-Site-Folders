@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.6.5
+// @version      0.6.6
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -240,7 +240,7 @@
     // when the group header is near the bottom of a short window.
     popup.style.maxHeight = available + 'px';
     if (list) list.style.maxHeight = available + 'px';
-    const width = popup.offsetWidth || 330;
+    const width = popup.offsetWidth || 310;
     const height = Math.min(popup.offsetHeight || 60, available);
     let x = onRight ? sidebar.left - width - GAP : sidebar.right + GAP;
     x = Math.max(8, Math.min(x, viewportW - width - 8));

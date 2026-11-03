@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.6.5
+// @version      0.6.6
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -1257,6 +1257,14 @@
               folder.parentElement !== current.node.tabsContainer) {
             throw new Error('沒有建立出一般分頁群組');
           }
+          // The incoming batch is not the entire folder. Preserve existing
+          // members (including deliberate cross-site manual placements) in
+          // their current order, then insert newly organized tabs above them.
+          // Sorting only `items` leaves arrivals below the old members.
+          const incoming = new Set(items.map(item => item.tab));
+          const preserved = [...(folder.tabs || folder.querySelectorAll('tab'))]
+            .filter(tab => eligible(tab) && tab.group === folder &&
+              !tab.pinned && !incoming.has(tab));
           for (const {tab} of items) {
             if (!tab.isConnected) { errors++; continue; }
             try {
@@ -1274,11 +1282,14 @@
           // the normal workspace and never pins any member.
           const sorted = items.map(item => item.tab).filter(tab =>
             tab?.isConnected && tab.group === folder && !tab.pinned);
-          reorderGroup(folder, sorted);
+          const desired = [...sorted, ...preserved.filter(tab =>
+            tab.isConnected && tab.group === folder && !tab.pinned)];
+          reorderGroup(folder, desired);
+          const expected = new Set(desired);
           const visibleOrder = [...folder.querySelectorAll('tab')].filter(tab =>
-            sorted.includes(tab) && tab.group === folder);
-          if (visibleOrder.length !== sorted.length ||
-              visibleOrder.some((tab, index) => tab !== sorted[index])) {
+            expected.has(tab) && tab.group === folder);
+          if (visibleOrder.length !== desired.length ||
+              visibleOrder.some((tab, index) => tab !== desired[index])) {
             errors++;
             console.warn(TAG, 'Newest-first order verification failed', site);
           }
@@ -1440,8 +1451,8 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
-    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.5' };
-    console.info?.(TAG, '0.6.5 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.6' };
+    console.info?.(TAG, '0.6.6 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }
 
   if (document.readyState === 'complete') initialize();

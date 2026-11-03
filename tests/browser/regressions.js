@@ -24,7 +24,7 @@ const finish = arguments[arguments.length - 1];
     const prefix = make('prefix'), tabs = ['A', 'B', 'C', 'D'].map(make), suffix = make('suffix');
     // Only the scroll stability test needs a guaranteed overflowing real
     // arrowscrollbox even when run alone with --case.
-    if (caseName.includes('scroll offset') || caseName.includes('drag edge')) {
+    if (caseName.includes('scroll offset') || caseName.includes('drag edge') || caseName.includes('bottom-up group pointer')) {
       for (let i = 0; i < 34; i++) make('overflow-' + i);
     }
     const group = gBrowser.addTabGroup(tabs, { id: 'zsf-native-test-' + id,
@@ -55,11 +55,16 @@ const finish = arguments[arguments.length - 1];
     // left native animations and workspace history in the same process.
     if (!selectedCase && (name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
         name.startsWith('native member drag edge scroll') ||
-        (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance'))))
+        (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance')) ||
+        name.startsWith('incremental organize puts incoming tabs above existing members')))
       return;
     try {
       const h = await fixture(name);
-      await guarded(h, () => fn(h));
+      // This integration case must create actual unpinned browser tabs.
+      // Every ordinary case still retains the strict no-add/remove guard.
+      if (name.startsWith('incremental organize puts incoming tabs above existing members'))
+        await fn(h);
+      else await guarded(h, () => fn(h));
       results.push({ name, status: 'PASS' });
     } catch (error) { results.push({ name, status: 'FAIL', error: String(error.message || error) + '\n' + (error.stack || '') }); }
   }
@@ -84,6 +89,46 @@ const finish = arguments[arguments.length - 1];
     return { workspaceId, value };
   }
   // Real custom element click -> native setter -> native event -> native animations -> computed layout.
+  await test('incremental organize puts incoming tabs above existing members', async h => {
+    const principal = Services.scriptSecurityManager.getSystemPrincipal();
+    const add = uri => gBrowser.addTab(uri, { triggeringPrincipal: principal });
+    const initial = [add('about:robots'), add('about:license')];
+    await delay(350);
+    const group = gBrowser.addTabGroup(initial, { id:'zsf-incremental-'+serial,
+      label:'About', insertBefore:initial[0], showCreateUI:false });
+    group.setAttribute('data-zsf-site','internal:about');
+    group.collapsed=false;
+    await delay(150);
+    assert(initial.every(t=>t.group===group),'baseline site group must contain original members');
+    const site = tab => tab.linkedBrowser?.currentURI?.spec || '';
+    assert(initial.every(t=>/^about:(robots|license)/.test(site(t))),
+      'actual internal page URLs are required for this test: '+initial.map(site));
+    // User manually reorders existing group members; incremental organize
+    // must not sort them just to bring new arrivals to the top.
+    gBrowser.moveTabBefore(initial[1],initial[0]);
+    const preserved=[initial[1],initial[0]];
+    assert(same(order(group),preserved),'manual order must be established');
+    const incoming=[add('about:about'),add('about:mozilla')];
+    await delay(400);
+    assert(incoming.every(t=>/^about:(about|mozilla)/.test(site(t))),
+      'new tabs must expose their actual internal URLs: '+incoming.map(site));
+    const stamps=[Date.now()+2,Date.now()+3];
+    for(let i=0;i<incoming.length;i++)
+      SessionStore.setCustomTabValue(incoming[i], 'zsf-created-at-v1',String(stamps[i]));
+    const originalBrowsers=[...initial,...incoming].map(t=>t.linkedBrowser);
+    await core.organize();
+    await delay(120);
+    assert(same(order(group),[incoming[1],incoming[0],...preserved]),
+      'newest incoming tab must be at group top, existing manual order preserved: '+
+      JSON.stringify(order(group).map(site)));
+    assert([...initial,...incoming].every((t,i)=>t.isConnected && !t.pinned &&
+      t.linkedBrowser===originalBrowsers[i] && t.group===group),
+      'organize must preserve original tab objects, ownership and pin status');
+    // No new eligible tab: idempotent run must not disturb manual ordering.
+    await core.organize();
+    assert(same(order(group),[incoming[1],incoming[0],...preserved]),
+      'second organize with no newcomers must be a no-op');
+  });
   await test('native collapse/expand, rapid reversal and selected row', async h => {
     const expanded = h.group.groupContainer.getBoundingClientRect().height;
     assert(expanded > 60, 'expanded group must have real row geometry');
@@ -606,6 +651,86 @@ const finish = arguments[arguments.length - 1];
       else Services.prefs.setStringPref(key, original);
       Services.obs.notifyObservers(null, 'zsf-selected-tab-color-changed');
     }
+  });
+  await test('bottom-up group pointer remains anchored during upward sidebar scroll', async h => {
+    assert(window.__ziaLoaded === true, 'requires actual Zia native group drag');
+    const group = h.group;
+    const space = gZenWorkspaces.activeWorkspaceElement;
+    const port = space.scrollbox?.scrollbox || space.scrollbox;
+    assert(port && port.scrollHeight > port.clientHeight + 180,
+      'test must have an overflowing actual Zen sidebar');
+    const after = [...root().querySelectorAll('tab')].filter(tab =>
+      tab.group !== group && !tab.pinned && !tab.hasAttribute('zen-empty-tab')).at(-1);
+    assert(after, 'ordinary tab below group required');
+    gBrowser.moveTabAfter(group, after);
+    // Match the reported bottom-of-sidebar gesture: the group immediately
+    // above the dragged last group still shows its one selected member.
+    const selectedAbove = gBrowser.addTabGroup([h.prefix], {
+      id:'zsf-active-above-'+serial, label:'Active', insertBefore:h.prefix,
+      showCreateUI:false
+    });
+    selectedAbove.setAttribute('data-zsf-site','active.example');
+    // Two members: opening the selected predecessor mid-drag changes the
+    // dragged group's real layout top, without moving the pointer.
+    gBrowser.moveTabToExistingGroup(h.suffix, selectedAbove);
+    gBrowser.moveTabBefore(selectedAbove, group);
+    gBrowser.selectedTab = h.prefix;
+    selectedAbove.collapsed = true;
+    group.collapsed = true;
+    await idle(group);
+    assert(h.prefix.getBoundingClientRect().height > 12 &&
+      selectedAbove.getBoundingClientRect().height > group.getBoundingClientRect().height,
+      'active group immediately above last dragged group must show its selected row');
+    const max = Math.max(0, port.scrollHeight - port.clientHeight);
+    assert(max >= 180, 'need 180px scroll range from bottom');
+    port.scrollTo({ top:max, behavior:'instant' });
+    await delay(140);
+    const head = group.querySelector(':scope > .tab-group-label-container');
+    const box = head.getBoundingClientRect();
+    assert(box.height > 8 && box.top >= 0 && box.bottom <= innerHeight + 5,
+      'last group header must be in viewport: '+JSON.stringify(box.toJSON()));
+    const x = box.left + Math.min(28, box.width/2);
+    const downY = box.top + Math.min(16,box.height/2);
+    const offset = downY - box.top;
+    const transfer = new DataTransfer();
+    head.dispatchEvent(new MouseEvent('mousedown', { bubbles:true, composed:true,
+      button:0, buttons:1, clientX:x, clientY:downY }));
+    head.dispatchEvent(new DragEvent('dragstart', { bubbles:true, composed:true,
+      dataTransfer:transfer, clientX:x, clientY:downY, buttons:1 }));
+    assert(document.documentElement.hasAttribute('zia-dragging-tab') &&
+      drag.debugDrag(group)?.ziaDelegate, 'Zia must own the real source during test');
+    const samples = [];
+    const initialTop = port.scrollTop;
+    for (const [scrollUp,moveUp] of [[0,35],[65,65],[130,95],[195,125]]) {
+      // Simulate the neighbouring selected folder changing row height while
+      // Zia keeps the same native drag gesture active.
+      if (scrollUp === 130) {
+        selectedAbove.collapsed = false;
+        // The native drag is intentionally still running: nativeIdle()
+        // must not be called during it. Only await the folder animation.
+        if (motion.whenIdle) await motion.whenIdle(selectedAbove);
+        else await delay(180);
+      }
+      port.scrollTo({top:Math.max(0,initialTop-scrollUp),behavior:'instant'});
+      await delay(32);
+      const y = downY - moveUp;
+      head.dispatchEvent(new DragEvent('dragover',{bubbles:true,composed:true,
+        dataTransfer:transfer, clientX:x, clientY:y, buttons:1}));
+      await delay(40);
+      const actual = head.getBoundingClientRect();
+      samples.push({ scroll:port.scrollTop, pointer:y,
+        headerTop:actual.top, anchoredPoint:actual.top+offset,
+        error:Math.round((actual.top+offset-y)*100)/100,
+        transform:group.style.getPropertyValue('transform') });
+    }
+    window.dispatchEvent(new DragEvent('dragend', { bubbles:true, composed:true,
+      dataTransfer:transfer, clientX:x, clientY:downY-125 }));
+    await delay(100);
+    assert(samples.every(s=>Math.abs(s.error)<=8),
+      'upward scrolling must keep grabbed folder under the pointer, not lag behind: '+JSON.stringify(samples));
+    assert(!document.documentElement.hasAttribute('zia-dragging-tab') &&
+      group.parentElement === root() && !group.isZenFolder,
+      'group must restore original identity and DOM ownership after drag cancellation');
   });
   await test('Zia shared folder adapter probe', async h => {
     const g = h.group;
