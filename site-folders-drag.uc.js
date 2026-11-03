@@ -39,7 +39,7 @@
       const transform = style.transform && style.transform !== 'none'
         ? new DOMMatrix(style.transform).m42 : 0;
       const translated = style.translate && style.translate !== 'none'
-        ? (parseFloat(style.translate.split(/\\s+/)[1]) || 0) : 0;
+        ? (parseFloat(style.translate.split(/\s+/)[1]) || 0) : 0;
       const top = rect.top - transform - translated;
       return Number.isFinite(top) ? top : null;
     } catch (_) { return null; }
