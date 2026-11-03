@@ -54,7 +54,8 @@ const finish = arguments[arguments.length - 1];
     // dedicated, fresh-profile CI step rather than after 21 fixtures have
     // left native animations and workspace history in the same process.
     if (!selectedCase && (name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
-        name.startsWith('native member drag edge scroll')))
+        name.startsWith('native member drag edge scroll') ||
+        (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance'))))
       return;
     try {
       const h = await fixture(name);
