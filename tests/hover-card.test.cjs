@@ -133,7 +133,8 @@ async function main() {
     getElementById: id => id === 'navigator-toolbox' ? host : null,
     createElementNS: (_ns, type) => new FakeNode(type),
   };
-  vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout });
+  vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout,
+    setInterval: () => 1, clearInterval: () => {} });
   const api = window.__zsfGroupHoverV037;
   assert.equal(api.version, '0.5.6');
 
@@ -147,7 +148,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.5.6');
+  assert.equal(manifest.version, '0.6.5');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
@@ -157,7 +158,8 @@ async function main() {
   assert.equal(rows[2].dataset.action, 'new');
   assert.equal(rows[0].getAttribute('zia-selected'), 'true', 'selected row uses Zia highlight');
   assert(rows[0].className.includes('zia-folder-card-row'), 'Zia list styling is inherited');
-  assert.equal(rows[0].children.length, 4, 'row has favicon, animated sound bars, title, close');
+  assert.equal(rows[0].children.length, 5, 'row has favicon, animated sound bars, title, opening age, close');
+  assert.equal(rows[0].children[3].className, 'zsf-hover-age', 'age uses its own bounded column');
   const audio = rows[0].children[1];
   assert.equal(audio.tag, 'span', 'native four-bar sound indicator, not static speaker image');
   assert(audio.className.includes('zsf-hover-sound'));

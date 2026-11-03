@@ -118,7 +118,9 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
     alert(_win, _title, msg) { alerts.push(msg); }
   };
   class FakeMutationObserver { observe() {} disconnect() {} }
-  vm.runInNewContext(script, { window, document: doc, Services: { prompt }, ChromeUtils: {},
+  vm.runInNewContext(script, { window, document: doc, Services: {
+    prompt, obs: { addObserver() {}, removeObserver() {} }
+  }, ChromeUtils: {},
     MutationObserver: FakeMutationObserver, console, setTimeout, clearTimeout, Event: class Event {} });
   const api = window.__zsfMenuV037;
   assert.equal(api.version, '0.4.1');
@@ -152,15 +154,12 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
 async function testMenu() {
   const a = makeHarness();
   const menu = a.context();
-  for (const label of ['變更顏色', '重新命名', '變更圖示', '移除圖示',
+  for (const label of ['重新命名', '變更圖示', '移除圖示',
     '移到工作區', '解散群組', '轉為 Zen 分頁夾（上方釘選）', '刪除群組']) {
     assert(a.find(menu, label), 'missing translated item ' + label);
   }
   a.command(menu, '重新命名');
   assert.equal(a.group.label, '新的名稱');
-  a.command(menu, '藍色');
-  assert.equal(a.group.color, 'blue');
-  assert.equal(a.group.style.values['--zsf-custom-accent'], '#4d91df');
   a.command(menu, '變更圖示');
   assert(a.window.iconPicker, 'Zen native picker should be reused');
   a.window.iconPicker.onSelect('chrome://global/skin/icons/settings.svg');

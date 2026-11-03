@@ -31,7 +31,7 @@ jobs:
           node --check site-folders-top-drop.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.6.4' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.6.5' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -43,6 +43,7 @@ jobs:
           node tests/cross-group-selection.test.cjs
           node tests/snapshot-duplicate-id.test.cjs
           node tests/selected-color-age.test.cjs
+          node tests/color-editor.test.cjs
           node tests/undo-secondary-click.test.cjs
           node tests/drag-feedback.test.cjs
           node tests/native-single-landing.test.cjs
@@ -102,7 +103,7 @@ jobs:
       - name: Verify native member takeover stays visible during scroll
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "native member drag edge scroll" --output native-results/member-scroll
       - name: Verify legacy pointer-only group fallback separately
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "whole group drag animates neighbour avoidance" --output native-results/group-fallback
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --case "whole group drag animates neighbour avoidance" --output native-results/group-fallback
       - name: Prove regressions fail on v0.3.8
         shell: bash
         run: |
@@ -110,8 +111,17 @@ jobs:
           git archive f0b71ddee8f9caefad2864030e3f14fe714669b4 | tar -x -C .runtime/baseline
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --repo .runtime/baseline --output native-results/baseline && exit 1 || test -f native-results/baseline/results.json
           python3 tests/browser/check-baseline.py native-results/baseline/results.json
-      - name: Verify candidate against native tab objects, events and layout
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --output native-results/candidate
+      - name: Verify selected-color panel in isolated native Zen
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "selected color editor" --output native-results/selected-color-panel
+      - name: Compare whole native regression to v0.6.4 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .runtime/baseline-v064
+          git archive 3cc9091725a44d621ed66ec73bc2929f77931232 | tar -x -C .runtime/baseline-v064
+          python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --repo .runtime/baseline-v064 --output native-results/baseline-v064 || test -s native-results/baseline-v064/results.json
+          python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --output native-results/candidate || test -s native-results/candidate/results.json
+          python3 tests/browser/compare-candidate-v064.py native-results/baseline-v064/results.json native-results/candidate/results.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

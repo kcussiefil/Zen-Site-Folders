@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.6.4
+// @version      0.6.5
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -33,42 +33,63 @@
     document.documentElement.style.setProperty('--zsf-selected-tab-fill',
       `rgba(${rgb.join(', ')}, ${value.alpha / 100})`);
   }
-  function chooseSelectedColor() {
+  function chooseSelectedColor(anchorTab = null) {
     if (colorDialog?.isConnected) { colorDialog.focus(); return; }
     const html = (tag, text) => {
       const node = document.createElementNS('http://www.w3.org/1999/xhtml', tag);
-      if (text) node.textContent = text;
+      if (text != null) node.textContent = text;
       return node;
     };
-    const dialog = html('dialog');dialog.id = 'zsf-color-dialog';
+    const dialog = html('dialog'); dialog.id = 'zsf-color-dialog';
     dialog.setAttribute('aria-labelledby', 'zsf-color-heading');
-    const heading = html('h3', '變更選取分頁顏色');heading.id = 'zsf-color-heading';
-    const note = html('p', '所有一般分頁共用；展開、收合與點選後保持一致。');
-    const colorLabel = html('label', '顏色');
-    const color = html('input');color.type = 'color';color.setAttribute('aria-label', '選取分頁顏色');colorLabel.append(color);
-    const alphaLabel = html('label', '不透明度');
-    const alpha = html('input');alpha.type = 'range';alpha.min = '0';alpha.max = '100';alpha.step = '1';alpha.setAttribute('aria-label', '底色不透明度');
-    const output = html('output');alphaLabel.append(alpha, output);
-    const actions = html('div');actions.className = 'zsf-color-actions';
-    const nativeButton = text => {
-      const button = document.createXULElement('button');
-      button.setAttribute('label', text);button.classList.add('dialog-button');
-      return button;
+    const header = html('div'); header.className = 'zsf-color-heading-row';
+    const heading = html('h3', '選取分頁顏色'); heading.id = 'zsf-color-heading';
+    const dismiss = html('button', '×'); dismiss.type = 'button';
+    dismiss.className = 'zsf-color-dismiss'; dismiss.setAttribute('aria-label', '關閉顏色設定');
+    header.append(heading, dismiss);
+    const colorRow = html('label'); colorRow.className = 'zsf-color-picker-row';
+    const controls = html('span'); controls.className = 'zsf-color-picker-controls';
+    const color = html('input'); color.type = 'color';
+    color.setAttribute('aria-label', '選取分頁顏色');
+    const code = html('span'); code.className = 'zsf-color-hex';
+    controls.append(color, code); colorRow.append(html('span', '顏色'), controls);
+    const alphaBlock = html('div'); alphaBlock.className = 'zsf-color-opacity';
+    const alphaHeader = html('div'); alphaHeader.className = 'zsf-color-opacity-heading';
+    const output = html('output'); output.className = 'zsf-color-percent';
+    alphaHeader.append(html('span', '不透明度'), output);
+    const alpha = html('input'); alpha.type = 'range'; alpha.min = '0'; alpha.max = '100';
+    alpha.step = '1'; alpha.setAttribute('aria-label', '底色不透明度');
+    alphaBlock.append(alphaHeader, alpha);
+    const sample = html('div'); sample.className = 'zsf-color-sample';
+    const caption = html('span', '即時預覽'); caption.className = 'zsf-color-sample-caption';
+    const sampleTab = html('div'); sampleTab.className = 'zsf-color-sample-tab';
+    sampleTab.append(html('span', anchorTab?.label || window.gBrowser?.selectedTab?.label || '目前選取的分頁'));
+    sample.append(caption, sampleTab);
+    const actions = html('div'); actions.className = 'zsf-color-actions';
+    const button = (text, type) => {
+      const node = html('button', text); node.type = 'button';
+      node.className = 'zsf-color-button ' + type; return node;
     };
-    const reset = nativeButton('還原預設'), cancel = nativeButton('取消'), save = nativeButton('儲存');
-    save.setAttribute('default', 'true');
-    const left = html('div');left.className = 'zsf-color-reset';left.append(reset);
-    const right = html('div');right.className = 'zsf-color-confirm';right.append(cancel, save);
-    actions.append(left, right);dialog.append(heading, note, colorLabel, alphaLabel, actions);
+    const reset = button('還原預設', 'zsf-color-reset');
+    const cancel = button('取消', 'zsf-color-cancel');
+    const save = button('儲存', 'zsf-color-save');
+    const right = html('div'); right.className = 'zsf-color-confirm'; right.append(cancel, save);
+    actions.append(reset, right); dialog.append(header, colorRow, alphaBlock, sample, actions);
     const preview = () => {
+      code.textContent = color.value.toUpperCase();
       output.textContent = alpha.value + '%';
       applySelectedColor({ hex: color.value, alpha: Number(alpha.value) });
     };
-    const set = value => { color.value = value.hex;alpha.value = String(value.alpha);output.textContent = alpha.value + '%'; };
+    const set = value => { color.value = value.hex; alpha.value = String(value.alpha); preview(); };
     set(readColor());
-    color.addEventListener('input', preview);alpha.addEventListener('input', preview);
-    reset.addEventListener('click', () => { set(DEFAULT_COLOR);preview(); });
+    color.addEventListener('input', preview);
+    alpha.addEventListener('input', preview);
+    reset.addEventListener('click', () => set(DEFAULT_COLOR));
+    dismiss.addEventListener('click', () => dialog.close());
     cancel.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { event.preventDefault(); dialog.close(); }
+    });
     save.addEventListener('click', () => {
       const value = { hex: color.value, alpha: Number(alpha.value) };
       if (!validColor(value)) return;
@@ -78,10 +99,34 @@
         dialog.close();
       } catch (_) { alertUser('無法儲存顏色，請再試一次。'); }
     });
+    const toolbox = document.getElementById('navigator-toolbox');
+    // Independent of preview cards: neither holder can release the other's sidebar.
+    toolbox?.setAttribute('data-zsf-color-sidebar-hold', 'true');
+    const position = () => {
+      const sidebar = toolbox?.getBoundingClientRect();
+      const anchor = anchorTab?.isConnected ? anchorTab.getBoundingClientRect() : null;
+      const root = document.documentElement;
+      const vw = window.innerWidth || root.clientWidth || 1024;
+      const vh = window.innerHeight || root.clientHeight || 768;
+      const width = dialog.getBoundingClientRect().width || 310;
+      const height = dialog.getBoundingClientRect().height || 260;
+      const onRight = root.getAttribute('zen-right-side') === 'true';
+      const x = onRight ? (sidebar?.left ?? vw) - width - 8 : (sidebar?.right ?? 0) + 8;
+      const y = anchor?.height ? anchor.top : (sidebar?.top ?? 8) + 20;
+      dialog.style.left = Math.round(Math.max(8, Math.min(x, vw - width - 8))) + 'px';
+      dialog.style.top = Math.round(Math.max(8, Math.min(y, vh - height - 8))) + 'px';
+      dialog.style.visibility = 'visible';
+    };
     dialog.addEventListener('close', () => {
-      applySelectedColor();dialog.remove();if (colorDialog === dialog) colorDialog = null;
+      window.removeEventListener('resize', position);
+      toolbox?.removeAttribute('data-zsf-color-sidebar-hold');
+      applySelectedColor(); dialog.remove();
+      if (colorDialog === dialog) colorDialog = null;
     }, { once: true });
-    document.documentElement.appendChild(dialog);colorDialog = dialog;dialog.showModal();
+    document.documentElement.appendChild(dialog); colorDialog = dialog;
+    dialog.style.visibility = 'hidden';
+    dialog.show(); // Non-modal, so the selected tab remains visible during adjustments.
+    position(); window.addEventListener('resize', position);
   }
   const colorObserver = { observe() { applySelectedColor(); } };
   let menu = null;
@@ -523,7 +568,8 @@
       if (event.target === popup) tabColorItem.hidden = !ordinaryContextTab();
     });
     bind(tabColorItem, 'command', () => {
-      if (ordinaryContextTab()) chooseSelectedColor();
+      const tab = ordinaryContextTab();
+      if (tab) chooseSelectedColor(tab);
     });
   }
   function init() {
@@ -565,7 +611,8 @@
     menu?.remove();
   }
 
-  const api = { init, destroy, validGroup, members, restoreDecorations, version: '0.4.1' };
+  const api = { init, destroy, validGroup, members, restoreDecorations,
+    openSelectedColor: chooseSelectedColor, version: '0.4.1' };
   window.__zsfMenuV037 = api;
   if (document.readyState === 'complete') init();
   else bind(window, 'load', init, { once: true });
