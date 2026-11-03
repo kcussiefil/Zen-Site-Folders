@@ -526,7 +526,8 @@ const finish = arguments[arguments.length - 1];
     tab.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,composed:true,
       button:0,buttons:1,clientX:x,clientY:y}));
     window.dispatchEvent(new MouseEvent('mousemove',{buttons:1,clientX:x,clientY:y+15}));
-    assert(tab.hasAttribute('data-zsf-drag-member'), 'fixture must enter pointer fallback');
+    assert(!tab.hasAttribute('data-zsf-drag-member') && !document.querySelector('.zsf-drag-ghost'),
+      'with Zia loaded, pointer movement must NOT start a competing fallback preview');
     const transfer=new DataTransfer();
     tab.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
       dataTransfer:transfer,clientX:x,clientY:y+15}));
@@ -583,9 +584,9 @@ const finish = arguments[arguments.length - 1];
         button:0, buttons:1, clientX:from.left+24, clientY:from.top+12}));
       window.dispatchEvent(new MouseEvent('mousemove', {buttons:1,
         clientX:from.left+24, clientY:from.top-30}));
-      assert(drag.debugDrag(g).activeKind === 'group' &&
-        g.hasAttribute('data-zsf-drag-source'),
-        'missing dragstart must immediately activate pointer fallback');
+      assert(drag.debugDrag(g).pendingKind === 'group' &&
+        !g.hasAttribute('data-zsf-drag-source') && !document.querySelector('.zsf-drag-ghost'),
+        'with Zia loaded, missing dragstart must retain the pending native source without fallback painting');
       head.dispatchEvent(event);
       assert(drag.debugDrag(g).ziaDelegate && !g.hasAttribute('data-zsf-drag-source'),
         'late native takeover must remove the fallback source mask');
