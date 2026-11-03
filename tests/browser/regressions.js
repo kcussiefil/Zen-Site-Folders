@@ -670,6 +670,9 @@ const finish = arguments[arguments.length - 1];
       showCreateUI:false
     });
     selectedAbove.setAttribute('data-zsf-site','active.example');
+    // Two members: opening the selected predecessor mid-drag changes the
+    // dragged group's real layout top, without moving the pointer.
+    gBrowser.moveTabToExistingGroup(h.suffix, selectedAbove);
     gBrowser.moveTabBefore(selectedAbove, group);
     gBrowser.selectedTab = h.prefix;
     selectedAbove.collapsed = true;
@@ -699,6 +702,12 @@ const finish = arguments[arguments.length - 1];
     const samples = [];
     const initialTop = port.scrollTop;
     for (const [scrollUp,moveUp] of [[0,35],[65,65],[130,95],[195,125]]) {
+      // Simulate the neighbouring selected folder changing row height while
+      // Zia keeps the same native drag gesture active.
+      if (scrollUp === 130) {
+        selectedAbove.collapsed = false;
+        await idle(selectedAbove);
+      }
       port.scrollTo({top:Math.max(0,initialTop-scrollUp),behavior:'instant'});
       await delay(32);
       const y = downY - moveUp;
