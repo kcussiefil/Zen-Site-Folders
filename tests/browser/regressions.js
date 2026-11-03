@@ -634,6 +634,11 @@ const finish = arguments[arguments.length - 1];
       sepTop:sepRect?.top,sepBottom:sepRect?.bottom,
       groupPinned:g.pinned,prefixPinned:prefix.pinned,
       groupParent:g.parentElement?.className,prefixParent:prefix.parentElement?.className};
+    // Store the UNWRAPPED insertion method before arming the scoped adapter.
+    // Recording it after prepare would test for the temporary wrapper remaining installed.
+    const originalSeparator = gZenWorkspaces.activeWorkspaceElement.querySelector('.pinned-tabs-container-separator');
+    assert(originalSeparator?.parentNode, 'pinned separator parent must exist');
+    const insertDescriptor = Object.getOwnPropertyDescriptor(originalSeparator.parentNode, 'insertBefore');
     const prepared = typeof drag.prepareZiaGroupDrag === 'function' &&
       drag.prepareZiaGroupDrag(g);
     assert(prepared, 'native adapter should be active before OS dragstart: ' +
@@ -654,7 +659,6 @@ const finish = arguments[arguments.length - 1];
     const ziaShifted = prefix.hasAttribute('zia-shift') ||
       /translateY\([^)]*[1-9]/.test(prefix.style.getPropertyValue('transform'));
     assert(ziaShifted, 'Zia must visibly displace the target BEFORE release');
-    const insertDescriptor=Object.getOwnPropertyDescriptor(sep.parentNode,'insertBefore');
     const landings=[];
     const landingObserver=new MutationObserver(records => {
       for (const record of records)
