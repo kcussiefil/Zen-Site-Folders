@@ -158,7 +158,8 @@ async function main() {
   assert.equal(rows[2].dataset.action, 'new');
   assert.equal(rows[0].getAttribute('zia-selected'), 'true', 'selected row uses Zia highlight');
   assert(rows[0].className.includes('zia-folder-card-row'), 'Zia list styling is inherited');
-  assert.equal(rows[0].children.length, 4, 'row has favicon, animated sound bars, title, close');
+  assert.equal(rows[0].children.length, 5, 'row has favicon, animated sound bars, title, opening age, close');
+  assert.equal(rows[0].children[3].className, 'zsf-hover-age', 'age uses its own bounded column');
   const audio = rows[0].children[1];
   assert.equal(audio.tag, 'span', 'native four-bar sound indicator, not static speaker image');
   assert(audio.className.includes('zsf-hover-sound'));
