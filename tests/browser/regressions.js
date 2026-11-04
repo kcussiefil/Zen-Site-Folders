@@ -92,8 +92,36 @@ const finish = arguments[arguments.length - 1];
   await test('grouped tab real opening time persists independently of sorting', async h => {
     const openedKey = 'zsf-opened-at-real-v1';
     const saved = h.tabs.map(tab => Number(SessionStore.getCustomTabValue(tab, openedKey)));
+    const moduleStore = ChromeUtils.importESModule('resource:///modules/sessionstore/SessionStore.sys.mjs').SessionStore;
+    const diag = {
+      stamp: Date.now(),
+      runtime: {
+        type: typeof window.__zenSiteFoldersV037,
+        version: window.__zenSiteFoldersV037?.version || null,
+        readyState: document.readyState,
+        windowStore: Boolean(window.SessionStore),
+        moduleStoreIsWindowStore: moduleStore === window.SessionStore,
+        separator: Boolean(document.querySelector('zen-workspace .pinned-tabs-container-separator'))
+      },
+      tabs: h.tabs.map((tab, i) => {
+        const read = (store,key) => {
+          try { return store?.getCustomTabValue?.(tab,key) ?? null; }
+          catch (err) { return 'THREW: ' + String(err); }
+        };
+        return {
+          index: i, label: tab.zsfTestName, connected: tab.isConnected,
+          memory: tab.__zsfReliableOpenedAt ?? null,
+          orderMemory: tab.__zsfOpenedAt ?? null,
+          actual: saved[i],
+          sessionGlobal: read(SessionStore, openedKey),
+          sessionWindow: read(window.SessionStore, openedKey),
+          sessionModule: read(moduleStore, openedKey),
+          legacySort: read(SessionStore, 'zsf-created-at-v1')
+        };
+      })
+    };
     assert(saved.every(time => Number.isFinite(time) && time > Date.now() - 60000),
-      'freshly created browser tabs must have real opening timestamps');
+      'freshly created browser tabs must have real opening timestamps; DIAGNOSTIC=' + JSON.stringify(diag));
     const orderKey = 'zsf-created-at-v1';
     const first = h.tabs[0];
     SessionStore.setCustomTabValue(first, orderKey, String(saved[0] - 86400000));
