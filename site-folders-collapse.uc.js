@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.6.8
+// @version      0.6.9
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -460,7 +460,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.8', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.9', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.6.8
+// @version      0.6.9
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -11,6 +11,7 @@
 
   const TAG = '[ZenSiteFolders]';
   const STORE_KEY = 'zsf-created-at-v1';
+  const REAL_OPENED_KEY = 'zsf-opened-at-real-v1';
   const ICON_CLASS = 'zsf-favicon';
   const TAB_UID_KEY = 'zsf-tab-uid-v1';
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
@@ -42,6 +43,11 @@
   let waveStart = 0;
   let waveEnding = false;
   let seq = 0;
+  // Only newly created tabs are candidates for a new clock. Session restores
+  // keep their original saved timestamp, even while content is still unloaded.
+  const newTabOpenedAt = new WeakMap();
+  let sessionRestoreBusy = false;
+  let startupRestorePending = false;
   let uidSeq = 0;
   let noticeTimer = null;
   let noticeSerial = 0;
@@ -71,6 +77,8 @@
   let startupGroupStates = null;
   function captureStartupGroupStates(startup) {
     if (!startup.willRestore()) return;
+    // This can predate initialize(): do not stamp a restored lazy tab as new.
+    startupRestorePending = true;
     const states = new Map();
     for (const savedWindow of startup.state?.windows || []) {
       let owned;
@@ -91,6 +99,7 @@
   }
 
   function restoreStartupGroupStates() {
+    startupRestorePending = false;
     const states = startupGroupStates;
     startupGroupStates = null;
     if (!states?.size) return;
@@ -208,9 +217,62 @@
     return fallback;
   }
 
+  function storedOpenedAt(tab) {
+    // Read only genuine timestamps. The legacy sort key is a synthetic ordering
+    // baseline on old tabs and must never become an apparent opening time.
+    for (const store of sessionStores()) {
+      try {
+        const raw = store?.getCustomTabValue?.(tab, REAL_OPENED_KEY);
+        const time = Number(raw);
+        if (raw && Number.isFinite(time) && time > 0 && time <= Date.now() + 60_000)
+          return time;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  function restoreOpenedAt(tab) {
+    if (!tab) return;
+    const saved = storedOpenedAt(tab);
+    if (saved !== null) tab.__zsfReliableOpenedAt = saved;
+    else delete tab.__zsfReliableOpenedAt;
+  }
+
+  function persistOpenedAt(tab, stamp) {
+    if (!tab || !Number.isFinite(stamp) || stamp <= 0) return;
+    tab.__zsfReliableOpenedAt = stamp;
+    try { getSessionStore('setCustomTabValue')?.setCustomTabValue(tab, REAL_OPENED_KEY, String(stamp)); }
+    catch (_) {} // Keep the in-memory time until SessionStore finishes initialization.
+  }
+
+  function reconcileOpenedAt(tab) {
+    if (!tab) return;
+    const newStamp = newTabOpenedAt.get(tab);
+    if (newStamp !== undefined) {
+      // Native duplicateTab can copy its source's SessionStore data after
+      // TabOpen. The duplicate's new clock takes precedence on tab restoration.
+      persistOpenedAt(tab, newStamp);
+    } else {
+      // Restored or lazily loaded tab: never fabricate a new opening time.
+      restoreOpenedAt(tab);
+    }
+  }
+
   function noteNewTab(tab) {
-    if (!tab || tab.__zsfOpenedAt) return;
-    // During session restore, do not overwrite the original creation stamp.
+    if (!tab) return;
+    if (sessionRestoreBusy || startupRestorePending) {
+      // Native session restore (including reopen-closed-tab) may emit TabOpen.
+      // A restored tab with no real timestamp is historically unknown.
+      reconcileOpenedAt(tab);
+    } else {
+      const stamp = Date.now();
+      newTabOpenedAt.set(tab, stamp);
+      // Independent of the legacy sort clock, which may have been copied from
+      // another tab. Never skip this because __zsfOpenedAt already exists.
+      persistOpenedAt(tab, stamp);
+    }
+    // The sorting clock is separate; preserve it if SessionStore restored it.
+    if (tab.__zsfOpenedAt) return;
     try {
       const restored = Number(getSessionStore('getCustomTabValue')?.getCustomTabValue(tab, STORE_KEY));
       if (Number.isFinite(restored) && restored > 0) {
@@ -218,10 +280,9 @@
         return;
       }
     } catch (_) {}
+    if (sessionRestoreBusy || startupRestorePending) return;
     const stamp = Date.now() + (++seq / 1000);
     tab.__zsfOpenedAt = stamp;
-    tab.__zsfReliableOpenedAt = stamp;
-    try { getSessionStore('setCustomTabValue')?.setCustomTabValue(tab, 'zsf-opened-at-real-v1', String(stamp)); } catch (_) {}
     try { getSessionStore('setCustomTabValue')?.setCustomTabValue(tab, STORE_KEY, String(stamp)); } catch (_) {}
   }
 
@@ -1430,6 +1491,12 @@
     // SessionStore may restore group elements after window load.
     setTimeout(reapplyAppearance, 800);
     setTimeout(reapplyAppearance, 2500);
+    // SSWindowStateBusy/Ready brackets native session restores, including
+    // reopen-closed-tab. Opening one must never reset or invent an age.
+    window.addEventListener('SSWindowStateBusy', () => { sessionRestoreBusy = true; });
+    window.addEventListener('SSWindowStateReady', () => { sessionRestoreBusy = false; });
+    window.gBrowser.tabContainer.addEventListener('SSTabRestoring', e => reconcileOpenedAt(e.target));
+    window.gBrowser.tabContainer.addEventListener('SSTabRestored', e => reconcileOpenedAt(e.target));
     window.gBrowser.tabContainer.addEventListener('TabOpen', e => {
       noteNewTab(e.target);
       // Automatic grouping is intentionally disabled in the Zia-compatible
@@ -1451,8 +1518,8 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
-    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.8' };
-    console.info?.(TAG, '0.6.8 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.9' };
+    console.info?.(TAG, '0.6.9 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }
 
   if (document.readyState === 'complete') initialize();
