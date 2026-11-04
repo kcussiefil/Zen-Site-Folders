@@ -1520,6 +1520,7 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
+    window.__zsfRealOpenedDiagnosticClearPendingForTest = () => { startupRestorePending = false; };
     window.__zsfRealOpenedDiagnostic = tabs => ({
       noteNewTabCalls: diagnosticTabOpenCalls,
       restoreBusy: sessionRestoreBusy,
