@@ -92,7 +92,9 @@ const finish = arguments[arguments.length - 1];
   await test('grouped tab real opening time persists independently of sorting', async h => {
     const openedKey = 'zsf-opened-at-real-v1';
     const saved = h.tabs.map(tab => Number(SessionStore.getCustomTabValue(tab, openedKey)));
-    const moduleStore = ChromeUtils.importESModule('resource:///modules/sessionstore/SessionStore.sys.mjs').SessionStore;
+    let moduleStore = null, moduleStoreError = null;
+    try { moduleStore = ChromeUtils.importESModule('resource:///modules/sessionstore/SessionStore.sys.mjs').SessionStore; }
+    catch (err) { moduleStoreError = String(err); }
     const diag = {
       stamp: Date.now(),
       runtime: {
@@ -101,6 +103,7 @@ const finish = arguments[arguments.length - 1];
         readyState: document.readyState,
         windowStore: Boolean(window.SessionStore),
         moduleStoreIsWindowStore: moduleStore === window.SessionStore,
+        moduleStoreError,
         separator: Boolean(document.querySelector('zen-workspace .pinned-tabs-container-separator'))
       },
       tabs: h.tabs.map((tab, i) => {
