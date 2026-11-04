@@ -319,6 +319,22 @@
     backdrop-filter: blur(24px) saturate(1.6) !important;
   }
 }
+
+/* Zia v2.117.3 native card-style compatibility.
+   A standalone ZSF preview holds its own visible card even after the pointer
+   leaves the compact sidebar. Keep the same on-demand blur composition then,
+   but do not re-enable it over a selected pane with a visible SDR/HDR video:
+   Zia intentionally protects video colour in that state. */
+@media (-moz-platform: macos) {
+  @media -moz-pref("zia.cards.blur") {
+    :root:has(> #zsf-folder-hover-card:not([hidden])):not(
+      :has(#tabbrowser-tabpanels > .browserSidebarContainer:is(.deck-selected, [zen-split="true"]) browser[zia-video])
+    ) #tabbrowser-tabpanels .browserSidebarContainer {
+      will-change: transform !important;
+      backface-visibility: hidden !important;
+    }
+  }
+}
 /* The Zia list CSS (07-hover-cards.css) supplies spacing, selected row shine,
    10-row max-height, hidden scrollbar, icon and text styles. */
 #zsf-folder-hover-card > .zsf-hover-list {
@@ -590,16 +606,8 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
   --zia-active-tab-bg-folder: var(--zsf-selected-tab-fill, rgba(255, 255, 255, 0.08)) !important;
 }
 
-/* Independent preview-card hairline: Zia's original rule only names its own IDs. */
-@media not -moz-pref("zia.glass") {
-  #zsf-folder-hover-card::after {
-    content: "";position: absolute;inset: 0;
-    border: 0.5px solid rgba(255,255,255,.12);
-    border-radius: inherit;corner-shape: var(--zia-squircle, round);
-    pointer-events: none;
-  }
-}
-:root[zia-light] #zsf-folder-hover-card::after { border-color: rgba(0,0,0,.12); }
+/* The native Zia card's computed box-shadow supplies its border/edge.
+   Do not layer a separate hairline over the live-mirrored glass styling. */
 #zsf-folder-hover-card .zsf-hover-age {
   flex: 0 0 40px;min-width: 40px;text-align: end;
   font-size: .9em;font-variant-numeric: tabular-nums;opacity: .65;

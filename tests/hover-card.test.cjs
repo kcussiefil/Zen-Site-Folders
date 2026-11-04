@@ -69,6 +69,17 @@ async function main() {
 
   assert(css.includes('@media -moz-pref("zia.cards.blur")'), 'Zia glass preference is honored');
   assert(css.includes('blur(24px) saturate(1.6)'), 'Zia glass blur matches');
+
+  assert(css.includes('browser[zia-video]'), 'video guard must prevent ZSF preview from forcing colour-washing composition');
+  assert(css.includes(':root:has(> #zsf-folder-hover-card:not([hidden])):not('),
+    'composition must only be applied for a visible ZSF card without selected video');
+  assert(source.includes('getComputedStyle(source)'), 'read actual native Zia paint instead of freezing CSS values');
+  assert(source.includes("document.getElementById('zia-folder-card')"), 'native folder style source');
+  assert(source.includes("document.getElementById('zia-tab-card')"), 'native tab style fallback');
+  assert(source.includes("Services.prefs.addObserver('zia.'"), 'Zia settings should be observed');
+  assert(source.includes('MutationObserver'), 'new Zia cards and theme state should trigger re-sync');
+  assert(source.includes('stopPaintWatch();'), 'native paint watcher should be released on unload');
+  assert(!css.includes('Independent preview-card hairline:'), 'no extra custom border over native Zia edge');
   assert(css.includes('max-height: calc(100vh - 16px)'), 'viewport clamp required');
   assert(css.includes('[data-closing]'), 'Zia-style exit animation required');
   assert(!css.includes('display: none !important;\n  max-height: 0 !important;\n  margin: 0 !important;\n  padding: 0 !important;'), 'no hard collapsed display:none that cancels Zia spring');
@@ -156,7 +167,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.6.9');
+  assert.equal(manifest.version, '0.7.0');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
