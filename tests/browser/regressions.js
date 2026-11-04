@@ -89,6 +89,23 @@ const finish = arguments[arguments.length - 1];
     return { workspaceId, value };
   }
   // Real custom element click -> native setter -> native event -> native animations -> computed layout.
+  await test('grouped tab real opening time persists independently of sorting', async h => {
+    const openedKey = 'zsf-opened-at-real-v1';
+    const saved = h.tabs.map(tab => Number(SessionStore.getCustomTabValue(tab, openedKey)));
+    assert(saved.every(time => Number.isFinite(time) && time > Date.now() - 60000),
+      'freshly created browser tabs must have real opening timestamps');
+    const orderKey = 'zsf-created-at-v1';
+    const first = h.tabs[0];
+    SessionStore.setCustomTabValue(first, orderKey, String(saved[0] - 86400000));
+    assert(Number(SessionStore.getCustomTabValue(first, openedKey)) === saved[0],
+      'opening time must not be tied to the sort-order field');
+    h.group.collapsed = true;
+    await delay(80);
+    h.group.collapsed = false;
+    await delay(80);
+    assert(h.tabs.every((tab,i) => Number(SessionStore.getCustomTabValue(tab, openedKey)) === saved[i]),
+      'folding, grouping and expanding must preserve time without loading tabs');
+  });
   await test('incremental organize puts incoming tabs above existing members', async h => {
     const principal = Services.scriptSecurityManager.getSystemPrincipal();
     const add = uri => gBrowser.addTab(uri, { triggeringPrincipal: principal });
