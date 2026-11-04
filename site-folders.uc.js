@@ -46,6 +46,7 @@
   // Only newly created tabs are candidates for a new clock. Session restores
   // keep their original saved timestamp, even while content is still unloaded.
   const newTabOpenedAt = new WeakMap();
+  let diagnosticTabOpenCalls = 0;
   let sessionRestoreBusy = false;
   let startupRestorePending = false;
   let uidSeq = 0;
@@ -260,6 +261,7 @@
 
   function noteNewTab(tab) {
     if (!tab) return;
+    diagnosticTabOpenCalls++;
     if (sessionRestoreBusy || startupRestorePending) {
       // Native session restore (including reopen-closed-tab) may emit TabOpen.
       // A restored tab with no real timestamp is historically unknown.
@@ -1518,6 +1520,14 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
+    window.__zsfRealOpenedDiagnosticClearPendingForTest = () => { startupRestorePending = false; };
+    window.__zsfRealOpenedDiagnostic = tabs => ({
+      noteNewTabCalls: diagnosticTabOpenCalls,
+      restoreBusy: sessionRestoreBusy,
+      startupRestorePending,
+      sessionStoresCount: sessionStores().length,
+      newTabWeakMap: tabs.map(tab => newTabOpenedAt.has(tab))
+    });
     window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.9' };
     console.info?.(TAG, '0.6.9 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }

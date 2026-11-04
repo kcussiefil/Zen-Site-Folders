@@ -8,6 +8,13 @@ const finish = arguments[arguments.length - 1];
   const drag = window.__zsfDragV037;
   const motion = window.__zsfCollapseV037;
   const root = () => gZenWorkspaces.activeWorkspaceElement.tabsContainer;
+  // Causal control: the test injects this mod after Zen's workspace startup
+  // event has fired. Reset only the pending flag to model a completed restore.
+  if (selectedCase?.includes('grouped tab real opening time')) {
+    window.__zsfRealOpenedDiagnosticClearPendingForTest?.();
+  }
+  const zsfObservedTabOpen = [];
+  gBrowser.tabContainer.addEventListener('TabOpen', e => zsfObservedTabOpen.push(e.target));
   const order = group => [...group.querySelectorAll('tab')].filter(tab => tab.group === group);
   const same = (a, b) => a.length === b.length && a.every((tab, i) => tab === b[i]);
   const names = list => list.map(tab => tab.zsfTestName || tab.id);
@@ -92,8 +99,41 @@ const finish = arguments[arguments.length - 1];
   await test('grouped tab real opening time persists independently of sorting', async h => {
     const openedKey = 'zsf-opened-at-real-v1';
     const saved = h.tabs.map(tab => Number(SessionStore.getCustomTabValue(tab, openedKey)));
+    let moduleStore = null, moduleStoreError = null;
+    try { moduleStore = ChromeUtils.importESModule('resource:///modules/sessionstore/SessionStore.sys.mjs').SessionStore; }
+    catch (err) { moduleStoreError = String(err); }
+    const diag = {
+      stamp: Date.now(),
+      runtime: {
+        type: typeof window.__zenSiteFoldersV037,
+        version: window.__zenSiteFoldersV037?.version || null,
+        readyState: document.readyState,
+        windowStore: Boolean(window.SessionStore),
+        moduleStoreIsWindowStore: moduleStore === window.SessionStore,
+        moduleStoreError,
+        separator: Boolean(document.querySelector('zen-workspace .pinned-tabs-container-separator')),
+        runtimeProbe: window.__zsfRealOpenedDiagnostic?.(h.tabs) || null,
+        eventsObserved: zsfObservedTabOpen.map(tab => tab.zsfTestName || 'unknown').slice(-24)
+      },
+      tabs: h.tabs.map((tab, i) => {
+        const read = (store,key) => {
+          try { return store?.getCustomTabValue?.(tab,key) ?? null; }
+          catch (err) { return 'THREW: ' + String(err); }
+        };
+        return {
+          index: i, label: tab.zsfTestName, connected: tab.isConnected,
+          memory: tab.__zsfReliableOpenedAt ?? null,
+          orderMemory: tab.__zsfOpenedAt ?? null,
+          actual: saved[i],
+          sessionGlobal: read(SessionStore, openedKey),
+          sessionWindow: read(window.SessionStore, openedKey),
+          sessionModule: read(moduleStore, openedKey),
+          legacySort: read(SessionStore, 'zsf-created-at-v1')
+        };
+      })
+    };
     assert(saved.every(time => Number.isFinite(time) && time > Date.now() - 60000),
-      'freshly created browser tabs must have real opening timestamps');
+      'freshly created browser tabs must have real opening timestamps; DIAGNOSTIC=' + JSON.stringify(diag));
     const orderKey = 'zsf-created-at-v1';
     const first = h.tabs[0];
     SessionStore.setCustomTabValue(first, orderKey, String(saved[0] - 86400000));
