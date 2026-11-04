@@ -53,7 +53,8 @@ const finish = arguments[arguments.length - 1];
     // Zia's native whole-folder drop is stateful, so validate it in the
     // dedicated, fresh-profile CI step rather than after 21 fixtures have
     // left native animations and workspace history in the same process.
-    if (!selectedCase && (name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
+    if (!selectedCase && (name.startsWith('site v072 ') ||
+        name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
         name.startsWith('native member drag edge scroll') ||
         (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance')) ||
         name.startsWith('incremental organize puts incoming tabs above existing members')))
@@ -62,7 +63,8 @@ const finish = arguments[arguments.length - 1];
       const h = await fixture(name);
       // This integration case must create actual unpinned browser tabs.
       // Every ordinary case still retains the strict no-add/remove guard.
-      if (name.startsWith('incremental organize puts incoming tabs above existing members'))
+      if (name.startsWith('incremental organize puts incoming tabs above existing members') ||
+          name.startsWith('site v072 '))
         await fn(h);
       else await guarded(h, () => fn(h));
       results.push({ name, status: 'PASS' });
@@ -145,6 +147,87 @@ const finish = arguments[arguments.length - 1];
     await core.organize();
     assert(same(order(group),[incoming[1],incoming[0],...preserved]),
       'second organize with no newcomers must be a no-op');
+  });
+
+  const addSiteTab = url => gBrowser.addTab(url, {
+    triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()
+  });
+  await test('site v072 singleton organizer and second-click snapshot', async h => {
+    const a=addSiteTab('about:robots');
+    await delay(280);
+    const linked=a.linkedBrowser;
+    await core.organize();
+    await delay(90);
+    assert(a.isConnected && !a.group,
+      'a site with only one eligible tab must remain independent');
+    assert([...root().children].indexOf(a)>[...root().children].indexOf(h.group),
+      'standalone site tab must be below the last group');
+    const ss=() => JSON.parse(SessionStore.getCustomWindowValue(window,'zsf-before-sort-v1'));
+    const before=ss()[gZenWorkspaces.activeWorkspace];
+    assert(before?.version===4,'first organize must preserve current positions');
+    const b=addSiteTab('about:license');
+    await delay(280);
+    await core.organize();
+    await delay(90);
+    assert(a.group && b.group===a.group && !a.pinned && !b.pinned,
+      'second same-site page must create exactly one ordinary group');
+    assert(a.linkedBrowser===linked,
+      'organize must preserve the original tab and its linked browser');
+    const after=ss()[gZenWorkspaces.activeWorkspace];
+    const raw=SessionStore.getCustomWindowValue(window,'zsf-archived-snapshots-v1');
+    const history=raw?JSON.parse(raw):{};
+    assert(history[gZenWorkspaces.activeWorkspace]?.length>=1,
+      'second organize must archive the previous recovery point');
+    assert(after?.capturedAt>=before.capturedAt,
+      'second organize must record a fresh pre-sort snapshot');
+    assert(after.tabs.some(t=>t.url==='about:robots'&&t.group===null),
+      'latest snapshot must preserve singleton position before it was grouped');
+  });
+  await test('site v072 selected remaining group tab stays in place', async h => {
+    const a=addSiteTab('about:robots'),b=addSiteTab('about:license');
+    await delay(250);
+    const group=gBrowser.addTabGroup([a,b],{
+      id:'zsf-single-selected-'+serial,label:'About',
+      insertBefore:h.group,showCreateUI:false
+    });
+    group.setAttribute('data-zsf-site','internal:about');
+    group.collapsed=false;
+    gBrowser.selectedTab=a;
+    const linked=a.linkedBrowser;
+    gBrowser.removeTab(b,{animate:false});
+    await delay(600);
+    assert(a.isConnected&&!a.group&&!a.pinned,
+      'selected final tab must auto-dissolve');
+    assert(gBrowser.selectedTab===a&&a.linkedBrowser===linked,
+      'selected tab and browser identity must stay the same');
+    const nodes=[...root().children];
+    assert(nodes.indexOf(a)>=0&&nodes.indexOf(a)<nodes.indexOf(h.group),
+      'selected final tab must occupy the former group slot');
+  });
+  await test('site v072 background remaining tab sorts without moving parked tab', async h => {
+    const a=addSiteTab('about:robots'),b=addSiteTab('about:license');
+    const parked=addSiteTab('about:mozilla');
+    await delay(250);
+    const group=gBrowser.addTabGroup([a,b],{
+      id:'zsf-single-background-'+serial,label:'About',
+      insertBefore:h.group,showCreateUI:false
+    });
+    group.setAttribute('data-zsf-site','internal:about');
+    group.collapsed=false;
+    gBrowser.moveTabBefore(parked,group);
+    gBrowser.selectedTab=h.prefix;
+    const linked=a.linkedBrowser;
+    gBrowser.removeTab(b,{animate:false});
+    await delay(600);
+    assert(a.isConnected&&!a.group&&!a.pinned,
+      'background final tab must auto-dissolve');
+    assert(a.linkedBrowser===linked,
+      'background final tab must retain the linked browser');
+    const nodes=[...root().children];
+    assert(nodes.indexOf(a)>nodes.indexOf(h.group),
+      'background final tab must move after all ordinary groups');
+    assert(nodes.indexOf(parked)<nodes.indexOf(h.group),
+      'manually positioned independent page above groups must stay there');
   });
   await test('native collapse/expand, rapid reversal and selected row', async h => {
     const expanded = h.group.groupContainer.getBoundingClientRect().height;
