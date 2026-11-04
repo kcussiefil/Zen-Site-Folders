@@ -319,6 +319,21 @@
     backdrop-filter: blur(24px) saturate(1.6) !important;
   }
 }
+/* v0.6.10 — Zia 2.117.2 no longer keeps the page in Firefox's composited
+   layer all the time to protect HDR. Its own cards turn that layer on only
+   while visible; include our separate hover card in the same opt-in behavior.
+   Never force this layer when the preview is hidden: doing so washes out HDR
+   video on macOS. A visible glass overlay may still temporarily affect HDR,
+   as with Zia's native hover cards. */
+@media (-moz-platform: macos) {
+  @media -moz-pref("zia.cards.blur") {
+    :root:has(> #zsf-folder-hover-card:not([hidden]))
+      #tabbrowser-tabpanels .browserSidebarContainer {
+      will-change: transform !important;
+      backface-visibility: hidden !important;
+    }
+  }
+}
 /* The Zia list CSS (07-hover-cards.css) supplies spacing, selected row shine,
    10-row max-height, hidden scrollbar, icon and text styles. */
 #zsf-folder-hover-card > .zsf-hover-list {

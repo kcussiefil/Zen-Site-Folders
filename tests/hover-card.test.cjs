@@ -69,6 +69,18 @@ async function main() {
 
   assert(css.includes('@media -moz-pref("zia.cards.blur")'), 'Zia glass preference is honored');
   assert(css.includes('blur(24px) saturate(1.6)'), 'Zia glass blur matches');
+  // Zia 2.117.2 draws the page into the blur layer only while a native
+  // floating card is up. Our card is separate and needs the same conditional
+  // compositing; never leave this enabled for ordinary HDR playback.
+  const ziaGlassCompat = css.match(
+    /@media \(-moz-platform: macos\)\s*\{\s*@media -moz-pref\("zia\.cards\.blur"\)\s*\{\s*:root:has\(> #zsf-folder-hover-card:not\(\[hidden\]\)\)\s*#tabbrowser-tabpanels \.browserSidebarContainer\s*\{([^}]*)\}/
+  );
+  assert(ziaGlassCompat, 'Zia 2.117.2 glass compatibility must only activate for a visible ZSF card on macOS');
+  assert(/will-change:\s*transform\s*!important/.test(ziaGlassCompat[1]), 'preview compositor activated only while visible');
+  assert(/backface-visibility:\s*hidden\s*!important/.test(ziaGlassCompat[1]), 'preview compositor matches Zia native cards');
+  assert(source.includes('document.documentElement.appendChild(card)'), 'popup remains a direct root child for CSS :has');
+  assert(source.includes('card.hidden = false') && source.includes('card.hidden = true'),
+    'preview visibility must drive the conditional compositor');
   assert(css.includes('max-height: calc(100vh - 16px)'), 'viewport clamp required');
   assert(css.includes('[data-closing]'), 'Zia-style exit animation required');
   assert(!css.includes('display: none !important;\n  max-height: 0 !important;\n  margin: 0 !important;\n  padding: 0 !important;'), 'no hard collapsed display:none that cancels Zia spring');
