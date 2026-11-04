@@ -8,6 +8,11 @@ const finish = arguments[arguments.length - 1];
   const drag = window.__zsfDragV037;
   const motion = window.__zsfCollapseV037;
   const root = () => gZenWorkspaces.activeWorkspaceElement.tabsContainer;
+  // Causal control: the test injects this mod after Zen's workspace startup
+  // event has fired. Reset only the pending flag to model a completed restore.
+  if (selectedCase?.includes('grouped tab real opening time')) {
+    window.__zsfRealOpenedDiagnosticClearPendingForTest?.();
+  }
   const zsfObservedTabOpen = [];
   gBrowser.tabContainer.addEventListener('TabOpen', e => zsfObservedTabOpen.push(e.target));
   const order = group => [...group.querySelectorAll('tab')].filter(tab => tab.group === group);
