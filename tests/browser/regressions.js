@@ -182,6 +182,15 @@ const finish = arguments[arguments.length - 1];
       'second organize must record a fresh pre-sort snapshot');
     assert(after.tabs.some(t=>t.url==='about:robots'&&t.group===null),
       'latest snapshot must preserve singleton position before it was grouped');
+    await core.undo();
+    await delay(120);
+    assert(a.isConnected && b.isConnected && !a.group && !b.group,
+      'Undo must restore the second-click state with two independent pages');
+    assert(a.linkedBrowser===linked,
+      'Undo must preserve tab identity and live browser without reloading');
+    const top=[...root().children];
+    assert(top.indexOf(a)>top.indexOf(h.group),
+      'Undo must restore first singleton to its pre-second-organize slot');
   });
   await test('site v072 selected remaining group tab stays in place', async h => {
     const a=addSiteTab('about:robots'),b=addSiteTab('about:license');
