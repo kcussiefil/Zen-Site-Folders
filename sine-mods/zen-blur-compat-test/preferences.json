@@ -1,0 +1,23 @@
+[
+  {
+    "property": "mod.zenblurtest.strategy",
+    "label": "毛玻璃合成修復測試（關閉／A／B）",
+    "type": "dropdown",
+    "defaultValue": "off",
+    "placeholder": false,
+    "options": [
+      {
+        "label": "關閉（預設，不修改合成）",
+        "value": "off"
+      },
+      {
+        "label": "方案 A：#browser blur(0px)",
+        "value": "a"
+      },
+      {
+        "label": "方案 B：#zen-tabbox-wrapper scale(1)",
+        "value": "b"
+      }
+    ]
+  }
+]
