@@ -8,6 +8,8 @@ const finish = arguments[arguments.length - 1];
   const drag = window.__zsfDragV037;
   const motion = window.__zsfCollapseV037;
   const root = () => gZenWorkspaces.activeWorkspaceElement.tabsContainer;
+  const zsfObservedTabOpen = [];
+  gBrowser.tabContainer.addEventListener('TabOpen', e => zsfObservedTabOpen.push(e.target));
   const order = group => [...group.querySelectorAll('tab')].filter(tab => tab.group === group);
   const same = (a, b) => a.length === b.length && a.every((tab, i) => tab === b[i]);
   const names = list => list.map(tab => tab.zsfTestName || tab.id);
@@ -104,7 +106,9 @@ const finish = arguments[arguments.length - 1];
         windowStore: Boolean(window.SessionStore),
         moduleStoreIsWindowStore: moduleStore === window.SessionStore,
         moduleStoreError,
-        separator: Boolean(document.querySelector('zen-workspace .pinned-tabs-container-separator'))
+        separator: Boolean(document.querySelector('zen-workspace .pinned-tabs-container-separator')),
+        runtimeProbe: window.__zsfRealOpenedDiagnostic?.(h.tabs) || null,
+        eventsObserved: zsfObservedTabOpen.map(tab => tab.zsfTestName || 'unknown').slice(-24)
       },
       tabs: h.tabs.map((tab, i) => {
         const read = (store,key) => {
