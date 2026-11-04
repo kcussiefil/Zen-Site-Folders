@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const original=fs.readFileSync(path.join(__dirname,'../site-folders.uc.js'),'utf8');
 const anchor="  if (document.readyState === 'complete') initialize();";
 assert(original.includes(anchor));
-const code=original.replace(anchor,"  window.timeProbe={noteNewTab,storedOpenedAt,restoreOpenedAt,reconcileOpenedAt,setRestoreBusy(x){sessionRestoreBusy=!!x}};\n"+anchor);
+const code=original.replace(anchor,"  window.timeProbe={noteNewTab,storedOpenedAt,restoreOpenedAt,reconcileOpenedAt,captureStartupGroupStates,restoreStartupGroupStates,watchWorkspaceInitialization,getRestoreState(){return {startupRestorePending,workspaceRestoreCompleted}},setRestoreBusy(x){sessionRestoreBusy=!!x}};\n"+anchor);
 const sort='zsf-created-at-v1',time='zsf-opened-at-real-v1',now=Date.now();
 function harness(saved=new Map()){
  const writes=[];
@@ -11,7 +11,7 @@ function harness(saved=new Map()){
  const window={SessionStore:store,addEventListener(){}};
  vm.runInNewContext(code,{window,document:{readyState:'loading'},
  ChromeUtils:{importESModule:()=>({SessionStore:store})},console:{warn(){}},setTimeout,clearTimeout});
- return {p:window.timeProbe,saved,writes,get:(tab,key)=>store.getCustomTabValue(tab,key)};
+ return {p:window.timeProbe,window,saved,writes,get:(tab,key)=>store.getCustomTabValue(tab,key)};
 }
 {
  const tab={},h=harness(new Map([[tab,new Map([[sort,String(now-86400000)]])]]));
@@ -47,4 +47,54 @@ function harness(saved=new Map()){
  h.p.reconcileOpenedAt(tab);assert.equal(h.get(tab,time),previous,'no reset on reload/restore');
 }
 assert(!code.includes('setInterval('),'opening-time tracking may not poll tabs');
-console.log('PASS: new/duplicate/restore/lazy opening clocks, grouping independence, no polling');
+
+// Zen's AfterWorkspacesSessionRestore may have happened before Sine loads.
+// The already-settled workspace promise must clear the pending flag without
+// falsely assigning an opening time to restored (historical) tabs.
+async function lateInstallRegression() {
+  const restoredTab={}, skipped={}, fresh={};
+  const previous=String(Date.now()-180000);
+  const saved=new Map([[restoredTab,new Map([[time,previous],[sort,previous]])]]);
+  const h=harness(saved);
+  const startup={willRestore:()=>true,state:{windows:[]}};
+  h.p.captureStartupGroupStates(startup);
+  assert.equal(h.p.getRestoreState().startupRestorePending,true);
+  h.p.setRestoreBusy(true);
+  h.p.noteNewTab(restoredTab);
+  h.p.setRestoreBusy(false);
+  h.p.noteNewTab(skipped);
+  assert.equal(h.get(skipped,time),'','pending restore must not invent timestamps');
+  assert.equal(h.get(restoredTab,time),previous,'restored tab must retain timestamp');
+
+  const ready=Promise.resolve();
+  // The real Zen native property is a Promise, not a one-shot event.
+  h.p.getRestoreState();
+  h.p.watchWorkspaceInitialization(); // no workspace object yet: safe
+  // Harness deliberately doesn't invoke the DOM-dependent initialize().
+  // Re-use its narrow promise watcher with a real settled Promise instead.
+  const workspaceHandle={promiseInitialized:ready};
+  // Promise watcher closes over window: expose it from the harness below.
+  h.window.gZenWorkspaces=workspaceHandle;
+  h.p.watchWorkspaceInitialization();
+  await ready;
+  await Promise.resolve();
+  assert.equal(h.p.getRestoreState().startupRestorePending,false,
+    'late-loaded mod must clear pending restore after settled Zen promise');
+  assert.equal(h.p.getRestoreState().workspaceRestoreCompleted,true);
+  h.p.noteNewTab(fresh);
+  assert(Number(h.get(fresh,time)) > Date.now()-2000,
+    'fresh tab must get its genuine time once restore has finished');
+  assert.equal(h.get(restoredTab,time),previous,
+    'clearing restore guard must not rewrite historical tabs');
+  h.p.captureStartupGroupStates(startup);
+  assert.equal(h.p.getRestoreState().startupRestorePending,false,
+    'late SessionStartup callback must not re-enable restore guard');
+  h.p.restoreStartupGroupStates();
+  assert.equal(h.p.getRestoreState().startupRestorePending,false,
+    'restore completion must be idempotent');
+}
+
+lateInstallRegression().then(
+  ()=>console.log('PASS: new/duplicate/restore/lazy/late-load opening clocks, grouping independence, no polling'),
+  err=>{console.error(err);process.exitCode=1;}
+);
