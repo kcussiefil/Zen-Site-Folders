@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.7.1
+// @version      0.7.2
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -48,6 +48,8 @@
   const newTabOpenedAt = new WeakMap();
   let sessionRestoreBusy = false;
   let startupRestorePending = false;
+  const closingSiteGroups = new Map();
+  let autoUngrouping = false;
   let workspaceRestoreCompleted = false;
   let uidSeq = 0;
   let noticeTimer = null;
@@ -418,6 +420,198 @@
       tab, stamp: openedAt(tab), index
     })).sort((a, b) => (b.stamp - a.stamp) || (a.index - b.index));
     reorderGroup(group, order.map(item => item.tab));
+  }
+
+
+  // Standalone tabs always use genuine opening times. The legacy sort key
+  // may only represent a synthetic pre-v0.6.9 fallback, so never rank on it.
+  function orderStandaloneTabs(tabs) {
+    return tabs.map((tab, index) => ({ tab, index, opened: storedOpenedAt(tab) }))
+      .sort((a, b) => {
+        if (a.opened !== null && b.opened !== null)
+          return (b.opened - a.opened) || (a.index - b.index);
+        if (a.opened !== null) return -1;
+        if (b.opened !== null) return 1;
+        return a.index - b.index;
+      }).map(entry => entry.tab);
+  }
+
+  function standaloneTab(tab, root) {
+    return tab?.isConnected && tab.localName === 'tab' &&
+      tab.parentElement === root && !tab.group &&
+      eligible(tab) && !!siteFor(tabURL(tab));
+  }
+
+  function lastOrdinaryGroup(root) {
+    return [...(root?.children || [])].reverse().find(node =>
+      node?.isConnected && node.parentElement === root &&
+      node.localName === 'tab-group' && !node.pinned &&
+      !node.hasAttribute('split-view-group')) || null;
+  }
+
+  // Explicit organize collects every eligible standalone; close-to-one only
+  // sorts the existing tail and the departing tab, leaving manually relocated
+  // independent tabs above the group region exactly where the user put them.
+  async function arrangeStandaloneTabs({ includeManual = false, incoming = [] } = {}) {
+    const current = workspace();
+    const root = current?.node?.tabsContainer;
+    const browser = window.gBrowser;
+    if (!root || !browser || typeof browser.moveTabBefore !== 'function' ||
+        typeof browser.moveTabAfter !== 'function')
+      throw new Error('獨立分頁排序缺少 Zen 原生 API');
+    const nodes = [...root.children];
+    const lastGroup = lastOrdinaryGroup(root);
+    const lastIndex = lastGroup ? nodes.indexOf(lastGroup) : -1;
+    const keep = new Set(incoming.filter(tab => standaloneTab(tab, root)));
+    const candidates = nodes.filter((tab, index) =>
+      standaloneTab(tab, root) &&
+      (includeManual || index > lastIndex || keep.has(tab)));
+    if (!candidates.length) return { considered: 0, moved: 0 };
+    const desired = orderStandaloneTabs(candidates);
+    let moved = 0;
+    if (lastGroup) {
+      let anchor = lastGroup;
+      for (const tab of desired) {
+        if (!tab.isConnected || tab.parentElement !== root || tab.group)
+          throw new Error('獨立分頁排序期間發生群組變更');
+        if (tab.previousElementSibling !== anchor) {
+          await browser.moveTabAfter(tab, anchor);
+          moved++;
+        }
+        anchor = tab;
+      }
+    } else {
+      // No groups: preserve the last standalone's placement while ordering
+      // the adjacent standalone run; never reparent or clone any tab.
+      for (let i = desired.length - 2; i >= 0; i--) {
+        const tab = desired[i], next = desired[i + 1];
+        if (tab.nextElementSibling !== next) {
+          await browser.moveTabBefore(tab, next);
+          moved++;
+        }
+      }
+    }
+    const visible = [...root.children].filter(tab => desired.includes(tab));
+    if (visible.length !== desired.length ||
+        visible.some((tab, index) => tab !== desired[index]))
+      throw new Error('獨立分頁排序後順序驗證失敗');
+    return { considered: desired.length, moved };
+  }
+
+  function scrollPositionGuard() {
+    const space = workspace();
+    const port = space?.node?.scrollbox?.scrollbox || space?.node?.scrollbox;
+    const tab = window.gBrowser?.selectedTab;
+    if (!port?.getBoundingClientRect || !tab?.getBoundingClientRect ||
+        !tab.isConnected || !space?.node?.contains?.(tab)) return () => {};
+    const viewport = port.getBoundingClientRect();
+    const start = tab.getBoundingClientRect().top;
+    if (start < viewport.top || start >= viewport.bottom) return () => {};
+    return () => {
+      if (!tab.isConnected || window.gBrowser?.selectedTab !== tab) return;
+      const delta = tab.getBoundingClientRect().top - start;
+      if (Number.isFinite(delta) && Math.abs(delta) > 0.5 &&
+          Math.abs(delta) < port.scrollHeight)
+        port.scrollTop += delta;
+    };
+  }
+
+  function isOwnedCloseGroup(group) {
+    return group?.isConnected && !group.isZenFolder && !group.pinned &&
+      !group.hasAttribute?.('split-view-group') &&
+      group.parentElement?.localName !== 'zen-folder' &&
+      !!siteOfGroup(group);
+  }
+
+  async function dissolveSingleMember(group, survivor) {
+    if (autoUngrouping || running || !isOwnedCloseGroup(group) ||
+        !survivor?.isConnected || survivor.group !== group ||
+        [...(group.tabs || [])].filter(tab => tab.isConnected && tab.group === group).length !== 1)
+      return false;
+    const browser = window.gBrowser;
+    const root = group.parentElement;
+    if (root !== workspace()?.node?.tabsContainer ||
+        typeof browser?.ungroupTab !== 'function' ||
+        typeof browser.moveTabBefore !== 'function' ||
+        typeof browser.moveTabAfter !== 'function') return false;
+    const selected = browser.selectedTab === survivor;
+    const siblings = [...root.children], pos = siblings.indexOf(group);
+    const next = siblings.slice(pos + 1).find(node => node.isConnected &&
+      (node.localName === 'tab' || node.localName === 'tab-group'));
+    const previous = siblings.slice(0, pos).reverse().find(node => node.isConnected &&
+      (node.localName === 'tab' || node.localName === 'tab-group'));
+    const restoreView = scrollPositionGuard();
+    autoUngrouping = true;
+    try {
+      await browser.ungroupTab(survivor);
+      if (!survivor.isConnected || survivor.group || survivor.pinned)
+        throw new Error('剩餘分頁解除群組失敗');
+      // Zia / native Zen may leave inactive collapsed row presentation inline.
+      survivor.removeAttribute('folder-active');
+      survivor.removeAttribute('zia-kept-tab');
+      survivor.style?.removeProperty?.('--zen-folder-indent');
+      window.gZenFolders?.styleCleanup?.([survivor]);
+      if (selected) {
+        // Stay at exactly the former group slot, even if later TabSelect fires.
+        if (next?.isConnected && next.parentElement === root)
+          await browser.moveTabBefore(survivor, next);
+        else if (previous?.isConnected && previous.parentElement === root)
+          await browser.moveTabAfter(survivor, previous);
+      } else {
+        await arrangeStandaloneTabs({ incoming: [survivor] });
+      }
+      restoreView();
+      return true;
+    } catch (error) {
+      console.warn(TAG, 'Auto dissolve single-member site group failed:', error);
+      restoreView();
+      return false;
+    } finally {
+      autoUngrouping = false;
+    }
+  }
+
+  function clearCloseWatch(group) {
+    const record = closingSiteGroups.get(group);
+    if (!record) return;
+    record.observer.disconnect();
+    clearTimeout(record.timeout);
+    closingSiteGroups.delete(group);
+  }
+
+  function checkClosedSiteGroup(group) {
+    const record = closingSiteGroups.get(group);
+    if (!record || running || autoUngrouping ||
+        document.documentElement?.hasAttribute?.('zia-dragging-tab')) return;
+    if (!isOwnedCloseGroup(group)) { clearCloseWatch(group); return; }
+    // A closing tab can remain connected during Zen's close animation.
+    // Wait for its actual DOM departure, never a guessed 200–500ms timer.
+    if ([...record.closing].some(tab => tab.isConnected && tab.group === group)) return;
+    const survivors = [...(group.tabs || [])].filter(tab =>
+      tab.isConnected && tab.group === group && !tab.closing);
+    if (survivors.length !== 1) { clearCloseWatch(group); return; }
+    clearCloseWatch(group);
+    void dissolveSingleMember(group, survivors[0]);
+  }
+
+  function onSiteTabClose(event) {
+    const tab = event.target;
+    if (tab?.localName !== 'tab') return;
+    const group = tab.group || tab.closest?.('tab-group');
+    if (!isOwnedCloseGroup(group)) return;
+    let record = closingSiteGroups.get(group);
+    if (!record) {
+      const observer = new MutationObserver(() => checkClosedSiteGroup(group));
+      observer.observe(group, { childList: true, subtree: true });
+      record = { observer, closing: new Set(), timeout: null };
+      record.timeout = setTimeout(() => {
+        checkClosedSiteGroup(group);
+        clearCloseWatch(group); // Do not leave a permanent observer on a stale group.
+      }, 2500);
+      closingSiteGroups.set(group, record);
+    }
+    record.closing.add(tab);
+    queueMicrotask(() => checkClosedSiteGroup(group));
   }
 
   // Persist tab identity in Firefox's own SessionStore. The document's tab
@@ -1280,12 +1474,29 @@
       if (stored[current.id] && stored[current.id].version !== 4) {
         throw new Error('仍有舊版快照；為保護分頁已拒絕整理，請先備份並處理舊版工作階段');
       }
-      if (!stored[current.id]) {
-        const snapshot = captureSnapshot(current);
-        if (!snapshot || !writeSnapshots({ ...stored, [current.id]: snapshot })) {
-          throw new Error('整理前備份寫入失敗，沒有移動任何分頁');
-        }
+      // Each explicit organize gets its OWN restore point. Archive the prior
+      // snapshot first so old recovery data is not destroyed by the new one.
+      const snapshot = captureSnapshot(current);
+      const previous = stored[current.id];
+      if (previous) {
+        const store = getSessionStore('getCustomWindowValue', 'setCustomWindowValue');
+        if (!store) throw new Error('歷史整理快照無法封存');
+        const raw = store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY);
+        const archives = raw ? JSON.parse(raw) : {};
+        if (!archives || typeof archives !== 'object' || Array.isArray(archives))
+          throw new Error('歷史快照格式錯誤；未變更分頁');
+        const history = Array.isArray(archives[current.id]) ? archives[current.id] : [];
+        const value = JSON.stringify({ ...archives, [current.id]: [
+          ...history, { archivedAt: Date.now(),
+            reason: 'superseded-by-explicit-organize',
+            snapshot: previous }
+        ] });
+        store.setCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY, value);
+        if (store.getCustomWindowValue(window, ARCHIVED_SNAPSHOTS_KEY) !== value)
+          throw new Error('舊快照封存驗證失敗；未變更分頁');
       }
+      if (!writeSnapshots({ ...stored, [current.id]: snapshot }))
+        throw new Error('本次整理快照寫入失敗，沒有移動任何分頁');
       const folders = new Map();
       for (const group of getGroups(current.node)) {
         if (group.isZenFolder || group.pinned || group.parentElement !== current.node.tabsContainer) continue;
@@ -1301,6 +1512,11 @@
         if (!site || (owner && folders.has(site))) continue;
         if (!buckets.has(site)) buckets.set(site, []);
         buckets.get(site).push({ tab, order: openedAt(tab) });
+      }
+      // A site with exactly one eligible tab does not justify a new group.
+      // One arrival to an existing matching group is still eligible.
+      for (const [site, items] of buckets) {
+        if (!folders.has(site) && items.length < 2) buckets.delete(site);
       }
       const requested = [...buckets.values()].reduce((sum, items) => sum + items.length, 0);
       let completed = 0, errors = 0, newFolders = 0;
@@ -1379,13 +1595,20 @@
           console.warn(TAG, 'Ordinary site group creation failed:', site, e);
         }
       }
-      if (!requested) {
-        toast('目前沒有新增的一般網站分頁需要整理');
-      } else if (completed !== requested || errors) {
-        toast(`整理不完整：${completed}/${requested} 個分頁已入資料夾，可按還原`, true);
+      let arranged = { considered: 0, moved: 0 };
+      try {
+        arranged = await arrangeStandaloneTabs({ includeManual: true });
+      } catch (error) {
+        errors++;
+        console.warn(TAG, 'Independent tab arrangement failed:', error);
+      }
+      if (completed !== requested || errors) {
+        toast('整理不完整：' + completed + '/' + requested +
+          ' 個分頁已入資料夾，錯誤 ' + errors + '，可按還原', true);
         console.warn(TAG, 'Ordinary group sort incomplete', { requested, completed, errors });
       } else {
-        toast(`已整理 ${completed} 個分頁，新增 ${newFolders} 個一般分頁群組`);
+        toast('已整理 ' + completed + ' 個分頁，新增 ' + newFolders +
+          ' 個群組；獨立分頁 ' + arranged.considered + ' 個');
       }
     } catch (e) {
       console.error(TAG, 'Sort stopped:', e);
@@ -1515,6 +1738,9 @@
     window.addEventListener('SSWindowStateReady', () => { sessionRestoreBusy = false; });
     window.gBrowser.tabContainer.addEventListener('SSTabRestoring', e => reconcileOpenedAt(e.target));
     window.gBrowser.tabContainer.addEventListener('SSTabRestored', e => reconcileOpenedAt(e.target));
+    // Only a close, not a drag-out or TabUngrouped event, triggers the
+    // single-member automatic dissolution.
+    window.gBrowser.tabContainer.addEventListener('TabClose', onSiteTabClose, true);
     window.gBrowser.tabContainer.addEventListener('TabOpen', e => {
       noteNewTab(e.target);
       // Automatic grouping is intentionally disabled in the Zia-compatible
@@ -1536,8 +1762,8 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
-    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.7.1' };
-    console.info?.(TAG, '0.7.1 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.7.2' };
+    console.info?.(TAG, '0.7.2 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }
 
   if (document.readyState === 'complete') initialize();
@@ -1549,6 +1775,8 @@
     if (scheduledUndoRescue != null) clearTimeout(scheduledUndoRescue);
     if (waveFrame != null) cancelAnimationFrame(waveFrame);
     if (noticeTimer) clearTimeout(noticeTimer);
+    window.gBrowser?.tabContainer?.removeEventListener('TabClose', onSiteTabClose, true);
+    for (const group of closingSiteGroups.keys()) clearCloseWatch(group);
     noticeSerial++;
   }, { once: true });
 })();
