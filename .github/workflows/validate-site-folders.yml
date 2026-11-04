@@ -31,7 +31,7 @@ jobs:
           node --check site-folders-top-drop.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.7.1' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.7.2' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
@@ -43,6 +43,7 @@ jobs:
           node tests/cross-group-selection.test.cjs
           node tests/snapshot-duplicate-id.test.cjs
           node tests/real-opened-session.test.cjs
+          node tests/standalone-rules.test.cjs
           node tests/selected-color-age.test.cjs
           node tests/color-editor.test.cjs
           node tests/undo-secondary-click.test.cjs
@@ -105,6 +106,12 @@ jobs:
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "grouped tab real opening time" --output native-results/grouped-open-age
       - name: Verify incremental site grouping preserves newest-first and manual order
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "incremental organize puts incoming tabs" --output native-results/incremental-organize
+      - name: Verify v0.7.2 single-site filter and latest pre-sort snapshot
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "site v072 singleton organizer" --output native-results/v072-singleton
+      - name: Verify v0.7.2 selected singleton stays at its former group slot
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "site v072 selected remaining" --output native-results/v072-selected
+      - name: Verify v0.7.2 background singleton moves below groups
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "site v072 background remaining" --output native-results/v072-background
       - name: Compare original v0.6.7 bottom-pointer behaviour
         shell: bash
         run: |
