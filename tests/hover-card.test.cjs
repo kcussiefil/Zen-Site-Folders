@@ -11,7 +11,19 @@ class FakeNode {
     this.children = [];
     this.attrs = {};
     this.dataset = {};
-    this.style = { setProperty(key, value) { this[key] = value; }, removeProperty(key) { delete this[key]; } };
+    this.style = {
+      priorities: {},
+      setProperty(key, value, priority = '') {
+        this[key] = value;
+        this.priorities[key] = priority;
+      },
+      removeProperty(key) {
+        delete this[key];
+        delete this.priorities[key];
+      },
+      getPropertyValue(key) { return this[key] || ''; },
+      getPropertyPriority(key) { return this.priorities[key] || ''; }
+    };
     this.events = {};
     this.isConnected = true;
     this.hidden = false;
@@ -69,6 +81,17 @@ async function main() {
 
   assert(css.includes('@media -moz-pref("zia.cards.blur")'), 'Zia glass preference is honored');
   assert(css.includes('blur(24px) saturate(1.6)'), 'Zia glass blur matches');
+
+  assert(css.includes('browser[zia-video]'), 'video guard must prevent ZSF preview from forcing colour-washing composition');
+  assert(css.includes(':root:has(> #zsf-folder-hover-card:not([hidden])):not('),
+    'composition must only be applied for a visible ZSF card without selected video');
+  assert(source.includes('getComputedStyle(source)'), 'read actual native Zia paint instead of freezing CSS values');
+  assert(source.includes("document.getElementById('zia-folder-card')"), 'native folder style source');
+  assert(source.includes("document.getElementById('zia-tab-card')"), 'native tab style fallback');
+  assert(source.includes("Services.prefs.addObserver('zia.'"), 'Zia settings should be observed');
+  assert(source.includes('MutationObserver'), 'new Zia cards and theme state should trigger re-sync');
+  assert(source.includes('stopPaintWatch();'), 'native paint watcher should be released on unload');
+  assert(!css.includes('Independent preview-card hairline:'), 'no extra custom border over native Zia edge');
   assert(css.includes('max-height: calc(100vh - 16px)'), 'viewport clamp required');
   assert(css.includes('[data-closing]'), 'Zia-style exit animation required');
   assert(!css.includes('display: none !important;\n  max-height: 0 !important;\n  margin: 0 !important;\n  padding: 0 !important;'), 'no hard collapsed display:none that cancels Zia spring');
@@ -136,13 +159,47 @@ async function main() {
     addEventListener(type, fn) { this.events[type] = fn; },
     removeEventListener(type) { delete this.events[type]; },
   };
+  // Simulate a real, lazy-created native Zia folder card. The Site Folders
+  // preview must copy Zia's *computed* paint and resync after a pref change.
+  const ziaCard = new FakeNode('div');
+  ziaCard.id = 'zia-folder-card';
+  const nativePaint = {
+    'background-color': 'rgba(38, 38, 38, 0.76)',
+    'backdrop-filter': 'blur(24px) saturate(1.6)',
+    'box-shadow': 'rgb(10, 10, 10) 0px 1px 4px',
+    'border': '0px none rgb(255, 255, 255)',
+    'border-radius': '19.5px',
+    'corner-shape': 'superellipse(1.93)',
+    'color': 'rgb(255, 255, 255)'
+  };
+  let ziaPrefObserver = null;
+  let prefObserverRemoved = false;
+  const Services = { prefs: {
+    addObserver(prefix, obs) {
+      assert.equal(prefix, 'zia.');
+      ziaPrefObserver = obs;
+    },
+    removeObserver(prefix, obs) {
+      assert.equal(prefix, 'zia.');
+      assert.equal(obs, ziaPrefObserver);
+      prefObserverRemoved = true;
+    }
+  } };
   const document = {
     readyState: 'complete', documentElement: root,
-    getElementById: id => id === 'navigator-toolbox' ? host : null,
+    getElementById: id =>
+      id === 'navigator-toolbox' ? host :
+      id === 'zia-folder-card' ? ziaCard : null,
     createElementNS: (_ns, type) => new FakeNode(type),
   };
-  vm.runInNewContext(source, { window, document, console, setTimeout, clearTimeout,
-    setInterval: () => 1, clearInterval: () => {} });
+  vm.runInNewContext(source, {
+    window, document, console, Services, setTimeout, clearTimeout,
+    setInterval: () => 1, clearInterval: () => {},
+    getComputedStyle: node => {
+      assert.equal(node, ziaCard, 'read Zia native card rather than our popup');
+      return { getPropertyValue: key => nativePaint[key] || '' };
+    }
+  });
   const api = window.__zsfGroupHoverV037;
   assert.equal(api.version, '0.5.6');
 
@@ -150,13 +207,30 @@ async function main() {
   await new Promise(resolve => setTimeout(resolve, 260));
   const popup = root.children.find(node => node.id === 'zsf-folder-hover-card');
   assert(popup && !popup.hidden, 'hover must show popup');
+  assert.equal(popup.style.getPropertyValue('background-color'), nativePaint['background-color'],
+    'native Zia computed opacity must be mirrored into the preview');
+  assert.equal(popup.style.getPropertyValue('backdrop-filter'), nativePaint['backdrop-filter'],
+    'native Zia backdrop blur must be mirrored');
+  assert.equal(popup.style.getPropertyValue('box-shadow'), nativePaint['box-shadow'],
+    'native Zia glass edge must be mirrored');
+  assert.equal(popup.style.getPropertyPriority('background-color'), 'important',
+    'native computed styles must override the fallback Site Folders CSS');
+  nativePaint['background-color'] = 'rgba(20, 20, 24, 0.89)';
+  nativePaint['backdrop-filter'] = 'blur(30px) saturate(1.3)';
+  assert(ziaPrefObserver, 'should listen for live Zia preference changes');
+  ziaPrefObserver.observe(null, 'nsPref:changed', 'zia.cards.blur');
+  assert.equal(popup.style.getPropertyValue('background-color'), nativePaint['background-color'],
+    'a Zia opacity change must update our visible card without a Site Folders release');
+  assert.equal(popup.style.getPropertyValue('backdrop-filter'), nativePaint['backdrop-filter'],
+    'a Zia blur change must update our visible card');
+
   assert(host.hasAttribute('data-zsf-preview-sidebar-hold'),
     'opening external card must keep compact sidebar expanded');
   assert(css.includes('#navigator-toolbox[data-zsf-preview-sidebar-hold]') &&
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.6.9');
+  assert.equal(manifest.version, '0.7.0');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
@@ -262,6 +336,7 @@ async function main() {
   assert(!host.hasAttribute('data-zsf-preview-sidebar-hold'),
     'unload must not leave compact sidebar locked');
   assert.equal(popup.isConnected, false, 'unload must remove the popup');
+  assert(prefObserverRemoved, 'unload must remove the Zia preference watcher');
   assert.equal(Object.keys(host.events).length, 0, 'unload must remove host listeners');
   console.log('PASS: hover preview, click selection, native-folder exclusion, explicit new tab, cleanup, safety guards');
 }

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.6.9
+// @version      0.7.0
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -94,7 +94,115 @@
       row.click();
     });
     document.documentElement.appendChild(card);
+    startPaintWatch();
     return card;
+  }
+
+
+  // Match Zia's *actual* rendered folder-card paint rather than fixing
+  // background opacity, blur, colour or shadow to one Zia version. Native
+  // cards are lazily created, so the existing variable-based CSS remains
+  // a fallback until Zia creates a card. Do not alter Zia's own nodes.
+  const PAINT_PROPERTIES = [
+    'background-color', 'backdrop-filter', 'box-shadow',
+    'border', 'border-radius', 'corner-shape', 'color'
+  ];
+  let paintStarted = false;
+  let paintObserver = null;
+  let paintSource = null;
+  let paintObserved = false;
+  let paintFrame = 0;
+  let paintPrefListening = false;
+  const paintPrefObserver = {
+    observe(_subject, topic) {
+      if (topic === 'nsPref:changed') schedulePaintSync();
+    }
+  };
+  function nativePaintCard() {
+    const folder = document.getElementById('zia-folder-card');
+    if (folder && !folder.hasAttribute('zia-folder-color')) return folder;
+    // Avoid inheriting another native folder's colour tint.
+    return document.getElementById('zia-tab-card');
+  }
+  function watchPaintSource(source) {
+    if (paintObserved && source === paintSource) return;
+    paintSource = source;
+    if (!paintObserver) return;
+    paintObserver.disconnect();
+    paintObserver.observe(document.documentElement, {
+      attributes: true, attributeFilter: ['zia-light', 'class', 'style'],
+      childList: true
+    });
+    if (source) {
+      paintObserver.observe(source, {
+        attributes: true,
+        attributeFilter: ['style', 'class', 'hidden', 'zia-folder-color']
+      });
+    }
+    paintObserved = true;
+  }
+  function syncNativePaint() {
+    if (!card?.isConnected || typeof getComputedStyle !== 'function') return;
+    const source = nativePaintCard();
+    watchPaintSource(source);
+    if (!source) {
+      for (const property of PAINT_PROPERTIES) card.style.removeProperty(property);
+      return;
+    }
+    const native = getComputedStyle(source);
+    for (const property of PAINT_PROPERTIES) {
+      const value = native.getPropertyValue(property)?.trim();
+      if (!value) {
+        card.style.removeProperty(property);
+      } else if (card.style.getPropertyValue(property) !== value ||
+                 card.style.getPropertyPriority(property) !== 'important') {
+        card.style.setProperty(property, value, 'important');
+      }
+    }
+  }
+  function schedulePaintSync() {
+    if (destroyed || !card?.isConnected || card.hidden) return;
+    if (typeof requestAnimationFrame !== 'function') {
+      syncNativePaint();
+      return;
+    }
+    if (paintFrame) return;
+    paintFrame = requestAnimationFrame(() => {
+      paintFrame = 0;
+      syncNativePaint();
+    });
+  }
+  function startPaintWatch() {
+    if (paintStarted) return;
+    paintStarted = true;
+    if (typeof MutationObserver === 'function') {
+      paintObserver = new MutationObserver(mutations => {
+        if (mutations.some(m => m.type === 'attributes' ||
+            [...m.addedNodes, ...m.removedNodes].some(node =>
+              node?.id === 'zia-folder-card' || node?.id === 'zia-tab-card')))
+          schedulePaintSync();
+      });
+      watchPaintSource(nativePaintCard());
+    }
+    try {
+      if (typeof Services !== 'undefined' && Services.prefs?.addObserver) {
+        Services.prefs.addObserver('zia.', paintPrefObserver);
+        paintPrefListening = true;
+      }
+    } catch (_) {}
+  }
+  function stopPaintWatch() {
+    if (paintFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(paintFrame);
+    paintFrame = 0;
+    paintObserver?.disconnect();
+    paintObserver = null;
+    paintSource = null;
+    paintObserved = false;
+    if (paintPrefListening) {
+      try { Services.prefs.removeObserver('zia.', paintPrefObserver); } catch (_) {}
+    }
+    paintPrefListening = false;
+    paintStarted = false;
   }
 
   // Zia's 08-music-and-sound-bars.js already writes an animated four-bar SVG
@@ -336,6 +444,7 @@
     activeGroup = group;
     activeLabel = label;
     card.hidden = false;
+    syncNativePaint();
     ageTimer ??= setInterval(() => {
       if (!card || card.hidden) return;
       for (const row of card.querySelectorAll('.zsf-hover-row')) {
@@ -505,6 +614,7 @@
       try { target.removeEventListener(type, handler, options); } catch (_) {}
     }
     handlers.length = 0;
+    stopPaintWatch();
     card?.remove();
     card = null;
     if (window.__zsfGroupHoverV037 === api) delete window.__zsfGroupHoverV037;

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — header drop joins first
-// @version      0.6.9
+// @version      0.7.0
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
