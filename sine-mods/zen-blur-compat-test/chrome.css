@@ -1,36 +1,26 @@
-/* Zen Transparent Blur Compositor Test v0.1.0
- * Experimental compatibility helpers for Zia 2.117.3 and
- * Zen Compact Transparent Mode (Sine).
+/* Zen Transparent Blur A/B Test v0.1.1
+ * Purpose: TEST whether compositor adjustments restore genuine glass blur
+ * in Zen Compact Transparent Mode on BOTH normal pages AND video pages.
  *
- * Select Off / A / B in Sine settings. OFF is the default.
- * The tests are mutually exclusive and are only active on macOS,
- * in Zen compact mode, with Transparent Mode enabled, and when the
- * selected Zia 2.117.3 browser does not have [zia-video].
- *
- * WARNING: Zia's visible-video signal is asynchronous. No CSS
- * strategy can promise HDR safety before the signal arrives.
+ * WARNING: No [zia-video] exclusion. HDR/SDR video color may be affected.
+ * Set the Sine selector to Off immediately if video colors wash out.
  */
-
 @media (-moz-platform: macos) {
   @media (-moz-bool-pref: "mod.compacttpr.usecompacttransparent") {
 
-    /* A: restore a backdrop/stacking context through a no-op blur.
-       Inspired by Matteo Tafuro's Better Cleaned URL Bar workaround. */
+    /* A: no-op backdrop filter on #browser.
+       Candidate from Better Cleaned URL Bar's Zen stacking-context fix. */
     @media (-moz-pref("mod.zenblurtest.strategy", "a")) {
-      :root[zen-compact-mode="true"]:not(:has(
-        #tabbrowser-tabpanels > .browserSidebarContainer:is(.deck-selected, [zen-split="true"]) browser[zia-video]
-      )) #browser {
+      :root[zen-compact-mode="true"] #browser {
         backdrop-filter: blur(0px) !important;
       }
     }
 
-    /* B: create the transform context from rasyidrafi's Zen
-       Custom URL Bar, avoiding a focused, expanded URL bar.
-       This may interfere with web compositing and video colors. */
+    /* B: no-op transform on the page wrapper.
+       Candidate extracted from Zen Custom URL Bar.
+       Does not run while an expanded URL bar has keyboard focus. */
     @media (-moz-pref("mod.zenblurtest.strategy", "b")) {
-      :root[zen-compact-mode="true"]:not(:has(
-        #tabbrowser-tabpanels > .browserSidebarContainer:is(.deck-selected, [zen-split="true"]) browser[zia-video]
-      )):not(:has(#urlbar[breakout-extend]:focus-within)) #zen-tabbox-wrapper {
+      :root[zen-compact-mode="true"]:not(:has(#urlbar[breakout-extend]:focus-within)) #zen-tabbox-wrapper {
         transform: scale(1) !important;
       }
     }
