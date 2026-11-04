@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.7.0
+// @version      0.7.1
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -48,6 +48,7 @@
   const newTabOpenedAt = new WeakMap();
   let sessionRestoreBusy = false;
   let startupRestorePending = false;
+  let workspaceRestoreCompleted = false;
   let uidSeq = 0;
   let noticeTimer = null;
   let noticeSerial = 0;
@@ -76,7 +77,7 @@
   // expand ordinary groups as their restored members connect.
   let startupGroupStates = null;
   function captureStartupGroupStates(startup) {
-    if (!startup.willRestore()) return;
+    if (workspaceRestoreCompleted || !startup.willRestore()) return;
     // This can predate initialize(): do not stamp a restored lazy tab as new.
     startupRestorePending = true;
     const states = new Map();
@@ -99,6 +100,8 @@
   }
 
   function restoreStartupGroupStates() {
+    if (workspaceRestoreCompleted) return;
+    workspaceRestoreCompleted = true;
     startupRestorePending = false;
     const states = startupGroupStates;
     startupGroupStates = null;
@@ -120,6 +123,19 @@
     // Finish native and Zia restore listeners before changing the group.
     queueMicrotask(restoreStartupGroupStates);
   }, {once:true});
+
+  // Zen resolves promiseInitialized AFTER dispatching
+  // AfterWorkspacesSessionRestore (ZenSpaceManager.mjs, onWindowRestored).
+  // Sine or native test loading after the event must still release the pending
+  // session-restore guard. A settled promise runs this immediately in a
+  // microtask; no timeout, guessed timestamps or restored-tab reloads.
+  function watchWorkspaceInitialization() {
+    const promise = window.gZenWorkspaces?.promiseInitialized;
+    if (!promise || typeof promise.then !== 'function') return;
+    promise.then(() => restoreStartupGroupStates()).catch(error => {
+      console.warn(TAG, 'Zen workspace restore readiness unavailable:', error);
+    });
+  }
 
   function workspace() {
     const ws = window.gZenWorkspaces;
@@ -1482,6 +1498,8 @@
       initTimer = setTimeout(initialize, 1000);
       return;
     }
+    // Catch both in-progress and already-finished Zen workspace restoration.
+    watchWorkspaceInitialization();
     // Use capture at the browser window: contextmenu on XUL toolbarbuttons
     // can be consumed by native Zen/Zia handlers before a target listener.
     window.addEventListener('mousedown', onUndoSecondaryClick, true);
@@ -1518,8 +1536,8 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
-    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.6.9' };
-    console.info?.(TAG, '0.6.9 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.7.1' };
+    console.info?.(TAG, '0.7.1 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }
 
   if (document.readyState === 'complete') initialize();
