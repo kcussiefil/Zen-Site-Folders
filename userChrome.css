@@ -314,9 +314,34 @@
 }
 /* Same glass transparency as Zia when its own blur setting is enabled. */
 @media -moz-pref("zia.cards.blur") {
-  #zsf-folder-hover-card {
+  /* Match native Zia's exact video gate as well as opacity and blur. */
+  :root:not([zia-video]) #zsf-folder-hover-card {
     background-color: color-mix(in srgb, var(--zia-tab-card-bg) 76%, transparent) !important;
     backdrop-filter: blur(24px) saturate(1.6) !important;
+  }
+}
+/* Native Zia disables its glass composition for a video page. */
+:root[zia-video] #zsf-folder-hover-card {
+  background-color: var(--zia-tab-card-bg, rgb(38, 38, 42)) !important;
+  backdrop-filter: none !important;
+}
+
+/* Zia's zia.glass=off mode does NOT use a glow shadow for the hover
+   outline: 27b-glass-off.css paints a 0.5px pseudo-element hairline.
+   Our independent card must provide that same paint layer. */
+@media not -moz-pref("zia.glass") {
+  #zsf-folder-hover-card::after {
+    content: "";
+    display: block;
+    position: absolute;
+    inset: 0;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    border-radius: inherit;
+    corner-shape: var(--zia-squircle) !important;
+    pointer-events: none;
+  }
+  :root[zia-light] #zsf-folder-hover-card::after {
+    border-color: rgba(0, 0, 0, 0.1);
   }
 }
 

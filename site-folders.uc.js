@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.7.2
+// @version      0.7.3
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -523,6 +523,59 @@
       !!siteOfGroup(group);
   }
 
+  // Zen/Zia can leave a fill:forwards height/opacity animation on the last
+  // background member of a collapsed folder. After native ungroup it becomes
+  // a standalone tab, but that animation still paints a zero-height row.
+  // Cancel ONLY size/fade animations bound to the ungrouped tab itself.
+  // Do not touch other groups, native folders, selection or page state.
+  function revealDetachedTab(tab) {
+    const root = workspace()?.node?.tabsContainer;
+    if (!tab?.isConnected || tab.group || tab.pinned ||
+        tab.parentElement !== root) return false;
+    try {
+      for (const animation of tab.getAnimations?.({ subtree: false }) || []) {
+        const frames = animation.effect?.getKeyframes?.() || [];
+        if (frames.some(frame => 'height' in frame || 'minHeight' in frame ||
+            'opacity' in frame)) animation.cancel();
+      }
+    } catch (error) {
+      console.warn(TAG, 'Detached tab animation cleanup failed:', error);
+    }
+    window.gZenFolders?.styleCleanup?.([tab]);
+    // Only a standalone tab in the *active* Space may be revealed. Never
+    // expose a hidden tab from another Space or a pinned/Glance tab.
+    if (tab.hidden && typeof window.gBrowser?.showTab === 'function')
+      window.gBrowser.showTab(tab);
+    window.gBrowser?.tabContainer?._invalidateCachedVisibleTabs?.();
+    return true;
+  }
+
+  function watchDetachedTabVisibility(tab) {
+    // First clear the persisted animation synchronously. A native close
+    // callback can schedule another fade on the next frame; clear that too,
+    // without delaying the removal or causing a second tab move.
+    if (!revealDetachedTab(tab)) return;
+    const next = () => {
+      if (tab?.isConnected && !tab.group) revealDetachedTab(tab);
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => {
+        next();
+        requestAnimationFrame(next);
+      });
+    }
+    // Zia's close animation can finish after those frames. This is
+    // post-move maintenance, not a fixed delay before showing the tab.
+    setTimeout(() => {
+      if (!tab?.isConnected || tab.group) return;
+      const box = tab.getBoundingClientRect?.();
+      const style = typeof getComputedStyle === 'function' ? getComputedStyle(tab) : null;
+      if (tab.hidden || (box && box.height < 1) ||
+          (style && (style.opacity === '0' || style.visibility === 'hidden')))
+        revealDetachedTab(tab);
+    }, 320);
+  }
+
   async function dissolveSingleMember(group, survivor) {
     if (autoUngrouping || running || !isOwnedCloseGroup(group) ||
         !survivor?.isConnected || survivor.group !== group ||
@@ -560,6 +613,7 @@
       } else {
         await arrangeStandaloneTabs({ incoming: [survivor] });
       }
+      if (!selected && group.collapsed) watchDetachedTabVisibility(survivor);
       restoreView();
       return true;
     } catch (error) {
@@ -1762,8 +1816,8 @@
     // position, making some tabs appear impossible to reorder.
     // Explicit 'organize' still applies newest-first once, and afterwards
     // the user's manual order always takes precedence.
-    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.7.2' };
-    console.info?.(TAG, '0.7.2 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
+    window.__zenSiteFoldersV037 = { organize, undo, rescueSiteGroups, ungroupInDisplayOrder, reapplyAppearance, readSnapshots, version: '0.7.3' };
+    console.info?.(TAG, '0.7.3 runtime-ready', JSON.stringify({ motion: window.__zsfCollapseV037?.revision, topDrop: !!window.__zsfTopDrop }));
   }
 
   if (document.readyState === 'complete') initialize();

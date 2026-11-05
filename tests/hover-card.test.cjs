@@ -230,7 +230,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.7.2');
+  assert.equal(manifest.version, '0.7.3');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;

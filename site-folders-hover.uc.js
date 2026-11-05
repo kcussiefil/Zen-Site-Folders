@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — ordinary group hover cards
-// @version      0.7.2
+// @version      0.7.3
 // @description  Read-only Zia-style hover list for unpinned Zen Site Folders groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -130,7 +130,7 @@
     if (!paintObserver) return;
     paintObserver.disconnect();
     paintObserver.observe(document.documentElement, {
-      attributes: true, attributeFilter: ['zia-light', 'class', 'style'],
+      attributes: true, attributeFilter: ['zia-light', 'zia-video', 'class', 'style'],
       childList: true
     });
     if (source) {
