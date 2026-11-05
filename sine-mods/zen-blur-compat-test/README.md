@@ -1,43 +1,51 @@
-# Zen Transparent Blur A/B Test — v0.1.1
+# Zen Transparent Blur — Local Compositor Test v0.2.0
 
-這是一個獨立的 [Sine](https://github.com/CosmoCreeper/Sine) 實驗性 MOD，用來測試 **Zia v2.117.3 + Zen Compact Transparent Mode** 在一般網頁與 SDR/HDR 影片頁面下是否能恢復真正的側欄毛玻璃。
+獨立的 Sine 實驗 MOD。用來判斷 **Zia 2.117.3 + Zen Compact Transparent Mode + Zen-Site-Folders 0.6.9** 的側欄毛玻璃，可否只透過「瀏覽器介面的局部合成」恢復，且不讓 HDR 影片發灰。
 
-**v0.1.1 重要變更：移除影片排除條件。** A 和 B 會在影片可見時照常啟用，以便實際檢驗能否恢復毛玻璃，以及是否讓影片發灰。**本版本不承諾 HDR/SDR 顯色安全，只能用於測試。**
+**目前沒有宣稱已修正；C/D/E 為新候選，尚無 macOS Zen 實機結果。**
 
-不修改 Zen-Site-Folders、Zia 或 Zen Compact Transparent Mode 原始碼；只在 macOS、Zen Compact Mode、Transparent Mode 的啟用設定為 true 時啟動測試規則。
+本 MOD **不修改** Zia、Transparent Mode、Site Folders 或其他 GitHub 專案的程式碼。只在 macOS、Zen Compact Mode，以及 Transparent Mode 已啟用時套用測試 CSS。為了能實測 HDR，**包含可見影片時仍照常啟用候選規則**。
 
-## Sine 安裝
+## 安裝與升級
 
-將下列路徑貼到 Sine 的 GitHub/URL 安裝欄位：
-
+Sine → 從 GitHub URL 安裝：
 `kcussiefil/Zen-Site-Folders/tree/main/sine-mods/zen-blur-compat-test`
 
-安裝後從「Zen Transparent Blur A/B Test」齒輪選取：
-- **關閉（預設）**：完全不套用測試 CSS。
-- **方案 A**：在 `#browser` 套用 `backdrop-filter: blur(0px)`。
-- **方案 B**：在 `#zen-tabbox-wrapper` 套用 `transform: scale(1)`（展開網址列並聚焦時暫停）。
+若已安裝 v0.1.1，請先在 Sine **更新**這個 MOD，確認版本顯示 **v0.2.0**。然後點齒輪，從下拉選單選擇 **關閉／A／B／C／D／E**。
 
-A/B 使用互斥的 Firefox preferences；一次只啟用一個。預設是 Off。
+## 測試選項
 
-## 不重啟切換
+| 選項 | CSS 主體 | 預期目的／已知結果 |
+|---|---|---|
+| 關閉（預設） | 不附加合成規則 | 控制組 |
+| A | `#browser {backdrop-filter:blur(0px)}` | 已實測：有毛玻璃，但 HDR 發灰；保留作對照，**不建議長期使用** |
+| B | `#zen-tabbox-wrapper {transform:scale(1)}` | 已實測：無效 |
+| C | `#navigator-toolbox #titlebar {isolation:isolate}` | **新實驗**：只建立側欄內部堆疊環境，不直接觸碰網頁容器 |
+| D | `#navigator-toolbox #titlebar {will-change:transform}` | **新實驗**：只提示浮動側欄要合成，網頁容器保持不動 |
+| E | `#navigator-toolbox #titlebar::before {transform:translateZ(0)}` | **新實驗**：只處理 Transparent Mode 現有的毛玻璃背景偽元素 |
 
-Sine 的下拉選單會更改 Firefox preference 並呼叫 `rebuildMods(false, false)`；一般情況不用重新啟動瀏覽器。首次安裝、修改程式碼或 Sine 更新載入仍有可能需要重新啟動／檢查 MOD 更新。若切換後無反應，可以先收起再展開側欄或重新整理頁面。
+C/D/E 是**三種不同的局部層級**，互斥測試，只有其中一種會啟用。它們不增添其他 blur，也不改變 Transparent Mode 的透明度或模糊強度。
 
-## 必須測試的狀態
+### 建議測試順序
 
-1. 一般網站：側欄真正模糊？移動滑鼠進 Site Folders v0.6.9 的預覽卡片，側欄與卡片是否都保持毛玻璃？
-2. YouTube 主播放器可見：真正模糊？SDR/HDR 顏色、亮度是否發灰？
-3. YouTube 捲到評論並顯示油猴小窗：仍有毛玻璃？HDR/SDR 顏色是否異常？
-4. 暫停／切換影片、開關側欄、網址列展開時：是否有閃爍、錯位或卡頓？
+1. 選 **關閉**，以一般網站及 HDR YouTube 建立基準。
+2. 選 **C**，檢查側欄是否模糊、Site Folders 預覽滑鼠進出是否持續模糊，及 HDR 是否發灰。
+3. 選回 **關閉**，讓合成層回復，再依序測 **D**、**E**。
+4. 每個選項都測 YouTube 主影片、小窗、主影片捲出畫面、暫停、普通頁面及卡片預覽；特別注意卡頓、閃爍、圓角或遮罩異常。
+5. 只要 HDR 發灰或畫面異常，立刻選回 **關閉**。
 
-**如果影片發灰、顏色異常或網頁卡頓，立即在 Sine 選「關閉」，然後再測另一方案。**
-這是刻意移除 Zia 影片保護例外後的比較測試；不能當作正式 HDR-safe 修補程式。
+**重要：** 局部合成仍可能影響 Firefox 的畫面合成、效能或 HDR 顯示，不能因為不直接設定網頁容器就保證安全。此外，在 Firefox 的遠端網頁合成模型下，單靠局部側欄屬性可能無法取樣網頁背景；**C/D/E 全部無效也是合理的結果**。
 
-## 來源
+## 切換與回復
 
-- [Zen Compact Transparent Mode issue #3](https://github.com/rasyidrafi/zen-compact-transparent-mode/issues/3)
-- [Zen Custom URL Bar](https://github.com/rasyidrafi/zen-custom-urlbar)
-- [Better Cleaned URL Bar](https://github.com/matteo-tafuro/zen-better-cleaned-url-bar)
-- [Zia v2.117.3 compact CSS](https://github.com/z1n-k/zia/blob/v2.117.3/src/css/16-compact-mode.css)
+Sine 的齒輪下拉選單修改偏好設定時會呼叫 `rebuildMods(false, false)`，正常情況不需重新啟動 Zen。若立即切換沒有變化，可先收合／展開側欄或重新整理影片頁；首次安裝及 MOD 更新是否需重啟，取決於當前 Sine 的實際載入行為。
 
-已做原始碼與遠端檔案靜態檢查；尚未在使用者的 Zen 實機驗證。
+此測試沒有任何 JavaScript 或外部連線。所有原始碼均可審查。
+
+## 技術參考
+
+- [Zia v2.117.3 CSS](https://github.com/z1n-k/zia/blob/v2.117.3/src/css/16-compact-mode.css)
+- [Zen Compact Transparent Mode](https://github.com/rasyidrafi/zen-compact-transparent-mode)
+- [Mozilla Bug 1799334（遠端網頁 backdrop-filter）](https://bugzilla.mozilla.org/show_bug.cgi?id=1799334)
+- [MDN backdrop-filter / backdrop roots](https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter)
+
