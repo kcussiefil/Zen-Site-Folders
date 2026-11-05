@@ -53,7 +53,7 @@ const finish = arguments[arguments.length - 1];
     // Zia's native whole-folder drop is stateful, so validate it in the
     // dedicated, fresh-profile CI step rather than after 21 fixtures have
     // left native animations and workspace history in the same process.
-    if (!selectedCase && ((name.startsWith('site v072 ') || name.startsWith('site v073 ')) ||
+    if (!selectedCase && ((name.startsWith('site v072 ') || name.startsWith('site v073 ') || name.startsWith('site v075 ')) ||
         name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
         name.startsWith('native member drag edge scroll') ||
         (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance')) ||
@@ -271,6 +271,38 @@ const finish = arguments[arguments.length - 1];
       JSON.stringify({hidden:a.hidden,display:style.display,visibility:style.visibility,
         opacity:style.opacity,height:rect.height,inlineHeight:a.style.height,
         inlineOpacity:a.style.opacity,animations:a.getAnimations?.().map(x=>x.playState)}));
+  });
+  await test('site v075 light theme label matches Zia sidebar ink', async h => {
+    // The translucent ZSF group deliberately sets the Zia folder swatch
+    // transparent, but that swatch must NOT tint its label into transparency
+    // when Zia marks a light-coloured Space.
+    const html=document.documentElement;
+    const wasLight=html.hasAttribute('zia-light');
+    const label=h.group.querySelector(':scope > .tab-group-label-container > .tab-group-label');
+    assert(label && h.group.hasAttribute('data-zsf-site'),
+      'fixture needs a real native ZSF group label');
+    const before=getComputedStyle(label).color;
+    try {
+      html.removeAttribute('zia-light');
+      // The underlying Zen colour palette may itself be light even without
+      // Zia's marker; never assume this control state must have white text.
+      const withoutMarker=getComputedStyle(label).color;
+      html.setAttribute('zia-light','');
+      const actual=getComputedStyle(label).color;
+      const rgba=actual.match(/[\d.]+/g)?.map(Number) || [];
+      assert(rgba.length>=3 && rgba[0]<85 && rgba[1]<85 && rgba[2]<85 &&
+          (rgba.length<4 || rgba[3]>=0.95),
+        'light mode ZSF label must use opaque Zia dark ink, not transparent swatch: '+actual);
+      assert(h.group.isConnected && h.tabs.every(tab => tab.group===h.group),
+        'style test cannot change group/tab ownership or tab count');
+      html.removeAttribute('zia-light');
+      assert(getComputedStyle(label).color===withoutMarker,
+        'removing light marker must restore the exact original unmarked colour');
+    } finally {
+      html.toggleAttribute('zia-light',wasLight);
+    }
+    assert(getComputedStyle(label).color===before,
+      'restoring the original theme marker must restore the original label colour');
   });
   await test('native collapse/expand, rapid reversal and selected row', async h => {
     const expanded = h.group.groupContainer.getBoundingClientRect().height;

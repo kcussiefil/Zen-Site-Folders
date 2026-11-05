@@ -5,7 +5,9 @@ const main=JSON.parse(fs.readFileSync(path.join(base,'theme.json'),'utf8'));
 const dir=path.join(base,'sine-mods/zen-blur-compat-test');
 const legacy=JSON.parse(fs.readFileSync(path.join(dir,'theme.json'),'utf8'));
 const css=fs.readFileSync(path.join(dir,'chrome.css'),'utf8');
-assert.equal(main.version,'0.7.4');
+assert.match(main.version,/^\d+\.\d+\.\d+$/,'main release must use semver');
+assert(main.version.localeCompare('0.7.4',undefined,{numeric:true})>=0,
+  'retired blur experiment must remain disabled in all releases since v0.7.4');
 assert(!Object.hasOwn(main,'preferences'),'main Sine manifest must not expose gear');
 assert.equal(legacy.version,'0.2.1');
 assert.equal(legacy.id,'0a960432-0bb0-44a9-8f73-dc9b50d31e08','legacy Sine ID must remain updateable');

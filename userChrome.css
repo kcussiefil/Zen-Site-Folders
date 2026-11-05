@@ -263,6 +263,18 @@
   align-self: center !important;
 }
 
+/* v0.7.5: Zia's light-space folder label is a mix of its folder swatch
+   and --zia-sidebar-ink. ZSF deliberately clears --zia-folder-swatch to
+   remove tinted group frames; that transparent swatch would also make
+   the native light label about 70% transparent. Use Zia's actual light
+   ink for our site labels only. Never affect the dark mode or native
+   folders; keep the transparent ZSF group background unchanged. */
+:root[zia-light]:not(#zia-none):not(#zia-none-2) #tabbrowser-tabs
+:is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group])
+> .tab-group-label-container > .tab-group-label {
+  color: var(--zia-sidebar-ink, rgb(28, 28, 32)) !important;
+}
+
 /* Do not override the ordinary tab-group container's margin, padding,
    display, overflow, or tab indentation. Zia uses its own negative top
    margin and 5px inner gap while running its native spring animation.
