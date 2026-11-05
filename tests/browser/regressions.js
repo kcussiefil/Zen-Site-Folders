@@ -281,12 +281,12 @@ const finish = arguments[arguments.length - 1];
     const label=h.group.querySelector(':scope > .tab-group-label-container > .tab-group-label');
     assert(label && h.group.hasAttribute('data-zsf-site'),
       'fixture needs a real native ZSF group label');
+    const before=getComputedStyle(label).color;
     try {
       html.removeAttribute('zia-light');
-      const dark=getComputedStyle(label).color;
-      const fromDark=dark.match(/[\d.]+/g)?.map(Number) || [];
-      assert(fromDark.length>=3 && fromDark[0]>=130,
-        'dark mode must preserve its original bright group label: '+dark);
+      // The underlying Zen colour palette may itself be light even without
+      // Zia's marker; never assume this control state must have white text.
+      const withoutMarker=getComputedStyle(label).color;
       html.setAttribute('zia-light','');
       const actual=getComputedStyle(label).color;
       const rgba=actual.match(/[\d.]+/g)?.map(Number) || [];
@@ -296,11 +296,13 @@ const finish = arguments[arguments.length - 1];
       assert(h.group.isConnected && h.tabs.every(tab => tab.group===h.group),
         'style test cannot change group/tab ownership or tab count');
       html.removeAttribute('zia-light');
-      assert(getComputedStyle(label).color===dark,
-        'returning to dark mode must leave original ink unchanged');
+      assert(getComputedStyle(label).color===withoutMarker,
+        'removing light marker must restore the exact original unmarked colour');
     } finally {
       html.toggleAttribute('zia-light',wasLight);
     }
+    assert(getComputedStyle(label).color===before,
+      'restoring the original theme marker must restore the original label colour');
   });
   await test('native collapse/expand, rapid reversal and selected row', async h => {
     const expanded = h.group.groupContainer.getBoundingClientRect().height;
