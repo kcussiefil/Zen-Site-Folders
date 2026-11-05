@@ -326,16 +326,16 @@
 }
 /* Same glass transparency as Zia when its own blur setting is enabled. */
 @media -moz-pref("zia.cards.blur") {
-  /* Match native Zia's exact video gate as well as opacity and blur. */
+  /* Zia 2.118: the root zia-video gate follows Blur over video. */
   :root:not([zia-video]) #zsf-folder-hover-card {
     background-color: color-mix(in srgb, var(--zia-tab-card-bg) 76%, transparent) !important;
     backdrop-filter: blur(24px) saturate(1.6) !important;
   }
-}
-/* Native Zia disables its glass composition for a video page. */
-:root[zia-video] #zsf-folder-hover-card {
-  background-color: var(--zia-tab-card-bg, rgb(38, 38, 42)) !important;
-  backdrop-filter: none !important;
+  /* Video protected: translucent, with no compositor-dependent blur. */
+  :root[zia-video] #zsf-folder-hover-card {
+    background-color: color-mix(in srgb, var(--zia-tab-card-bg) 88%, transparent) !important;
+    backdrop-filter: none !important;
+  }
 }
 
 /* Zia's zia.glass=off mode does NOT use a glow shadow for the hover
@@ -357,16 +357,12 @@
   }
 }
 
-/* Zia v2.117.3 native card-style compatibility.
-   A standalone ZSF preview holds its own visible card even after the pointer
-   leaves the compact sidebar. Keep the same on-demand blur composition then,
-   but do not re-enable it over a selected pane with a visible SDR/HDR video:
-   Zia intentionally protects video colour in that state. */
+/* Zia v2.118: root zia-video already reflects Blur over video.
+   The content browser itself can keep browser[zia-video] even while blur
+   is enabled. Match Zia's native hover-card compositor gate instead. */
 @media (-moz-platform: macos) {
   @media -moz-pref("zia.cards.blur") {
-    :root:has(> #zsf-folder-hover-card:not([hidden])):not(
-      :has(#tabbrowser-tabpanels > .browserSidebarContainer:is(.deck-selected, [zen-split="true"]) browser[zia-video])
-    ) #tabbrowser-tabpanels .browserSidebarContainer {
+    :root:not([zia-video]):has(> #zsf-folder-hover-card:not([hidden])) #tabbrowser-tabpanels .browserSidebarContainer {
       will-change: transform !important;
       backface-visibility: hidden !important;
     }
