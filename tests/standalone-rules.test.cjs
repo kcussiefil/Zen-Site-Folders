@@ -102,5 +102,22 @@ function harness(){
   assert.deepEqual(three.root.children.map(x=>x.name),
     ['head','selected','following'],'selected member must retain former group slot');
   assert.equal(three.browser.selectedTab,selected);
+  const four=harness();
+  const park=four.tab('park','https://parking.test/');
+  const owner4=four.group('collapsed','collapsed.test');
+  owner4.collapsed=true;
+  const last=four.tab('last','https://last.test/');
+  owner4.tabs=[last];last.group=owner4;last.parentElement=owner4;
+  four.root.children.push(owner4,park);
+  four.browser.selectedTab=park;
+  const animation={effect:{getKeyframes(){return [{opacity:1,height:'34px'},{opacity:0,height:'0px'}];}},
+    canceled:false,cancel(){this.canceled=true;}};
+  last.getAnimations=()=>animation.canceled?[]:[animation];
+  last.hidden=true;
+  let shown=0;four.browser.showTab=t=>{assert.equal(t,last);shown++;t.hidden=false;};
+  assert.equal(await four.rule.dissolveSingleMember(owner4,last),true);
+  assert.equal(animation.canceled,true,'collapsed background tab must cancel stale Zia fade/height');
+  assert.equal(last.hidden,false,'active-Space standalone member may be shown');
+  assert.equal(shown,1,'showTab must only be called when tab was hidden');
   console.log('PASS: standalone A+B sort, background parking, selected and background auto dissolve');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -238,6 +238,40 @@ const finish = arguments[arguments.length - 1];
     assert(nodes.indexOf(parked)<nodes.indexOf(h.group),
       'manually positioned independent page above groups must stay there');
   });
+  await test('site v073 collapsed background preview close leaves visible survivor', async h => {
+    // ZSF preview's close action calls removeTab(tab, {animate:true}); unlike
+    // v0.7.2's uncollapsed animate:false test, Zen/Zia closed-folder CSS can
+    // leave a fill:forwards animation on its last background member.
+    const a=addSiteTab('about:robots'),b=addSiteTab('about:license');
+    await delay(260);
+    const group=gBrowser.addTabGroup([a,b],{
+      id:'zsf-collapsed-background-'+serial,label:'About',
+      insertBefore:h.group,showCreateUI:false
+    });
+    group.setAttribute('data-zsf-site','internal:about');
+    gBrowser.selectedTab=h.prefix;
+    group.collapsed=true;
+    await delay(320);
+    assert(group.collapsed,'fixture must be collapsed before closing');
+    const linked=a.linkedBrowser;
+    gBrowser.removeTab(b,{animate:true});
+    await delay(1050);
+    assert(a.isConnected && !a.group && !a.pinned,
+      'collapsed background group must auto-ungroup the real survivor');
+    assert(a.linkedBrowser===linked,
+      'collapsed survivor must retain its original linked browser');
+    const nodes=[...root().children];
+    assert(nodes.indexOf(a)>nodes.indexOf(h.group),
+      'background survivor must move into the independent tail');
+    const style=getComputedStyle(a),rect=a.getBoundingClientRect();
+    assert(!a.hidden &&
+      style.display!=='none' && style.visibility!=='hidden' &&
+      Number(style.opacity)>0.1 && rect.height>10,
+      'surviving independent tab must PAINT visibly after native close: '+
+      JSON.stringify({hidden:a.hidden,display:style.display,visibility:style.visibility,
+        opacity:style.opacity,height:rect.height,inlineHeight:a.style.height,
+        inlineOpacity:a.style.opacity,animations:a.getAnimations?.().map(x=>x.playState)}));
+  });
   await test('native collapse/expand, rapid reversal and selected row', async h => {
     const expanded = h.group.groupContainer.getBoundingClientRect().height;
     assert(expanded > 60, 'expanded group must have real row geometry');

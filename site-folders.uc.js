@@ -588,6 +588,7 @@
         typeof browser.moveTabBefore !== 'function' ||
         typeof browser.moveTabAfter !== 'function') return false;
     const selected = browser.selectedTab === survivor;
+    const wasCollapsed = group.collapsed || group.hasAttribute('collapsed');
     const siblings = [...root.children], pos = siblings.indexOf(group);
     const next = siblings.slice(pos + 1).find(node => node.isConnected &&
       (node.localName === 'tab' || node.localName === 'tab-group'));
@@ -613,7 +614,7 @@
       } else {
         await arrangeStandaloneTabs({ incoming: [survivor] });
       }
-      if (!selected && group.collapsed) watchDetachedTabVisibility(survivor);
+      if (!selected && wasCollapsed) watchDetachedTabVisibility(survivor);
       restoreView();
       return true;
     } catch (error) {

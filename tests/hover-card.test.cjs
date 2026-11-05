@@ -71,6 +71,15 @@ async function main() {
       'collapsed compatibility must not add another geometry or animation controller');
   }
   assert(css.includes('#zsf-folder-hover-card'));
+  // Zia 2.117.x uses a pseudo-element hairline when zia.glass is off,
+  // and disables card blur behind an HDR/SDR video. Mirror exactly those
+  // two native guards without changing the custom preview layout.
+  assert(css.includes('@media not -moz-pref("zia.glass")'), 'Zia glass-off gate');
+  assert(css.includes('#zsf-folder-hover-card::after'), 'native border paint layer');
+  assert(css.includes('border: 0.5px solid rgba(255, 255, 255, 0.12)'), 'native dark hairline');
+  assert(css.includes(':root[zia-light] #zsf-folder-hover-card::after'), 'native light hairline');
+  assert(css.includes(':root:not([zia-video]) #zsf-folder-hover-card'), 'native glass video gate');
+  assert(source.includes("'zia-video', 'class', 'style'"), 'native video state must refresh computed glass');
   assert(css.includes('width: min(310px, calc(100vw - 16px))'), 'preview card width 310px');
   assert(css.includes('flex: 0 0 40px;min-width: 40px'), 'age column width 40px');
   assert(css.includes('gap: 6px !important;'), 'compact horizontal row gap');
