@@ -53,7 +53,7 @@ const finish = arguments[arguments.length - 1];
     // Zia's native whole-folder drop is stateful, so validate it in the
     // dedicated, fresh-profile CI step rather than after 21 fixtures have
     // left native animations and workspace history in the same process.
-    if (!selectedCase && (name.startsWith('site v072 ') ||
+    if (!selectedCase && ((name.startsWith('site v072 ') || name.startsWith('site v073 ')) ||
         name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
         name.startsWith('native member drag edge scroll') ||
         (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance')) ||
@@ -64,7 +64,7 @@ const finish = arguments[arguments.length - 1];
       // This integration case must create actual unpinned browser tabs.
       // Every ordinary case still retains the strict no-add/remove guard.
       if (name.startsWith('incremental organize puts incoming tabs above existing members') ||
-          name.startsWith('site v072 '))
+          (name.startsWith('site v072 ') || name.startsWith('site v073 ')))
         await fn(h);
       else await guarded(h, () => fn(h));
       results.push({ name, status: 'PASS' });
