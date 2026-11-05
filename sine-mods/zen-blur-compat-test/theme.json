@@ -1,7 +1,7 @@
 {
   "id": "0a960432-0bb0-44a9-8f73-dc9b50d31e08",
-  "name": "Zen Transparent Blur A/B Test",
-  "description": "實驗用：Sine 齒輪選關閉／A／B；一般網頁與影片可見時都測試 Zia 2.117.3 + Transparent Mode 毛玻璃。可能影響 HDR／SDR 顯色。",
+  "name": "Zen Transparent Blur A/B + Local Test",
+  "description": "實驗性 Sine MOD：在 Zia + Transparent Mode 下切換關閉、A/B 基準與 C/D/E 局部側欄合成。請測 HDR 發灰風險。",
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders/tree/main/sine-mods/zen-blur-compat-test",
   "style": {
     "chrome": "https://raw.githubusercontent.com/kcussiefil/Zen-Site-Folders/main/sine-mods/zen-blur-compat-test/chrome.css"
@@ -9,7 +9,7 @@
   "readme": "https://raw.githubusercontent.com/kcussiefil/Zen-Site-Folders/main/sine-mods/zen-blur-compat-test/README.md",
   "preferences": "https://raw.githubusercontent.com/kcussiefil/Zen-Site-Folders/main/sine-mods/zen-blur-compat-test/preferences.json",
   "author": "kcussiefil",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "tags": [
     "UI",
     "Experimental"
