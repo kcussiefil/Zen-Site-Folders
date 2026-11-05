@@ -91,9 +91,12 @@ async function main() {
   assert(css.includes('@media -moz-pref("zia.cards.blur")'), 'Zia glass preference is honored');
   assert(css.includes('blur(24px) saturate(1.6)'), 'Zia glass blur matches');
 
-  assert(css.includes('browser[zia-video]'), 'video guard must prevent ZSF preview from forcing colour-washing composition');
-  assert(css.includes(':root:has(> #zsf-folder-hover-card:not([hidden])):not('),
-    'composition must only be applied for a visible ZSF card without selected video');
+  assert(css.includes(':root:not([zia-video]):has(> #zsf-folder-hover-card:not([hidden]))'),
+    'Zia 2.118 root state controls preview composition, including Blur over video');
+  assert(!css.includes('browser[zia-video])'),
+    'do not inspect inner video state and override the Blur over video setting');
+  assert(css.includes('var(--zia-tab-card-bg) 88%, transparent'),
+    'protected SDR/HDR video preview should remain translucent without blur');
   assert(source.includes('getComputedStyle(source)'), 'read actual native Zia paint instead of freezing CSS values');
   assert(source.includes("document.getElementById('zia-folder-card')"), 'native folder style source');
   assert(source.includes("document.getElementById('zia-tab-card')"), 'native tab style fallback');
@@ -239,7 +242,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.7.5');
+  assert.equal(manifest.version, '0.7.6');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
