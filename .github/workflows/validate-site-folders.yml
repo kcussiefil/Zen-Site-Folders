@@ -31,10 +31,11 @@ jobs:
           node --check site-folders-top-drop.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.7.5' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.7.6' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js']) process.exit(1)"
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
+          node tests/zia-2.118-video-hover.test.cjs
           node tests/retired-blur-mod.test.cjs
           node tests/light-theme-contrast.test.cjs
           node tests/group-menu-order.test.cjs
@@ -72,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: z1n-k/zia
-          ref: 68ce963e35746d8424e910c574497d34ae4e5415
+          ref: 41640ec290a55bf0afdbeccc9128123f8d0637f3
           path: .runtime/zia
           persist-credentials: false
       - name: Install pinned Zen 1.24b
