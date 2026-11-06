@@ -1,343 +1,47 @@
-# Zen Site Folders 0.5.6 — 一般分頁區域群組（測試）
+# Zen Site Folders
 
-依網站網域整理 Zen Browser **目前工作區**的普通網頁分頁。每個網站即使只有一個分頁，也能建立群組。群組內依記錄的開啟時間由新到舊排序（沒有開啟時間的歷史分頁依原位置估算），圖示使用 Firefox 本機 `page-icon:` favicon 快取。**不用 AI、不連接外部分類服務。**
+**Organize related Zen tabs into compact, native tab groups without pinning them.**
 
-## 與 Zia 的相容設計
+[繁體中文](README.zh-TW.md) · [Latest release](https://github.com/kcussiefil/Zen-Site-Folders/releases/latest) · [Changelog](CHANGELOG.md)
 
-- 已依據 `z1n-k/zia` 2.114.1 的相關 CSS、資料夾色彩、圖示與命名程式碼檢查。
-- CSS 僅對 `tab-group[data-zsf-site]`（本 Mod 建立的網站群組）移除顏色／外框。**一般 Zia 資料夾、其他 Workspace、Essentials、網站內容與媒體 UI 完全不套用此樣式。**
-- 不改寫 Zia 函式、偏好設定、檔案或內部狀態。僅呼叫 Zen/Firefox 的 `gBrowser` 分組 API。
-- v0.1.4 修正既有 Zia 群組內分頁作為 `insertBefore` 錨點可能形成巢狀群組的問題，並使用 SessionStore 保存本站群組 ID，以便重啟後重新套用網站圖示與樣式。
-- 只在手動點擊按鈕後分類，沒有自動分組功能，避免 Zia 的資料夾動畫期間自動重排。
-- Zia 的「Name new folders and choose their icons with a local model」預設關閉；如果你自行開啟，它可能對新建網站群組另行運算和儲存圖示，造成不必要的動作。請保持關閉（不影響 Zia 其他功能）。
-- 若同時使用 Advanced Tab Groups，這些自建網站群組會使用本 Mod 的 favicon；**其他既有群組**仍保留 Advanced Tab Groups 與 Zia 的原本外觀。
-- **必須停用 Zen Tidy Tabs**：它會使用同一個分頁分組 API，自行排序並可能重新建立群組，不能同時運作。
+Zen Site Folders is a [Sine](https://github.com/CosmoCreeper/Sine) mod for Zen Browser. It groups eligible ordinary tabs by website in the regular tab area and supplies a Zia-style hover preview. Organizing is manual; existing Zen folders, pinned tabs and other protected tab types are kept outside the organizer.
 
-## v0.5.6 原生接手可見性與一次落定
+## Features
 
-- 單一分頁原生拖曳接手時，立即清除備援隱藏標記、浮動卡及備援捲動，避免等到下一次 dragover 才恢復可見。
-- 網站資料夾沿用 Zia 已繪製的讓位落點，在 Zia 原生落定動畫量測前，將其釘選區插入操作轉接至一般分頁區；移除放開後第二次搬回的排序流程。
-- 新增向上／向下落定的完整 DOM 插入紀錄驗證，以及分頁接手後滾動可見性測試。預覽側欄保持展開、輪廓光、拆分及還原流程不變。
-- Linux／macOS 隔離原生自動化不代表使用者實體觸控板視覺驗收。
+- **One-click organization:** group matching sites in the ordinary tab area. A new group needs at least two eligible tabs; a single tab may join an existing matching group.
+- **Compact previews:** a separate group hover card with tab information, opening-time display when reliable, and Zia-compatible appearance and sound indicators.
+- **Native-feeling interaction:** expand/collapse animation, visual drag-and-drop feedback and automatic scrolling near the edge.
+- **Preserve your tabs:** sorting and undo use local snapshots and the browser's tab-group APIs; the mod does not intentionally close or reload tabs while organizing.
+- **Sensible standalone tabs:** remaining independent web tabs are ordered on an explicit Organize action, with a fallback for unknown opening times.
+- **Automatic single-member cleanup:** closing a tab may dissolve a Site Folders-owned group when exactly one member remains; manually dragging a tab out does not trigger this behavior.
 
-## v0.5.5 真正共用 Zia 單一資料夾拖曳控制器
+## Requirements and installation
 
-- Zia 的內部拖曳控制器沒有公開註冊 API，但其 `tabFromEvent()` 會識別 `isZenFolder`；因此本站資料夾只有在抓起、進入原生拖曳期間短暫取得相容識別，讓 Zia 本身控制動態列位移、即時落點與放開後排序。
-- 偵測到 Zia 的 `zia-dragging-tab` 後，Site Folders 不再繪製自己的拖曳卡或第二套讓位動畫，Zia 負責即時目標和放開視覺。若 Zen／Zia 對普通 `tab-group` 的最終放置意外移入釘選容器，本 Mod 會在同一次放開處理中、下一個畫面繪製前，依同一個已捕捉的一般分頁落點回復原 DOM 物件；正常落點不做任何額外排序。
-- **嚴格限制**：不允許將本站資料夾拖入其他資料夾成為巢狀；其餘 Zen `canDropElement` 行為保持原樣。拖放完成、Esc、視窗失焦、切換 Space 或模組卸載後，還原普通 `tab-group` 的身分。
-- 沒有 Zia、未啟用 Zia 拖曳，或只有指標事件而無原生 `dragstart` 時仍保留 v0.5.4 安全備援。原有快照、解散還原、釘選防護、Sine 更新時間戳、邊緣捲動及預覽時保持側邊欄展開不變。
-- 需通過 Linux/macOS 原生 Zen＋Zia、群組身分清理及實際落點測試；實體觸控板流暢度仍需 macOS 實機確認。
+1. Install Zen Browser, [Sine](https://github.com/CosmoCreeper/Sine) and [Zia](https://github.com/z1n-k/zia). The current preview integration targets **Zia 2.118**.
+2. In Zen / Sine, allow JavaScript mods from external repositories as required by your Sine setup.
+3. Install this repository using `kcussiefil/Zen-Site-Folders`.
+4. Restart Zen to load the mod scripts.
+5. Use the organizer button at the left of the tab-section divider. Its adjacent restore/undo control is available when a suitable snapshot exists.
 
-## v0.5.4 Zia 原生式「所見即落點」拖曳預覽
+Back up your Zen profile before first using an organizer that moves existing tabs. If another grouping mod manages the same ordinary groups, check for conflicts before enabling both.
 
-- 對照 Zia `src/js/28-tab-dragging.js` 的 `measureRows`、`place`、`apply` 與 `finishFolderDrop`：Zia 不在每次移動滑鼠時改動真實排序，而是移動視覺列，放開後再以同一落點提交。
-- 本 Mod 現在對整個網站群組也採用此架構：拖動時周圍分頁上下讓位，**唯一的拖曳預覽卡片直接呈現在將插入的空位**，而不是只跟隨滑鼠。向上與向下移動皆依原始索引、落點前後位置及相同列高計算，避免預覽與實際落點不一致。
-- 放開時繼續沿用 v0.5.3 通過 Linux/macOS Zen＋Zia 原生測試的安全原生移動及晚到校正。保留約一個畫面的預覽銜接，避免來源列在提交前顯示於舊位置，然後才突然跳到落點。
-- 群組內單一分頁仍以 Zia 原生拖動視覺為主，不重複對它使用本站的群組讓位。未改 Zia 本體。
-- 灰色雙圓點橫條已隱藏、邊緣自動捲動、Sine 更新、預覽時保持側邊欄展開、SessionStore 與安全拆分均保留。
+## Compatibility and limitations
 
-## v0.5.3 恢復拖曳穩定性及閃避動畫
+- The mod operates on **ordinary tab groups**, not Zen's pinned native folders. It does not automatically convert groups into pinned folders.
+- Site Folders' hover preview follows **Zia 2.118** video-state styling. With Zia's *Blur over video* disabled, a video-page card can be translucent **without actual blur**; this is intentional to avoid forcing additional video composition.
+- If *Blur over video* is enabled, the preview may use blur while visible. Zia warns that video blur can dull colors or impair HDR rendering; test the result on your own display.
+- Genuine opening times are retained when available. Restored legacy tabs without trustworthy timestamps show an unknown time rather than an invented one.
+- Browser/profile state, other mods and operating-system graphics composition can affect the final result. Automated tests do not replace hardware testing.
 
-- v0.5.1 在每次拖曳滑鼠移動時提前透過 `gBrowser.moveTabBefore/After` 改動真實 DOM，與 Zia 原生拖動動畫互相干擾，導致分頁跑版、落點錯亂及群組歸屬問題。此版恢復原本 v0.5.0 通過原生 Zen＋Zia 測試的策略：拖曳中僅預覽與讓位，放開後再套用原生最終落點與必要校正。
-- 恢復整個網站群組移動時的相鄰列避讓效果，位移高度改用群組標題列實際高度，不再拿展開群組全高誤當作單列；過渡調至 110ms。
-- 保留 v0.5.1 已移除的重複水平落點線，只顯示浮動拖曳資訊卡與動態避讓。
-- 當 Zen／Zia 沒有發送原生 `drop` 而只有 `mouseup` 時，現在會正常確認拖曳落點，不再取消操作造成放開後等待。正常原生 `drop` 不重複處理。
-- Sine 更新時間戳、v0.5.2 的預覽側邊欄維持展開、自動捲動、SessionStore 快照、安全拆分與既有釘選限制不變。
+## Project information
 
-## v0.5.2 Sine 更新偵測與預覽時保留垂直分頁列
+| Item | Location |
+| --- | --- |
+| Current mod version | **v0.7.6** (see `theme.json`) |
+| Installation metadata | [`theme.json`](theme.json) |
+| Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
+| Detailed historical release notes | [`releases/`](releases/) |
+| macOS acceptance checklist | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |
+| Release-writing convention | [`docs/RELEASE_POLICY.md`](docs/RELEASE_POLICY.md) |
 
-- 修正 `theme.json` 中的 `updatedAt` 為實際發布時較新的 UTC ISO 8601 時間。Sine 會比較已安裝與儲存庫的此時間欄位，而非只依 `version` 判斷，因此每次升版都必須同步遞增。保留 GitHub 正式 Release 自動發布。
-- **Zen 緊湊模式**：本站資料夾的預覽卡片顯示時暫時維持垂直分頁列展開；滑鼠離開資料夾標籤與預覽卡片後，才解除保持狀態並交還 Zen 原本的側邊欄滑出／收合效果。
-- 卡片顯示與切換期間不直接覆寫 Zen 的 `zen-has-hover` 或 Zia 屬性，只使用本站暫時屬性與限定在緊湊模式的 CSS。關閉分頁、選取分頁、切換工作區、視窗失焦、視窗縮放、模組卸載都會清理，避免卡住。
-- 拖曳即時排序、邊緣捲動、快照、安全拆分以及 Zia 外觀不變。
-
-## v0.5.1 取消重複落點線並改為拖曳時即時排列
-
-- 修正 v0.5.0 誤判灰色橫條來源：Zia 早已隱藏 Zen 原生指示器；殘留的是本站自行生成的 `.zsf-drop-guide`。現在不再生成這條橫線。
-- 網站分頁與整個網站群組在拖曳過程中越過有效落點便直接透過原生 `gBrowser.moveTabBefore/After` 更新真實順序，不再只顯示預覽、等放開後才更新。保留浮動資訊卡的名稱與有效落點提示。
-- 放開時採用最後有效預覽的位置；Esc、無效落點、視窗失焦、切換 Space 時盡量以原始相鄰分頁還原拖曳前位置，仍不得釘選、關閉、重建分頁。
-- 邊緣自動捲動、Zia 原生動畫、快照及還原維持原設定。避免額外讓位 CSS 與真實移動互相干擾。
-- 高頻拖曳下的流暢度與原生實際影像仍須 macOS 實機確認。
-
-## v0.5.0 灰色雙圓點落點橫條與放開後延遲修正
-
-- 使用者看到的左右帶圓點灰色橫條，實際是 Zen `#zen-drag-indicator`，不是系統拖曳縮圖。僅在拖曳本 Mod 的分頁或群組期間，以專屬根屬性隱藏 Zen 原生指示器及舊式提示線；維持 ZSF 浮動卡與自己的落點線，不修改原生拖放事件。
-- **群組與成員分頁**：放開後只讓原生 `drop` 事件完成同步派發，隨即以既有 `gBrowser.moveTabBefore/After` 套用最後預覽位置，不再等 Zen/Zia 所有高度、位移動畫結束才動。若原生後續延遲搬移破壞順序，保留原本 `nativeIdle` 完成後一次安全校正。
-- 不改變自動捲動、讓位動畫、快照、還原、釘選與工作區隔離。
-- 影片播放／觸控板與雙圓點橫條的最終視覺效果仍須 macOS 實機確認。
-
-## v0.4.3 拖曳灰色橫條、整組讓位動畫與自動捲動
-
-- 單獨分頁及整個網站群組：拖曳時隱藏原生灰色拖曳縮圖和來源橫條，保留 ZSF 浮動資訊卡與落點插入線；限制在本 Mod 的群組及其成員，其他普通分頁、Zen 資料夾、Essentials、Library 的原生行為不變。
-- 拖動整組資料夾時，原位置和目標位置之間的相鄰群組／一般分頁以 `translate` 動畫讓位，不提前移動 DOM、不釘選、不影響手動排序。
-- 靠近目前 Space 普通分頁捲動容器上下約 52px 時，透過 `requestAnimationFrame` 持續捲動；游標移開、到達端點、Esc、失焦、切換 Space 或放開即停止，並依實際 scrollTop 修正落點。
-- 安全：不攔截 Zen／Zia 原生拖放事件；不新增、關閉、重建分頁；SessionStore 快照和還原規則不變。
-- macOS 系統拖曳縮圖的實際呈現及影片播放時的觸控板流暢度仍需實機驗收。
-
-## v0.4.2 影片播放時的開合動畫修正（待實機驗收）
-
-- 修正已收合資料夾切換作用中分頁時，程式同時呼叫 Zen 的展開與收合動畫，造成互相覆蓋。現在每次狀態同步只啟動一條原生動畫；新選取分頁若留有前次收合的高度／透明度，僅清除該分頁的原生 inline 狀態。
-- 將群組開合事件同步排入微任務，使 Zia 的 TabGroup 動畫標記先完成，避免事件監聽順序造成彈跳遺失；同一事件與屬性變更只同步一次。
-- 取消收合但含作用中分頁時整個群組的 `clip-path`，也不再用 `:has()` 逐組判斷展開裁切，降低播放影片／波形時的重繪成本。保留隱藏分頁的點擊隔離，不更動 Zia 自身圖示。
-- 分頁切換只檢查前後相關群組，並補上 `selected/multiselected` 屬性備援，避免每次切換掃描所有收合群組。
-- 自動測試驗證單一路徑、收合時切換作用中分頁的可見性，以及既有拖曳／排序／救援規則。**Zia 真實音量波形與影片解碼負載的流暢度仍須 macOS 實機確認；這是修正候選版，不宣稱已解決所有滾動頓挫。**
-
-## v0.4.1 展開時捲動位置與影片播放效能改善
-
-- **避免展開資料夾時，垂直分頁清單自動下移**：只對含本工具網站群組的 Zen 工作區設定 `overflow-anchor: none`，停用 Firefox 在動畫高度改變時的捲動錨定補償，不停用使用者的觸控板／滑鼠滾動。
-- **保留原生微彈跳**：仍交給 Zen/Zia 的 `animateExpand/animateCollapse`，不使用第二套逐格高度動畫或每幀 `scrollTop` 重設。
-- **降低開合與捲動重繪**：已展開且含目前分頁的資料夾保持 `overflow: visible` 讓光暈完整呈現，但取消整個資料夾的額外 `clip-path`；收合時的點擊區隔離與光暈裁切仍保留。
-- **降低 JavaScript 額外負擔**：單一群組 `collapsed` 變更只更新該群組；`TabSelect` 只檢查前後選取分頁所屬的群組；跨群組結構變動在下一動畫影格合併更新，避免逐次掃描全部分頁。
-- **音訊播放情境**：Zia 的波形屬於 SVG 自身動畫，原生彈跳使用另一套路徑。新增含 `soundplaying` 的真實 Zen DOM 回歸測試，驗證捲動位置、開合與原生彈跳動畫時間；此測試不等同實機影片解碼負載測試。
-- 其他功能及快照格式不變。**須在 macOS Zen + Zia 實機測試垂直分頁位置與影片播放時的流暢度**，不以 CI 代替實機觀察。
-
-## v0.4.0 開啟資料夾光暈修復
-
-只延伸目前分頁的原生光暈繪製範圍，讓開啟資料夾期間不因移除 collapsed 狀態而突然改用硬裁切。保留 Zia 自己控制高度時的裁切例外，未變更任何分頁、排序、收合 JavaScript 或快照行為。
-
-## v0.3.9 還原可見性與資料夾點擊修復
-
-- 修正收合群組解散／還原後，分頁殘留 `height:0`、`opacity:0` 而整片消失。移動前先讓原生動畫完成展開清理，還原成功前新增實際可見性驗證；失敗保留快照。
-- 多個群組同時收合時，各自等待自身原生動畫完成，不再依賴原生共用計數器的最後一個群組來完成隱藏。
-- 補齊 Zia 原本只套用於 `zen-folder` 的隱藏分頁點擊隔離、目前分頁繪製範圍與淡出樣式，限定本工具的一般群組。
-- 加入收合且含目前分頁的還原／解散／安全拆分、多群組同時收合及實際命中位置回歸測試。合成輸入與無視窗驗證仍不代表使用者實機動畫已驗收。
-
-## v0.3.8 收合、拖放與保序解散修復（2026-11-01）
-
-- 補齊一般網站群組的原生垂直動畫入口，讓 Zen／Zia 負責收合、展開及目前分頁的過渡。
-- 修正切換分頁時的焦點移交誤清除拖曳來源；以拖曳前排列計算落點，等原生落地完成再校正一次，取代固定 38ms。
-- 解散、安全拆分與還原先等待未完成的拖放，再擷取真正 DOM 順序；等待非同步移出與空群組移除後驗證，保留快照及還原箭頭。
-- 六套 Node 測試及 Linux／macOS 各十項真實 Zen 回歸測試納入 Actions，包含原始 v0.3.7 的失敗對照。
-- 依使用者發布指示準備 Pre-release；**實體觸控板與動畫觀感仍未驗證**，不以無視窗測試代替實機驗收。
-
-## v0.3.7 原生 Zia 開合、手動拖曳與無確認安全拆分（2026-11-01）
-
-- **資料夾開合與選取分頁過渡**：撤除 v0.3.3–v0.3.6 自行執行的 WAAPI 高度動畫、強制收合樣式和完成動畫後切換 `display` 的處理，避免與 Zen/Zia 的原生 420ms 彈跳及選取分頁動畫爭搶布局。一般網站群組與 Zia 原生群組共用其動畫機制，並在載入時清除舊版留下的動畫狀態屬性。
-- **資料夾內手動排序不再被程式重排**：取消 `TabGrouped` 後 80ms 自動排序；整理按鈕仍在明確執行時依「最新在上」整理，使用者後續拖曳的排序不再被時間戳覆蓋。
-- **群組可拖到普通分頁區最前方**：將第一列上方、釘選區分隔線下方的小空隙列為有效放置位置。Zen/Zia 放置完成後若位置仍不符，僅對同工作區、同層未釘選群組使用 `gBrowser.moveTabBefore/After` 原生 API 校正。
-- **群組內分頁拖曳**：對已展開網站群組的成員，提供同一資料夾內的實際保序移動備援，保留 Zia 原本的拖曳動畫與落點處理；不把分頁移出群組、不釘選、不關閉。拖放提示同時支援資料夾與成員。
-- **解散群組／安全拆分取消確認視窗**：右鍵選擇「解散群組」或雙指點按還原箭頭執行安全拆分後，先做必要驗證與快照封存，再直接執行，不另跳確認。安全拆分後保留還原箭頭；第二次點按在確認無群組殘留後封存並清除舊快照，也不跳確認。若有未知群組、錯誤或封存失敗，仍拒絕危險操作並保留快照。
-- **高風險操作不變**：「刪除群組」會關閉分頁，「轉為 Zen 分頁夾」會移往釘選區，兩項仍保留確認。
-- **測試範圍**：GitHub Actions 包含原生動畫接管、無確認安全拆分、直接解散、拖曳到最上方的實際 DOM 順序、群組成員手動排序與不可移動／釘選保護。
-- **限制**：自動化模擬無法代替使用者 macOS Zen + Zia 介面的流暢度與落點實測。建議備份 Profile、先在測試 Space 驗證，尤其是含目前分頁的收合群組。
-
-## v0.3.6 保序解散、安全拆分與快速預覽關閉修正（2026-11-01）
-- **解散群組不再倒序**：先記錄資料夾內從上到下的分頁順序，使用 Firefox / Zen 原生 `ungroupTab` 解除所有成員後，再用 `moveTabBefore`／`moveTabAfter` 將分頁按原順序排列。即使 Zen 原生解除時把後面的分頁插到最前，也不會留下倒序。
-- **一般右鍵與救援共用保序函式**：兩者執行後都核對原分頁仍存在、未釘選，且視覺順序與原群組一致；排序校正失敗就保留快照並提示部分完成，不會偽稱成功。
-- **舊群組 ID 失效可救援**：恢復 Zen 工作階段後群組 ID 變更時，除了快照的舊 ID，還依本工具的 `zsf-` 前綴、專屬 `data-zsf-site` 屬性，以及 SessionStore 的已知擁有權紀錄辨識目前群組。不能只以名稱相似來猜測。
-- **防止還原箭頭提前消失**：若畫面仍存在無法確認歸屬的一般群組，就拒絕「接受重置／清除舊快照」，不會讓資料夾留著、拆分入口卻消失。安全拆分後**先保留快照與箭頭**，核對後再次雙指點按才可封存並清除；清除前再次確認目前已沒有殘留群組。
-- **手動解散也保留復原入口**：執行一般群組右鍵「解散群組」時，先封存原快照，但不立即刪除目前快照；拆分或排序不完整時仍保有可回報的恢復資訊。
-- **快速預覽關閉分頁不向左移動**：關閉時固定卡片座標及動畫原點；原生 `TabClose` 與點擊關閉事件只排入一個合併刷新，不會在 80ms 內重複重建和重新定位。
-- **不變部分**：不關閉、不重建、不釘選或重新載入任何拆分的分頁；分類、最新到最舊排序、目前分頁常駐、Zia 動態音量波形、Zia 樣式及拖曳預覽不改。
-- **驗證**：新增模擬 Zen 原生倒序解除、工作階段群組 ID 改變、未知群組阻止快照清除、兩段式安全拆分及快速預覽關閉位置不變的回歸測試。需再由使用者於 macOS Zen 實機確認。
-
-## v0.3.5 網站群組拖曳位置提示（2026-11-01）
-- 依據使用者 4.6 秒螢幕錄影，群組在拖曳後確實會變動順序，但過程缺少明顯的移動預覽和插入位置提示。
-- 新增獨立 `site-folders-drag.uc.js`，只對本 Mod 的一般未釘選 `tab-group[data-zsf-site]` 監看使用者從群組名稱列開始的拖曳。
-- 移動超過 6px 或收到原生 `dragstart` 後，顯示**跟隨游標的半透明群組浮動預覽**（網站圖示、群組名稱）；來源群組名稱列降低透明度、加上淡虛線。
-- 指向同一工作區及同一層級的其他群組或普通分頁時，顯示**細插入線與上方／下方文字提示**；超出側邊欄或同層有效範圍時改為不可放置樣式。
-- 原生 Zen／Zia 仍負責**實際群組移動與是否允許放置**。此提示只表示依目前畫面推估的同層插入位置，不取代瀏覽器最終的落點判定；不處理將群組嵌入其他資料夾，也不允許自動釘選。
-- 浮動預覽與插入線一律 `pointer-events: none`；不呼叫 `preventDefault`、`stopPropagation`、`setDragImage`、`dropEffect` 或任何分頁移動 API。
-- 放開滑鼠、原生 `drop`／`dragend`、按 Esc、視窗失焦、切換工作區時會清除視覺狀態。
-- 核心整理、開合、動態波形、SessionStore 快照、還原與安全拆分邏輯未修改；CI 增加視覺拖曳、同層落點、無效區域及清理回歸測試。
-- 尚未在 macOS Zen 真實拖曳的每個階段完成端到端驗證，建議先在測試工作區試用。
-
-## v0.3.4 收合時保留 Zia 原生選取分頁外觀（2026-11-01）
-- **修正收合後目前分頁突然變成另一種外框**：v0.3.3 曾在收合穩態下對 `.tab-stack > .tab-background` 強制指定 `background-color`、`box-shadow` 和 `border-radius`，把 Zia 已有的深色選取背景、漸層光暈及細緻邊緣蓋掉。v0.3.4 移除這三種自訂外觀，讓同一個實際分頁在展開與收合時都由 Zia 原生 `.tabbrowser-tab[visuallyselected]` 樣式呈現。
-- **減少動畫結束時的高度跳動**：移除收合穩態額外指定的 `min-height`；fallback WAAPI 現在將目前分頁的真實高度、上下外邊距及容器上下內距一起算入最後一格的高度，避免動畫結束時重新布局造成突然位移。
-- **保留功能**：收合後只顯示正在查看的分頁；保留 Zia 原有 420ms 動態高度動畫優先順序及 WAAPI 備援；一般網站群組仍未釘選、由新到舊排序。
-- **風險隔離**：主整理、SessionStore 快照、Undo、安全拆分、右鍵選單與快速預覽邏輯完全未修改，只有腳本版號更新。
-- **測試**：新增原生選取樣式不可被自訂覆寫、目前分頁真實高度（含 margin/padding）之模擬回歸測試；實際 Zia 視覺效果仍須在你的 Zen/macOS 環境確認。
-
-## v0.3.3 原生 Zia 動態波形與無等待開合動畫（2026-11-01）
-- **音量動畫**：快速預覽不再顯示靜態的喇叭 SVG；在音訊分頁上讀取 Zia 已建立的 `--zia-sound-wave`、`--zia-sound-muted` 動態 SVG，直接在卡片內呈現同一組四條波形。靜音狀態同步，保留點擊切換靜音；如 Zia 尚未建立該變數，使用 Zia 靜態波形圖示作安全備援。
-- **音訊圖示間距**：改成 18px 波形容器、16px 波形、每側原始 8px gap 扣除 3px 外邊距，移除之前喇叭與文字之間的重複留白。
-- **資料夾開合**：移除 `site-folders-collapse.uc.js` 的 470ms 固定延後隱藏。點擊群組前只量測當前高度，不阻止 Zen 點擊；原生 Zen/Zia 已有實際幾何動畫時交給原生完成（監聽其 `finished`），否則由本 Mod 使用 WAAPI 以實際高度播放 420ms 彈性展開／收合。
-- **目前分頁常駐**：收合最後狀態仍以 CSS 僅顯示選取中的分頁，其餘分頁隱藏；若群組沒有選取分頁則整組內容收起。狀態更新和動畫完成同步，不依賴固定計時。
-- **快速反向切換**：連續收合／展開時，從目前畫面高度重新計算動畫，舊動畫結束不得再次隱藏已展開的群組。
-- **資料安全**：不移動、不釘選、不複製、不關閉任何群組分頁；整理、最新到最舊排序、SessionStore 快照、Undo、安全拆分和右鍵選單核心邏輯不變。
-- 新增模擬回歸測試，直接檢查 WAAPI 高度 keyframes、Zia 原生動畫優先、取消／反向與選取分頁；此測試仍**不等於**真實 macOS Zen + Zia 動畫畫面驗證。請先備份 Zen Profile，在測試工作區操作。
-
-## v0.3.2 快速預覽視窗定位、流暢動畫與右鍵修復（2026-11-01）
-- **防止卡片越界**：右側卡片採用未經動畫縮放的 `offsetWidth/offsetHeight`，而非可能被縮小動畫污染的 `getBoundingClientRect`；以視窗邊界上下夾住位置，並對清單提供 `100vh - 16px` 高度上限。即使資料夾貼近視窗底部，「新增分頁」仍可經自然捲動抵達。
-- **即時性與動畫**：起始懸停延遲 230ms → 105ms，避免滑鼠在同一資料夾的圖示、文字間移動時反覆重設計時；卡片再開時會重新觸發 Zia 風格 260ms 彈性進場，離開時 120ms 淡出；已開啟卡片切換到另一群組時直接更新不額外等待。
-- **音量圖示與間距**：和 Zia 一樣根據實際 sidebar favicon 位置量測清單內縮，沿用 16px 音量圖示及其原生邊距，排除手工固定縮排造成的空白。
-- **選單第一次無反應**：原生 XUL 的 `popuphidden` 有機會在 `command` 前送出；將目標群組安全保存在該選單上，點選時先驗證該群組仍存在，避免第一次操作被略過。
-- **還原箭頭雙指點按**：舊版在 `mousedown` 當下開啟安全拆分確認，可能造成後續 `contextmenu` 落在網頁上。新版在攔截右鍵選單事件後才排入安全拆分，並只抑制與還原箭頭相關的手勢；一般網頁右鍵功能不變。
-- **資料安全**：原始快照資料格式、正常整理／新到舊排序、Zia 原生資料夾、分頁釘選／關閉規則均不變。僅修改右鍵箭頭事件先後、快速預覽與群組選單事件。
-- 新增窄視窗定位、卡片進場重播、清單捲動位置、XUL first-click、網頁右鍵隔離回歸測試，並保留既有收合、快照安全測試。仍待 macOS Zen + Zia 實機驗證。
-
-## v0.3.1 修正網站群組無法收合（2026-11-01）
-- 修正 v0.3.0 在一般網站分頁群組的子容器強制 `display:flex !important`，蓋掉 Zen 原生收合樣式，造成群組箭頭已變化但子分頁仍顯示。
-- 新增獨立 `site-folders-collapse.uc.js`：群組收到 `TabGroupCollapse` 或其 `collapsed` 屬性變化時，先讓 Zia 原生約 420ms 彈跳動畫執行，470ms 後加入 `data-zsf-collapse-settled` 作為最終收合保護。展開時立即移除此狀態。
-- 收合且沒有正在查看的分頁時，群組子容器會完整隱藏；若群組內有正在查看的分頁，只保留該選取分頁，其餘分頁在原生動畫完成後隱藏。
-- 重新啟動後已收合的群組會立即同步最終狀態；快速收合再展開會取消舊計時，避免延遲誤隱藏。
-- 此腳本只處理 `tab-group[data-zsf-site]`，不處理 Zia 原生 `zen-folder`、其他使用者群組、分頁移動、關閉或釘選。
-- 主核心整理、快照、還原、救援、群組排序與右鍵選單行為未更動，除了四個腳本的版號一致性。
-- 新增收合控制器的 Node 22 模擬回歸測試與 CI 檢查，仍需 Zen + Zia macOS 實機驗證（特別是開合動畫與目前分頁常駐）。
-
-## v0.3.0 收合常駐分頁、Zia 彈跳與透明玻璃卡片（2026-11-01）
-
-- **右鍵選單**改為「解散群組」、「轉為 Zen 分頁夾（上方釘選）」、「刪除群組」。解散、轉換、刪除只詢問**一次**；已確認後若有整理快照，自動封存且讀回驗證，封存失敗立即停止，不另跳第二次確認。取消操作不動分頁或快照。
-- **收合群組保留目前正在看的分頁**：不再對整個收合子容器強制 `display:none`。CSS 只放行收合群組裡選取中的分頁並隱藏其他成員；切換分頁時依 `tab[selected]` 即時同步。離開群組後則交由 Zen/Zia 正常收合，不複製或移動分頁。
-- **開合動畫**：移除先前妨礙 Zia 420ms 彈跳的 `display:none/max-height:0` 硬覆寫，讓 Zia 現有針對普通 `tab-group` 的原生彈跳邏輯處理；沒有新加第二套高度動畫。Zia 設定 `zia.folders.bounce` 需保持啟用。
-- **Zia 式快速預覽**：內部清單採用 `zia-folder-card-list`、`zia-folder-card-row`、`zia-folder-card-icon` 與 `zia-selected` 樣式；卡片使用 Zia 玻璃色彩變數、260ms 彈性進場，Zia `zia.cards.blur` 啟用時使用 76% 底色混合、24px 模糊及 1.6 倍飽和。
-- **捲動**：依 Zia 的十列高度上限、隱藏式捲軸及自然觸控板滾動；選取變化、關閉分頁或清單刷新時保留 `scrollTop`。
-- **快速操作**：每筆預覽成員在滑鼠停留時提供 Zia 類型的關閉控制，有聲音的分頁提供靜音／取消靜音；只有使用者點擊才執行。原本點選切換分頁與明確新增分頁的功能維持。
-- **資料安全**：主核心 `site-folders.uc.js` 除版號及防重複載入旗標外未修改；不更動整理、新到舊排序、還原、救援、快照格式、分頁 ID、釘選規則。普通網站群組仍留在一般分頁區。
-- **驗證**：GitHub Actions 測試選單、快照保護、CSS 限定、懸停與捲動模擬；Zen + Zia 在 macOS 真實工作階段的開合手感、卡片透明與操作尚需實機驗證。安裝前先備份 Zen Profile，使用測試工作區檢查。
-
-## v0.2.9 繁體中文群組右鍵選單、文字對齊及最新分頁優先（2026-11-01）
-- 修正網站群組 favicon 與標題的基線偏移，將群組文字和展開箭頭向下微調 2px，不變更其他 Zia 資料夾。
-- 整理網站分頁時依 SessionStore 開啟時間由**最新在上、最舊在下**排序；新開啟的分頁加入既有網站群組後亦會調整位置。對非常舊、缺少建立時間的分頁，使用初始分頁位置作為推估基準，不聲稱能還原真實歷史開啟時間。
-- 新增獨立 `site-folders-menu.uc.js`，只接管本站建立的普通 `tab-group[data-zsf-site]` 標題右鍵選單，使用 Zen 原生 XUL 選單元件，所有文字為繁體中文：**變更顏色、重新命名、變更圖示、移除圖示、移到工作區、解除群組、轉為 Zen 資料夾、刪除群組**。
-- 圖示使用 Zen 內建 `gZenEmojiPicker`，選擇後寫入本 Mod 的 SessionStore 圖示對應表。色彩只微調群組的箭頭，不重新加上彩色背景或外框。
-- 對會改變成員或工作區的操作，若有整理快照，必須明確確認，先額外封存舊快照並讀回驗證，才清除當前整理鎖定。封存失敗則拒絕操作。
-- **解除群組**保留分頁；**刪除群組**會關閉群組內分頁，操作前另有警告；**轉為 Zen 原生資料夾**會使分頁釘選到上方，必須另外確認；不會在背景自動轉換。
-- 「移到工作區」需 Zen 提供 `gBrowser.zenHandleTabMove`；沒有該 API 時拒絕操作。多視窗工作區同步仍須實機測試。
-- 主程式的 v4 還原快照格式與雙指點按還原箭頭的救援路徑保留，不自動清除既有快照。
-- 新增原生右鍵選單與排序回歸測試，尚需 Zen + Zia + Advanced Tab Groups 停用的實機驗證。
-
-## v0.2.8 獨立的 Zia 風格資料夾預覽與收合（2026-11-01）
-- **不需要 Advanced Tab Groups** 來繪製本 Mod 的網站群組列、子分頁縮排或已收合內容。使用 `tab-group[data-zsf-site]` 專用 CSS；保持普通分頁區域，不自動釘選。
-- 已收合的網站群組上停留滑鼠約 230ms，右側出現 **獨立的 Zia 風格分頁清單**。清單會列出群組內實際分頁及 favicon，點選即可切換；也可明確點選「開啟新分頁」。超長清單可以捲動。
-- Zia 原生 Hover Card 只接受 `isZenFolder`，因此這項功能使用**獨立腳本** `site-folders-hover.uc.js`，不覆寫 Zia 的內部函式、不攔截 Zia 原生資料夾、不借用或修改 `#zia-folder-card`。
-- 預覽卡片採用與 Zia 相近的尺寸、間距、動畫與玻璃變數；如果 Zia 主題變數存在會跟隨配色，但 Zia 未來的 DOM 或動畫改動不一定自動同步到此卡片。
-- 只隱藏本站群組的彩色底、外框、偽元素裝飾。資料夾列、網站 favicon、展開箭頭與 hover 中性反白仍保留；不影響手動建立的 Zen／Zia 資料夾。
-- **整理與還原、SessionStore 快照、舊版救援及雙指點按還原箭頭的邏輯完全未修改**，只有主腳本版號更新。仍需 Zen + Zia + Advanced Tab Groups 停用狀態實機確認。
-- Firefox 的原生 `browser.tabs.groups.enabled` 必須開啟，這是原生分組功能，不是依賴 Advanced Tab Groups 本身。
-- 已新增不使用外部套件的 Node 22 回歸測試及 GitHub Actions 驗證工作流程。
-
-## v0.2.7 還原箭頭雙指點按與孤立快照封存（2026-11-01）
-- 恢復原本的簡潔介面：分隔線只有「資料夾整理」與「還原箭頭」兩個按鈕，**移除「拆」按鈕**。
-- 還原箭頭左鍵仍執行標準還原；macOS 觸控板**雙指點按（右鍵）**執行安全拆分。為避開 Zen / Zia 原生工具列選單的攔截，在瀏覽器視窗擷取階段處理次要按鍵與 `contextmenu`，同一手勢只觸發一次，其他區域的右鍵選單不受影響。
-- 如果舊快照記錄的網站群組已不存在，且目前工作區沒有任何可辨識的本 Mod 群組，會顯示確認視窗；確認後先將舊快照**完整複製封存**到獨立 SessionStore 鍵 `zsf-archived-snapshots-v1`，寫入後必須讀回一致才解除該工作區的整理鎖定。過程不移動、不關閉、不重載分頁。
-- 如仍存在本 Mod 群組、備份封存失敗、舊快照資料不完整，或使用者取消，則保留整理鎖定及原始快照，不猜測分頁身分。
-- 若原群組還在，雙指點按箭頭會維持安全拆分與兩次確認機制；拆分不等於完全恢復舊分頁順序。
-- 語法檢查、兩按鈕 UI、觸控板右鍵等價事件、舊快照封存及失敗拒絕路徑已用模擬環境測試；**尚待 Zen + Zia + ATG 實機驗證**，操作前先備份 Profile。
-
-## v0.2.6 獨立左鍵安全拆分按鈕（歷史版本，已取代）（2026-11-01）
-- 修正 v0.2.5 在 Zen / Zia 環境右鍵「還原」箭頭無法叫出安全拆分確認視窗。
-- 將安全拆分改為分隔線上的獨立 **「拆」按鈕**，與「整理」和「還原」分開。按一下「拆」才會開啟確認；不再依賴右鍵事件。
-- 按鈕只在目前 Space 的 v3 / v4 快照記錄曾建立網站群組，或已完成拆分尚待核對時顯示。
-- 第一次按「拆」需確認，只解除快照記錄中本 Mod 建立的普通分頁群組，不關閉、重新載入或釘選任何分頁；備份保留。第二次按「拆」且核對分頁後再確認，才清除舊快照。
-- 優先使用 Firefox 的原生確認視窗介面，失敗時再使用一般 `window.confirm`；無法確認時不得移動分頁。
-- 保留 Zen + Zia + ATG 的既有還原判定；本版未修正舊版快照缺失 ID 無法精確還原原始排序的限制。
-- 已完成 JavaScript 語法與模擬測試，**尚未通過使用者 Zen 實機測試**。安裝前請備份 Zen Profile，並在確認本版已載入後操作。
-
-## v0.2.5 舊版快照救援與分頁辨識（2026-11-01）
-- 已有 v3 快照出現「5 個分頁無法辨識」時，**左鍵還原仍會拒絕修改**，確保不會亂配對或直接刪除分頁。
-- **右鍵還原箭頭**：選擇性救援，會顯示確認視窗；只解除該快照 `createdFolders` 記錄、本工具建立的 `zsf-` 一般群組；不關閉、不重載、不釘選分頁。包括整理後加入該群組的分頁也可能被解除，且無法保證恢復原始全域順序。
-- 救援成功後保留原快照。**再次右鍵還原箭頭**，必須確認網站分頁仍存在、且本工具建立的群組已清空，才會出現清除舊快照的二次確認；不會自動刪除備份。
-- 新建 v4 快照額外保存分頁 URL；只有網址唯一相符、分頁開啟時間可確認不晚於整理當時的情況，才允許以 URL 輔助識別。對重複網址、無法確認建立時間等情況仍拒絕猜測。
-- v3 舊快照原先沒有儲存網址，因此無法保證完全精確重建原本位置。救援只是安全拆分，而非完全回復原始排序。
-- Sine 更新依 `updatedAt` 比較；請確認新版本的版號與實際載入版本，若仍顯示舊版不要反覆按還原。已通過模擬測試但尚未在 Zen/Zia/ATG 實機驗證。
-
-## v0.2.4 群組收合與 Sine 更新偵測（2026-11-01）
-- 對本 Mod 的一般 Tab Groups 增加獨立的 CSS 收合樣式。Advanced Tab Groups v3.12.1 關閉時，也應能隱藏已收合的子分頁（保留選取中的分頁），不影響 Zia 或其他使用者群組。
-- Sine 會依 `updatedAt` 而非單純 `version` 判斷更新；新版的 `theme.json` 已補上更新時間，往後每次發版都要同步更新。
-- 修正範圍限 CSS、版本及更新中繼資料；**不修改既有 v3 還原快照、SessionStore、分頁位置、分組或復原流程**。
-- 靜態與語法檢查已完成，Zen 實機仍需驗證；若先前仍有「5 個分頁無法辨識」，不要反覆按還原。
-
-## v0.2.3 About 與 Zia Hover Cards（2026-11-01）
-- 允許 `about:config`、`about:addons`、`about:support` 等瀏覽器內部頁面整理到普通分頁區域的 `About` 群組。
-- 排除 `about:newtab`、`about:home`、`about:blank` 等可能作為 Zen 臨時佔位的分頁，避免誤分類。
-- `About` 群組使用本機設定圖示，不從網路抓取 favicon。
-- 右側懸停快速檢視使用 Zia 現有 **Hover cards for tabs and folders** 選項：Zia 官方支援一般 Tab Groups；本 Mod 不另建相互衝突的懸停 UI。需要在 Zia 設定開啟此選項。
-- 仍保留 v3 還原快照與未釘選分類，不主動操作既有 Zia 分組。
-- 本版完成語法與靜態檢查，但 Zen + Zia 實機互動仍須確認。
-
-## v0.2.2 還原查找修正（2026-11-01）
-- 群組中的分頁即使缺少獨立的工作區屬性，也從目前工作區容器直接辨識。
-- 還原只讀取既有分頁 ID，不在查找過程建立新 ID；如任何原始分頁仍找不到，停止還原，不再執行後續分組與移動，並保留備份。
-- 先前已部分還原的狀態仍需實機檢查；此版本不保證恢復已刪除的分頁。
-
-## v0.2.1 波浪修正（2026-11-01）
-- 依錄影修正還原箭頭在波浪動畫開始後才出現造成的重疊：波浪每影格重新量測所有可見按鈕（包含操作中停用的按鈕）及分隔線的位置，空間不足時隱藏波浪。
-
-## v0.2.0 修正（2026-11-01）
-- 不再使用 `gZenFolders.createFolder`，改用 Firefox `gBrowser.addTabGroup`，網站群組留在一般分頁區域，不再自動釘選。
-- 僅整理一般未釘選分頁，不搬離使用者既有的 Zia / Zen 資料夾；保留群組內的原有相對順序。
-- 針對 v0.1.9 的原生資料夾工作階段快照，禁止執行可能導致空白分頁的舊還原流程。新整理使用版本 3 快照。
-- 與 Zen 原生資料夾不同：這是一般可收合 Tab Group，不具備所有 Zen 原生資料夾特性。
-- **本版尚待 Zen + Zia 實機驗證；若仍有 v0.1.9 快照，會阻止新整理。勿直接刪除快照以繞過保護。**
-
-## v0.1.9 真正 Zen 資料夾（歷史版本，已停用）
-- 改用 `gZenFolders.createFolder` 建立 Zen 原生可收合的網站資料夾，不再使用 Firefox 一般群組作為網站整理目標。
-- **Zen 原生資料夾會把子分頁釘選到分隔線上方。** 這是原生 API 行為；按「還原」會嘗試解除這些釘選並恢復原本的群組、位置和順序。
-- 整理前儲存 v2 快照；建立每個原生資料夾前先保存其 ID。還原只清理本 Mod 創建、且不含任何真實分頁的空資料夾，不會關閉使用者後續加進去的分頁。
-- 整理結果只計入真正移入對應原生資料夾且已釘選的分頁；只完成部分時顯示失敗訊息並保留還原備份。
-- 若留有 v0.1.8 舊版快照，先按還原再整理，避免兩種還原格式混用。
-- 此為測試版；尚未在實際 Zen + Zia 環境完成整理及還原驗證，請先使用獨立測試 Space。
-
-## v0.1.8 修正（2026-11-01）
-- **SessionStore 分頁識別碼修正：** 優先使用 Zen 視窗的 `window.SessionStore`（與 Zia 相同入口）；如不可用，改用已匯入的 SessionStore 模組。必須成功寫入並讀回識別碼才允許整理，沒有不可靠的記憶體 ID 備援。
-- **特殊分頁：** 跳過 Zen 佔位空白分頁、釘選、Essential、Glance 等不會參與整理的分頁，不再因為這些分頁無法保存識別碼而取消整個整理。
-- **通知動畫：** 盡量沿用 Zen 的 spring 彈出和淡出縮小效果，動畫完成後停留約 2 秒；失敗和成功採相同停留時間（原本分別 6.5 秒、4.2 秒）。
-- 重新驗證 SessionStore 視窗與模組備援、寫入／讀回，以及保存失敗時拒絕整理。仍須在 Zen + Zia 實機確認跨重啟還原是否完整。
-
-## v0.1.7 修正（2026-11-01）
-- 中文整理訊息改用 Zen 原生 `.zen-toast` 視覺規則，移除自訂深色背景、黃色錯誤外框、固定高度及字級覆蓋，讓通知隨 Zen 佈景主題改變。
-- 無修改備份檢查、分頁排序或還原邏輯。若仍顯示「一般分頁無法保存識別碼」，表示安全檢查仍阻擋整理，需從瀏覽器主控台的 `[ZenSiteFolders]` 訊息確認 SessionStore 實際失敗原因。
-
-## v0.1.6 修正（2026-11-01）
-- 修復 Zen 原生 Toast 僅支援 Fluent 訊息 ID 導致的右上角空白通知，改為直接顯示含文字的狀態／錯誤通知。
-- 整理按下後立即顯示至少 1.25 秒的分隔線波浪；就算備份／API 安全檢查拒絕整理，仍可確認按鈕已觸發。
-- 快照建立失敗會說明具體問題（例如分頁識別碼失敗、群組缺 ID、特殊資料夾不在備份範圍），不會靜默無動作，也不會解除「未備份不整理」限制。
-- 先前版本波浪動畫只有在通過備份檢查後才播放；未見波浪不一定表示按鈕沒有收到點擊。
-- **原有 Zen 資料夾與 Zia 特殊狀態仍可能超出還原能力，尚未通過完整實機測試；請勿以此版本直接整理重要分頁。**
-
-## v0.1.5 修正（2026-11-01）
-- 對每一個 Space 的原生分隔線建立整理／還原按鈕。修正切換 Space 後沒有按鈕的問題，也支援新建的 Space。
-- 按鈕寬高固定 20px、圖示 15px，明確覆蓋 Zen 原生 toolbarbutton 在分隔區的背景、內距、圖示透明度及 pointer-events 規則，避免被撐成大方塊。
-- 不再插入額外 spacer；直接使用 Zen 原生 flex=1 分隔線維持「左側整理／還原、中間分隔線、右側清除」。
-- 波浪長度與位置由原生分隔線尺寸計算，支援側邊欄寬度和還原按鈕的變動。
-- 這是靜態結構驗證版本，仍需要 Zen + Zia 實機測試。
-
-## 安裝（不需要終端機）
-
-1. 在 GitHub 建立新的**公開** Repository，名稱 `Zen-Site-Folders`，不要使用任何現有 POS 儲存庫。
-2. 把本 ZIP 解壓縮後的 `theme.json`、`site-folders.uc.js`、`userChrome.css`、`README.md` 直接上傳到**儲存庫根目錄**（不是先上傳 ZIP）。
-3. Zen → Settings → Sine Mods → Sine 設定中允許從非官方來源安裝 JS Mod。
-4. 在 Sine 安裝欄貼入 `kcussiefil/Zen-Site-Folders`，安裝後重新啟動 Zen。
-5. 將原本 Zen Tidy Tabs 停用。Zia 保持啟用，建議其本機 AI 自動命名資料夾選項維持關閉。
-6. 使用側邊欄**分隔線左端**的網站整理資料夾圖示按鈕；整理後旁邊會出現「還原」箭頭。原有清除分頁按鈕維持在**右端**，中間用分隔線／彈性空間隔開。
-
-## 新增：整理動畫與安全還原
-
-- **整理波浪**：按下左端「整理」後，原本水平的分隔線播放局部波浪（至少約 0.75 秒），動畫不攔截滑鼠、不中斷清除按鈕的點擊事件；整理完成後恢復 Zen 原分隔線。
-- **還原按鈕**：第一次成功保存整理前快照後，整理按鈕旁會出現一個「復原」箭頭。按下後以 Firefox 原生分頁 API 回復原本的工作區頂層順序、群組成員／群組內順序、群組 ID、名稱、顏色和展開／收合狀態。
-- **先備份才整理**：快照與每個分頁的持久 ID 存放在 Firefox 的 SessionStore（**僅在本機**）。若無法寫入完整快照，就不執行整理。
-- **重複整理不覆蓋**：同一工作區再按整理，會保留原始快照直到成功還原；各工作區分開記錄。在正常還原工作階段的前提下，重新啟動 Zen 後仍可使用尚未清除的快照（尚未經 Zen 實機測試）。
-- **不關閉分頁**：還原不使用關閉或重新載入分頁 API。整理後新開的分頁留在原處；已關閉的分頁不會被擅自開回來。發生缺漏、順序錯誤或群組無法還原時，會保留快照讓使用者繼續處理。
-- **界限**：Zia／Advanced Tab Groups 的特定自訂圖示可能是在別的 Mod 內，群組一旦因最後一個分頁移走而被原生瀏覽器移除，即使恢復相同群組 ID，外部 Mod 儲存的附加狀態不保證能完全恢復。第一次測試前仍須備份 Zen Profile。
-
-## 防誤觸設計
-
-- 「整理／還原」與「清除分頁」不相鄰：整理、還原在左端，清除仍在右端。
-- 將整理維持為**手動按一下才執行**，不會自動整理或清除分頁。
-- 此按鈕只是移動分頁到原生群組，**不會執行關閉分頁的動作**。
-
-## 範圍與安全
-
-- 目前工作區有效 HTTP(S) 網頁；網域名稱透過 Firefox `Services.eTLD` 取得有效註冊網域，Google 重要服務另外分組。
-- 不整理 Essentials、釘選、空白、Glance、Split View、`about:`、`file:` 等特殊分頁。
-- **不關閉或重新載入分頁，不清除登入資訊，不存取 POS 或 GitHub 程式碼。**
-- 仍然會實際移動群組位置；請先備份 Zen Profile／工作階段。
-- 舊分頁建立日期不一定存在；第一次以現有順序近似新舊。之後新分頁的時間儲存在 Firefox SessionStore。
-- 如果原本手動建立的 Zia 資料夾內混有不同網站，整理後其分頁可能移入新網站群組。程式不會主動呼叫「刪除群組」API，但 Firefox 可能在最後一個分頁移出後自動移除空群組；還原功能會使用原群組 ID、名稱與顏色重建，**外部 Mod 的附加資料（例如自訂圖示）不保證完全還原**。
-- 無法使用 favicon 快取的網站可能沒有圖示，不會因此使用第三方伺服器抓圖。
-
-## 移除
-
-在 Zen → Sine Mods 移除 Zen Site Folders，重新啟動。若尚要恢復整理前狀態，**先按還原**再移除 Mod；停用後按鈕會消失。已建立的 Firefox 原生群組不會因移除 Mod 自動解散。此 Mod 不會修改其他模組的檔案。
-
-## 測試範圍
-
-完成靜態衝突檢查、JavaScript 語法檢查、模擬整理／反覆整理／還原舊群組／不關閉新分頁／備份寫入失敗就停止的測試，以及與 Zia 2.114.1 CSS/JS 的選擇器及事件設計比對。**未在你的 Zen + Zia + Advanced Tab Groups 實際安裝環境做端到端測試，無法保證視覺或分組行為 100% 無衝突。**
-### Work-mode regression repair
-
-The v0.3.8 repair was prepared on `fix/native-folder-order-regressions` from v0.3.7.
-See [source and timing audit](docs/regression-audit.md) and
-[macOS Zen + Zia acceptance steps](docs/macOS-acceptance.md).
-Publication is explicitly user-authorized; physical trackpad and animation acceptance remain unverified.
+**Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
