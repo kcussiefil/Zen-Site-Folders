@@ -75,7 +75,85 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                 client.js(script.read_text())
             if client.js("return !!document.getElementById('zia-welcome')?.matches(':popover-open');")['value']:
                 raise RuntimeError('Zia first-install overlay covers native input targets')
-            if args.case == 'real-bottom-pointer':
+            if args.case == 'separator-hover':
+                # Real WebDriver pointer movement; DOM-only synthetic hover
+                # events cannot activate Firefox's native CSS :hover state.
+                fixture = client.js('''
+                  const ws = gZenWorkspaces.activeWorkspaceElement;
+                  const tabs = Array.from({length:3}, (_,i) => gBrowser.addTab(
+                    'about:blank#separator-hover-'+i, {
+                      triggeringPrincipal:Services.scriptSecurityManager.getSystemPrincipal()
+                    }));
+                  document.documentElement.setAttribute('zen-sidebar-expanded','true');
+                  Services.prefs.setBoolPref('zen.view.show-clear-tabs-button', true);
+                  const sep = ws.querySelector('.pinned-tabs-container-separator');
+                  const undo = sep?.querySelector('.zsf-undo-button');
+                  if (!sep || !sep.querySelector('.zsf-sort-button') ||
+                      !sep.querySelector('.zen-workspace-close-unpinned-tabs-button'))
+                    throw new Error('Native separator or controls missing');
+                  ws.pinnedTabsContainer.removeAttribute('hide-separator');
+                  if (undo) undo.hidden = false; // expose second icon for layout-only test
+                  sep.querySelector('.zen-workspace-close-unpinned-tabs-button')
+                    .setAttribute('can-close','true'); // force availability only in test
+                  return {tabs: tabs.length,separator:sep.getBoundingClientRect().toJSON()};
+                ''')['value']
+                time.sleep(.3)
+                def measure():
+                    return client.js('''
+                      const sep=gZenWorkspaces.activeWorkspaceElement.querySelector('.pinned-tabs-container-separator');
+                      const q=s=>sep.querySelector(s);
+                      const rect=e=>e?.getBoundingClientRect().toJSON();
+                      const line=q(':scope > toolbarseparator');
+                      const sort=q('.zsf-sort-button'),undo=q('.zsf-undo-button');
+                      const clear=q('.zen-workspace-close-unpinned-tabs-button');
+                      const label=clear.querySelector('.toolbarbutton-text');
+                      return {
+                        host:rect(sep),line:rect(line),sort:rect(sort),undo:rect(undo),clear:rect(clear),
+                        nativeIcon:getComputedStyle(clear).listStyleImage,
+                        clearLabelDisplay:label?getComputedStyle(label).display:null,
+                        wave:!!q('.zsf-wave'),waveClass:q('.zsf-wave-path')?.getAttribute('d'),
+                        actualHover:sep.matches(':hover'),
+                        sortOpacity:getComputedStyle(sort).opacity,
+                        nativeIconDisplay:clear.querySelector('.toolbarbutton-icon')
+                          ?getComputedStyle(clear.querySelector('.toolbarbutton-icon')).display:null
+                      };
+                    ''')['value']
+                def hover_at(x,y):
+                    client.call('WebDriver:PerformActions',{
+                      'actions':[{'type':'pointer','id':'zsf-separator-pointer',
+                        'parameters':{'pointerType':'mouse'},
+                        'actions':[{'type':'pointerMove','origin':'viewport',
+                          'x':int(x),'y':int(y),'duration':60}]}]})
+                    time.sleep(.25)
+                sep=fixture['separator']
+                if not sep['width'] or not sep['height']:
+                    raise RuntimeError('Separator has no dimensions: '+str(fixture))
+                hover_at(sep['right']+90,sep['top']+sep['height']/2)
+                hidden=measure()
+                hover_at(sep['left']+sep['width']/2,sep['top']+sep['height']/2)
+                shown=measure()
+                hover_at(sep['right']+90,sep['top']+sep['height']/2)
+                restored=measure()
+                report['separatorHover']={'fixture':fixture,'rest':hidden,'hover':shown,'after':restored}
+                def width(s,key):
+                    return s[key]['width']
+                good = (
+                    all(width(hidden,k)<3 for k in ('sort','undo','clear')) and
+                    all(width(shown,k)>16 for k in ('sort','undo','clear')) and
+                    all(width(restored,k)<3 for k in ('sort','undo','clear')) and
+                    hidden['line']['width']>shown['line']['width']+45 and
+                    restored['line']['width']>shown['line']['width']+45 and
+                    hidden['line']['width']>hidden['host']['width']-34 and
+                    shown['actualHover'] and not restored['actualHover'] and
+                    'dart-down.svg' in shown['nativeIcon'] and
+                    shown['clearLabelDisplay']=='none' and
+                    bool(shown['wave'])
+                )
+                report['results']=[{'name':'separator-only hover reveals all icons and restores full line',
+                                    'status':'PASS' if good else 'FAIL',
+                                    'reason': None if good else 'See separatorHover geometry'}]
+                client.call('WebDriver:ReleaseActions',{})
+            elif args.case == 'real-bottom-pointer':
                 setup = client.async_js(pathlib.Path(__file__).with_name('real-bottom-setup.js').read_text(), [])['value']
                 if setup.get('error'): raise RuntimeError('Pointer fixture: '+setup['error'])
                 report['pointerFixture'] = setup

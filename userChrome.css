@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.4.3 — compact native separator buttons, Zia-safe. */
+/* Zen Site Folders v0.8.3 — separator-local reveal and native Clear icon, Zia-safe. */
 /* Zen applies its own toolbarbutton background, padding and icon opacity
    inside this separator. Fully reset those rules only for our controls. */
 .pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
@@ -70,6 +70,118 @@
   opacity: 1 !important;
   background: color-mix(in srgb, currentColor 8%, transparent) !important;
   background-image: none !important;
+}
+/* Three controls share ONE hover trigger: the separator row, not the
+   entire sidebar. Collapsed controls have zero actual layout width/margins,
+   so the native flex=1 separator becomes full-length; opacity alone would
+   leave permanent blank gaps. This overrides our older fixed 20px rules
+   without replacing any Zen/Zia command handlers. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zen-workspace-close-unpinned-tabs-button) {
+  box-sizing: border-box !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  flex: 0 0 0px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  background: transparent !important;
+  background-image: none !important;
+  transition:
+    width .15s ease,
+    min-width .15s ease,
+    max-width .15s ease,
+    flex-basis .15s ease,
+    margin .15s ease,
+    opacity .10s ease !important;
+}
+/* Keep keyboard focus usable when moving the pointer away. The row's
+   hover remains true when the pointer crosses from the line to a button. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
+  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zen-workspace-close-unpinned-tabs-button) {
+  width: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  flex: 0 0 20px !important;
+  overflow: visible !important;
+  opacity: .76 !important;
+  pointer-events: auto !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
+  toolbarbutton.zsf-sort-button {
+  margin-inline-start: 1px !important;
+  margin-inline-end: 6px !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
+  toolbarbutton.zsf-undo-button {
+  margin-inline-end: 11px !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
+  toolbarbutton.zen-workspace-close-unpinned-tabs-button[can-close="true"] {
+  margin-inline-start: 7px !important;
+}
+/* Zen owns the real Clear command, its can-close state, and the preference
+   zen.view.show-clear-tabs-button. Never force display:flex on this native
+   control, or we'd override a user's preference to hide it entirely. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zen-workspace-close-unpinned-tabs-button {
+  list-style-image: url('chrome://browser/skin/zen-icons/dart-down.svg') !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: inherit !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-text {
+  display: none !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {
+  width: 15px !important;
+  min-width: 15px !important;
+  max-width: 15px !important;
+  height: 15px !important;
+  min-height: 15px !important;
+  max-height: 15px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  opacity: .9 !important;
+  fill: currentColor !important;
+  -moz-context-properties: fill, fill-opacity !important;
+}
+/* Zen intentionally hides the native icon unless the workspace has
+   closable tabs. A disabled Clear must not leave an empty 20px slot. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
+  toolbarbutton.zen-workspace-close-unpinned-tabs-button:not([can-close="true"]) {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  flex-basis: 0px !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+/* Do not revive Undo when there is no valid pre-sort snapshot. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zsf-undo-button[hidden] {
+  display: none !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
+  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zen-workspace-close-unpinned-tabs-button):hover:not([disabled]) {
+  opacity: 1 !important;
+}
+/* Revealing controls must never reactivate an action Zen or ZSF disabled. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
+  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button)[disabled] {
+  opacity: .35 !important;
+  pointer-events: none !important;
 }
 /* Native flex=1 toolbarseparator handles the gap; never inject a spacer.
    Wave overlay is measured against the actual line at click-time. */
