@@ -357,12 +357,18 @@ const finish = arguments[arguments.length - 1];
     const margin = parseFloat(h.group.groupStartElement.style.marginTop) || 0;
     assert(Math.abs(margin) < 3, 'expanded start margin must be zero, got '+margin);
     const rect = node => node.getBoundingClientRect();
-    const first=rect(h.tabs[0]), middle=rect(split), last=rect(h.tabs[3]);
-    assert(first.height > 12 && middle.height > 12 && last.height > 12,
+    // The native drop appends the split AFTER the existing ordinary rows.
+    // Check actual DOM order rather than assuming the split sorts between B/C.
+    const rows = [...h.group.groupContainer.children]
+      .filter(node => node === split || node === h.tabs[0] || node === h.tabs[3]);
+    assert(rows.length === 3, 'two normal members and one nested split remain');
+    const rects = rows.map(rect);
+    assert(rects.every(box => box.height > 12),
       'other members and split wrapper must have full native heights');
-    assert(middle.top >= first.bottom - 3 && last.top >= middle.bottom - 3,
-      'expanded native rows must not overlap: '+JSON.stringify({first:first.toJSON(),
-        split:middle.toJSON(),last:last.toJSON(),margin}));
+    assert(rects.every((box, i) => i === 0 || box.top >= rects[i-1].bottom - 3),
+      'expanded native rows must not overlap: '+JSON.stringify({
+        order: rows.map(node => node === split ? 'split' : node.zsfTestName),
+        rects:rects.map(box => box.toJSON()), margin}));
     assert(a.label && b.label, 'both original split tab names are retained');
     assert(h.tabs.every(tab => tab.isConnected && !tab.pinned),
       'all tabs survive with unchanged pinned state');
