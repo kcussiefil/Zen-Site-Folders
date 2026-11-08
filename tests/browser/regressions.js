@@ -375,12 +375,11 @@ const finish = arguments[arguments.length - 1];
     // should not replay its expand animation merely due to membership.
     const root=h.group.parentElement;
     root.insertBefore(split,h.group.nextElementSibling);
-    await idle(h.group);
-    await delay(300); // isolate re-entry from the previous normal-group timeline
+    await delay(40); // snapshot the native split-exit boundary, not the settled end
     const beforeOverflow=h.group.groupContainer.style.overflowY;
     const beforeMargin=h.group.groupStartElement.style.marginTop;
     assert(beforeOverflow !== 'hidden',
-      'split exit must settle native clipping BEFORE re-entry: '+JSON.stringify({
+      'split exit must NOT start a redundant native animation: '+JSON.stringify({
         overflow:beforeOverflow,margin:beforeMargin,closed:h.group.collapsed,
         hidden:h.group.groupContainer.hidden
       }));

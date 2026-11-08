@@ -18,11 +18,12 @@ const split={hasAttribute:k=>k==='split-view-group'};
 const nested=tab('Split pane name',true,split);
 const sibling=tab('Other group tab',false,null);
 const descendants=[sibling,nested];
+let hasSplit=true;
 const group={
  isConnected:true,isZenFolder:false,pinned:false,collapsed:true,
  tabs:[sibling],groupContainer:{hidden:true,style:sty()},
  groupStartElement:{style:sty()},matches:()=>true,
- querySelectorAll:s=>s==='tab-group[split-view-group]'?[split]
+ querySelectorAll:s=>s==='tab-group[split-view-group]'?(hasSplit?[split]:[])
    :s==='tab.tabbrowser-tab'?descendants:[],
  removeAttribute:k=>attrs.delete(k),hasAttribute:k=>attrs.has(k),
  dispatchEvent:()=>{}
@@ -74,6 +75,16 @@ const api=win.__zsfCollapseV037;
   api.sync(group);await api.whenIdle(group);
   assert.deepEqual(calls,['collapse','expand'],
     'removing a split child must not replay native expand');
+  // The entire native split wrapper exits the opened host, leaving a
+  // normal group. This must not start an ordinary animateExpand either.
+  hasSplit=false;descendants.pop();win.gBrowser.selectedTab=sibling;
+  api.sync(group);await api.whenIdle(group);
+  assert.deepEqual(calls,['collapse','expand'],
+    'split exit to ordinary group must not replay native expand');
+  hasSplit=true;descendants.push(nested);win.gBrowser.selectedTab=nested;
+  api.sync(group);await api.whenIdle(group);
+  assert.deepEqual(calls,['collapse','expand'],
+    'split return to expanded host must not replay native expand');
   group.collapsed=true;api.sync(group);await api.whenIdle(group);
   assert.deepEqual(calls,['collapse','expand','collapse']);
   assert(/#tabbrowser-tabs tab-group\[split-view-group\]\s*\{\s*--zia-active-tab-bg:\s*var\(--zsf-selected-tab-fill/.test(css),

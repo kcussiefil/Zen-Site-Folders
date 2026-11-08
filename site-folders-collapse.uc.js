@@ -149,6 +149,7 @@
     }
     const state = {
       collapsed: group.collapsed, selected, members, finished: false,
+      splitHost: true,
       deferredComplete: prior?.deferredComplete === true, done: null
     };
     states.set(group, state);
@@ -186,6 +187,24 @@
     const members = [...group.tabs];
     const selected = members.filter(tab => tab.selected || tab.multiselected);
     const prior = states.get(group);
+    // The nested split just left an already-open Site Folder. There is no
+    // collapse/expand transition and the remaining ordinary tabs already
+    // occupy their natural rows. Starting ANOTHER animateExpand here clips
+    // the group for 180ms, racing the split's next Zia landing (observed as
+    // an unlabelled grey ghost after rapid reordering).
+    if (!force && !membership && prior?.splitHost && !collapsed &&
+        prior.collapsed === false) {
+      const startMargin = parseFloat(group.groupStartElement?.style?.marginTop) || 0;
+      if (!prior.finished ||
+          (!group.groupContainer?.hidden && Math.abs(startMargin) < .5)) {
+        prior.members = members;
+        prior.selected = selected;
+        prior.splitHost = false;
+        return;
+      }
+      // Nonzero collapsed shift is NOT a stable expanded host: let the
+      // native path repair it instead of suppressing needed relayout.
+    }
     const held = deferredRows.get(group);
     if (held && (!collapsed || selected.length || !members.includes(held)))
       deferredRows.delete(group);
