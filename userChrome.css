@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.8.4 — fixed right-hand separator actions, fade only.
+/* Zen Site Folders v0.8.5 — optical icon sizing; stationary right-hand controls.
    Native markup: one flex=1 toolbarseparator plus Zen Clear. Our actions
    remain inside this same native row; neither DOM order nor Zen handlers
    need replacing. The ROW :hover is the sole pointer reveal trigger. */
@@ -103,6 +103,28 @@
   color: inherit !important;
   fill: currentColor !important;
   -moz-context-properties: fill, fill-opacity !important;
+}
+/* Optical adjustment for Zen's three different SVG viewBoxes. The 20px
+   BUTTON boxes remain fixed, clickable, and centered; change only the
+   intrinsic icon artwork dimensions (not row/inset/hover/wave positions).
+   Undo = 15px via shared rule above, Folder = 16px, Clear = 13px. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zsf-sort-button > .toolbarbutton-icon {
+  width: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
+  max-height: 16px !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {
+  width: 13px !important;
+  min-width: 13px !important;
+  max-width: 13px !important;
+  height: 13px !important;
+  min-height: 13px !important;
+  max-height: 13px !important;
 }
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-text {

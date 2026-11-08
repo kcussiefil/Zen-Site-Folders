@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.8.5](releases/v0.8.5.md) | Optically balance separator icons: Undo 15px, Group 16px, Clear 13px; keep all three 20px hit targets and fixed positions. |
 | [v0.8.4](releases/v0.8.4.md) | Fix missing native Clear icon even when Zen protects active tabs; right-align Undo → Group → Clear with stationary fading and full-width separator wave. |
 | [v0.8.3](releases/v0.8.3.md) | Reveal all three separator actions only on separator hover; use Zen's dart-down Clear icon; full-width line and adaptive sorting wave. |
 | [v0.8.2](releases/v0.8.2.md) | Reject native split-view group admission at the drop boundary; preserve standalone split and ordinary-tab moves. |
