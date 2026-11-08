@@ -69,4 +69,10 @@ jobs:
           HISTORY
 
           current="$(node -p "JSON.parse(require('fs').readFileSync('theme.json', 'utf8')).version")"
+          # Historical tags may predate the new numbering policy; enforce the
+          # one-digit minor/patch rule for the CURRENT release only.
+          if [[ ! "$current" =~ ^[0-9]+\.[0-9]\.[0-9]$ ]]; then
+            echo "::error::Current version must use single-digit minor and patch with carry-over: $current"
+            exit 1
+          fi
           publish "v$current" "$GITHUB_SHA"

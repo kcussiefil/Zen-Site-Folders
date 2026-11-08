@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.7.10
+// @version      0.8.0
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==

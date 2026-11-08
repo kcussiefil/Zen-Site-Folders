@@ -8,6 +8,20 @@
 - **New** release notes: English, with a consistent title and headings. Do not mix languages within one release description, except UI labels that must be quoted verbatim.
 - Never place sequential release logs or old implementation plans at the top of `README.md`.
 
+## Version numbering (mandatory for every future release)
+
+Use three-segment version identifiers `vMAJOR.MINOR.PATCH`. MINOR and PATCH
+must each be **one decimal digit (0–9)**, with carry-over rather than a
+two-digit patch: `v0.3.8 → v0.3.9 → v0.4.0 → v0.4.1`, and
+`v0.9.9 → v1.0.0`. Therefore the version after `v0.7.9` is
+`v0.8.0`, **never** `v0.7.10`. Enforce the same format in
+`theme.json`, CI and the release publisher.
+
+Versions, commits, tags and release notes already published are historical
+records; never rename or delete them merely to repair a numbering mistake.
+The already-published `v0.7.10` remains as history and is superseded by
+`v0.8.0`, which contains the same functional implementation.
+
 ## New release checklist
 
 1. Confirm behavior changes and complete relevant automated and Zen/Zia tests.
