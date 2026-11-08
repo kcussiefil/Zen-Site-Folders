@@ -121,10 +121,10 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         undoHidden:undo.hidden,
                         nativeIcon:getComputedStyle(clear).listStyleImage,
                         nativeIconDisplay:icon?getComputedStyle(icon).display:null,
-                        iconWidths:Object.fromEntries([
+                        glyphRects:Object.fromEntries([
                           ['undo',undo],['sort',sort],['clear',clear]
                         ].map(([key,btn])=>[key,btn.querySelector('.toolbarbutton-icon')
-                          ?.getBoundingClientRect().width||0])),
+                          ?.getBoundingClientRect().toJSON()||null])),
                         clearLabelDisplay:label?getComputedStyle(label).display:null,
                         nativeCommand:clear.getAttribute('command'),
                         canClose:clear.hasAttribute('can-close'),
@@ -201,9 +201,12 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                     not shownAll['undoHidden'] and
                     not shownAll['canClose'] and
                     shownAll['nativeIconDisplay']!='none' and
-                    abs(shownAll['iconWidths']['undo']-15)<1 and
-                    abs(shownAll['iconWidths']['sort']-16)<1 and
-                    abs(shownAll['iconWidths']['clear']-13)<1 and
+                    abs(shownAll['glyphRects']['undo']['width']-15)<1 and
+                    abs(shownAll['glyphRects']['undo']['height']-12.9)<1 and
+                    abs(shownAll['glyphRects']['sort']['width']-14.08)<1 and
+                    abs(shownAll['glyphRects']['sort']['height']-16)<1 and
+                    abs(shownAll['glyphRects']['clear']['width']-15.86)<1 and
+                    abs(shownAll['glyphRects']['clear']['height']-13)<1 and
                     'dart-down.svg' in shownAll['nativeIcon'] and
                     shownAll['clearLabelDisplay']=='none' and
                     shownAll['nativeCommand']=='cmd_zenCloseUnpinnedTabs' and

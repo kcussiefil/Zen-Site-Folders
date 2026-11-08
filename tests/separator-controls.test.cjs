@@ -3,7 +3,7 @@ const fs=require('node:fs'), path=require('node:path');
 const root=path.join(__dirname,'..'),css=fs.readFileSync(path.join(root,'userChrome.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'site-folders.uc.js'),'utf8');
 const manifest=require(path.join(root,'theme.json'));
-assert.equal(manifest.version,'0.8.5');
+assert.equal(manifest.version,'0.8.6');
 assert(css.includes('.pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator'),
   'only the separator row should shrink the line');
 assert(css.includes('position: absolute !important') &&
@@ -51,4 +51,20 @@ assert(css.includes('width: 20px !important;') &&
 assert(css.includes('inset-inline-end: 59px !important;') &&
   css.includes('inset-inline-end: 32px !important;') &&
   css.includes('inset-inline-end: 5px !important;'),'original icon positions unchanged');
-console.log('PASS v0.8.5: 15/16/13 optical icons in 20px stationary right controls; Clear/Undo/wave intact');
+const optical = new Map([
+  ['zsf-undo-button','scaleY(0.86)'],
+  ['zsf-sort-button','scaleX(0.88)'],
+  ['zen-workspace-close-unpinned-tabs-button','scaleX(1.22)']
+]);
+for(const [selector,scale] of optical) {
+  const label='toolbarbutton.'+selector+' > .toolbarbutton-icon {';
+  const needle=css.slice(css.indexOf(label),css.indexOf('}',css.indexOf(label))+1);
+  // Select the last declaration block for each icon; previous blocks set
+  // base dimensions, whereas these optical blocks set only transforms.
+  const blocks=css.matchAll(new RegExp('toolbarbutton\\\\.'+selector+' > \\\\.toolbarbutton-icon \\\\{([^}]+)\\\\}', 'g'));
+  assert([...blocks].some(m=>m[1].includes('transform: '+scale+' !important;')),
+    selector+' must have the exact calibrated optical transform '+scale);
+}
+assert(css.includes('transform-origin: 50% 50% !important;') &&
+  css.includes('transition: none !important;'),'glyphs transform about their center without animation');
+console.log('PASS v0.8.6: measured optical glyph corrections, unchanged icon boxes, stationary click targets and native Clear');
