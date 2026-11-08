@@ -117,10 +117,22 @@
   outline: 0 !important;
   box-shadow: none !important;
 }
-/* Zia draws group frames using pseudo-elements, NOT CSS borders. Hide them
-   except during drag-over so the user keeps a visible drop target. */
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group], [zia-drop-slot])::before,
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group], [zia-drop-slot])::after {
+/* Hide the group background layer for our own groups except when Zia marks
+   a real drop target: ::before supplies the native-style drop hover wash. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group], [zia-drop-slot])::before {
+  content: none !important;
+  display: none !important;
+  opacity: 0 !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+/* Zia's group ::after is solely the hairline perimeter shine. Its
+   [zia-drop-slot] rule explicitly turns that shine back on during drag.
+   Suppress the decorative ring for Site Folders groups in ALL states,
+   including drag-over, without touching ::before, [zia-drop-slot] itself,
+   native landing positions, or .tab-group-container::after's drop slot. */
+#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group])::after {
   content: none !important;
   display: none !important;
   opacity: 0 !important;
