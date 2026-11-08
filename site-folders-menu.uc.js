@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 繁體中文群組選單
-// @version      0.7.5
+// @version      0.7.7
 // @description  Scoped native context menu for ordinary site groups.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -546,7 +546,9 @@
     event.stopPropagation();
     activeGroup = group;
     menu.zsfTargetGroup = group;
-    menu.openPopupAtScreen(event.screenX, event.screenY, false);
+    // This is a context menu, not a generic popup. Gecko needs its context-menu
+    // interaction state for native pointer tracking and menu-item highlighting.
+    menu.openPopupAtScreen(event.screenX, event.screenY, true);
   }
 
   function ordinaryContextTab() {

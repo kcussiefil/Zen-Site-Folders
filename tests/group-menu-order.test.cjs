@@ -35,7 +35,7 @@ class XulNode {
   removeAttribute(key) { delete this.attrs[key]; }
   addEventListener(type, fn) { (this.events[type] ||= []).push(fn); }
   removeEventListener(type, fn) { this.events[type] = (this.events[type] || []).filter(f => f !== fn); }
-  openPopupAtScreen(x, y) { this.opened = [x, y]; }
+  openPopupAtScreen(x, y, isContextMenu) { this.opened = [x, y, isContextMenu]; }
   matches() { return false; }
   closest() { return null; }
   querySelector(selector) {
@@ -132,6 +132,8 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
     assert.equal(event.prevented, true);
     const menu = popupSet.children.find(node => node.id === 'zsf-site-group-menu');
     assert(menu && menu.opened, 'native menu must open');
+    assert.deepEqual(menu.opened, [30, 40, true],
+      'site group popup must open as a real XUL context menu for macOS pointer tracking');
     return menu;
   };
   function find(item, label) {
