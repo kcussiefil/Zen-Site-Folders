@@ -32,7 +32,9 @@ const ownIconRule=(selector) => {
   const rx = new RegExp('toolbarbutton\\.'+selector+' > \\.toolbarbutton-icon \\{([^}]+)\\}', 'g');
   const matches=[...css.matchAll(rx)];
   assert(matches.length>=1,'expected a distinct icon-size rule for '+selector);
-  return matches[matches.length-1][1];
+  // The last rule may apply a transform, not dimensions. Select the
+  // dimensions declaration instead of assuming every matching block is one.
+  return matches.map(m=>m[1]).reverse().find(rule=>rule.includes('width: '));
 };
 const verifyIcon=(selector,size) => {
   const rule=ownIconRule(selector);
