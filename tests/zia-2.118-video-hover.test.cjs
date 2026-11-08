@@ -9,7 +9,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'theme.json'), 'utf8
 const hover = fs.readFileSync(path.join(root, 'site-folders-hover.uc.js'), 'utf8');
 const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
-assert.equal(manifest.version, '0.7.8', 'release under test must be v0.7.8');
+assert.equal(manifest.version, '0.7.9', 'release under test must be v0.7.9');
 assert(!Object.hasOwn(manifest, 'preferences'), 'no retired separate blur settings or gear');
 assert(hover.includes('getComputedStyle(source)'), 'inherit Zia actual native preview paint');
 assert(hover.includes("Services.prefs.addObserver('zia.'"), 'react to Zia pref changes');

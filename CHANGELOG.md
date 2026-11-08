@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.7.9](releases/v0.7.9.md) | Keep nested Zen split views visible and their titles intact in Site Folders; apply custom active-tab color to split containers. |
 | [v0.7.8](releases/v0.7.8.md) | Suppress Zia decorative site-group hairline during drag, retaining drop highlights and all placement logic. |
 | [v0.7.7](releases/v0.7.7.md) | Correct XUL context-menu opening mode for Site Folders group right-click pointer tracking; macOS manual validation pending. |
 | [v0.7.6](releases/v0.7.6.md) | Zia 2.118 video-state hover-card compatibility and visible-only compositor handling. |

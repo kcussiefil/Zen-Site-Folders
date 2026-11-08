@@ -651,6 +651,13 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
   --zia-active-tab-bg-folder: var(--zsf-selected-tab-fill, rgba(255, 255, 255, 0.08)) !important;
 }
 
+/* A split paints its selection on its tab-group container, not the child
+   tab backgrounds. Supply the SAME user-selected fill at that wrapper so
+   Zen/Zia keep their native split layout, titles, shine and hover state. */
+#tabbrowser-tabs tab-group[split-view-group] {
+  --zia-active-tab-bg: var(--zsf-selected-tab-fill, rgba(255, 255, 255, 0.08)) !important;
+}
+
 /* The native Zia card's computed box-shadow supplies its border/edge.
    Do not layer a separate hairline over the live-mirrored glass styling. */
 #zsf-folder-hover-card .zsf-hover-age {
