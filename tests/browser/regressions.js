@@ -402,6 +402,44 @@ const finish = arguments[arguments.length - 1];
     assert(h.tabs.every(tab => tab.isConnected && !tab.pinned),
       'all tabs survive with unchanged pinned state');
   });
+
+  await test('native split cannot join ordinary groups during a drag', async h => {
+    assert(typeof gZenViewSplitter?.splitTabs === 'function',
+      'Zen split-view API must exist');
+    const [a,b]=[h.tabs[1],h.tabs[2]];
+    gZenViewSplitter.splitTabs([a,b],'grid');
+    await delay(450);
+    const split=a.group;
+    assert(split === b.group && split?.hasAttribute('split-view-group'),
+      'two original tabs must become one native split');
+    assert(split.parentElement === root(), 'split must start outside ordinary group');
+    const gate=window.__zsfSplitGuardV1;
+    assert(gate?.arm(a), 'split admission guard must be available');
+    const box=h.group.groupContainer, normal=h.tabs[0];
+    const attempts=[
+      () => box.appendChild(split),
+      () => box.insertBefore(split,normal),
+      () => normal.before(split),
+      () => normal.after(split),
+      () => gBrowser.moveTabBefore(split,normal),
+      () => gBrowser.moveTabAfter(split,normal),
+      () => h.group.appendChild(split)
+    ];
+    for(const attempt of attempts) {
+      attempt();
+      assert(split.parentElement===root() && !h.group.contains(split),
+        'split may not enter group through any browser/DOM insertion path');
+    }
+    assert(gate.status().blocked>=attempts.length,
+      'all rejected insertions must be blocked before DOM mutation');
+    gBrowser.moveTabBefore(split,h.group);
+    assert(split.parentElement===root(),
+      'a native split may still reorder before a top-level group');
+    gate.disarm();
+    assert(!gate.status().active, 'after drag the temporary hooks must be gone');
+    assert(h.tabs.every(tab=>tab.isConnected && !tab.pinned),
+      'all real tabs and pinned states must survive');
+  });
   // Native DOM objects and real native move APIs, with a deliberately late placing callback.
   // Mouse/drag events in these race fixtures are synthetic, not physical trackpad acceptance.
   function gesture(h, source, target, before, lateMove = true) {
