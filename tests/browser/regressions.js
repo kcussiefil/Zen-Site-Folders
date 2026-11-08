@@ -414,7 +414,16 @@ const finish = arguments[arguments.length - 1];
       'two original tabs must become one native split');
     assert(split.parentElement === root(), 'split must start outside ordinary group');
     const gate=window.__zsfSplitGuardV1;
-    assert(gate?.arm(a), 'split admission guard must be available');
+    assert(gate && !gate.status().active, 'guard must start dormant');
+    // Exercise the actual Zia/native entrypoint, not only the debug arm().
+    const from=a.getBoundingClientRect(), x=from.left+Math.min(24,from.width/2),
+      y=from.top+Math.min(12,from.height/2), transfer=new DataTransfer();
+    a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,composed:true,
+      button:0,buttons:1,clientX:x,clientY:y}));
+    a.dispatchEvent(new DragEvent('dragstart',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y}));
+    assert(gate.status().active,
+      'the real native split dragstart must automatically arm admission protection');
     const box=h.group.groupContainer, normal=h.tabs[0];
     const attempts=[
       () => box.appendChild(split),
@@ -435,8 +444,15 @@ const finish = arguments[arguments.length - 1];
     gBrowser.moveTabBefore(split,h.group);
     assert(split.parentElement===root(),
       'a native split may still reorder before a top-level group');
+    window.dispatchEvent(new DragEvent('dragend',{bubbles:true,composed:true,
+      dataTransfer:transfer,clientX:x,clientY:y}));
+    await delay(90);
+    assert(!gate.status().active, 'dragend must restore all original methods automatically');
+    // A second gesture must install a fresh hook: prevent stale WeakMap keys.
+    assert(gate.arm(a), 'second split drag must re-arm after cleanup');
+    box.appendChild(split);
+    assert(split.parentElement===root(),'second split drag must also reject admission');
     gate.disarm();
-    assert(!gate.status().active, 'after drag the temporary hooks must be gone');
     assert(h.tabs.every(tab=>tab.isConnected && !tab.pinned),
       'all real tabs and pinned states must survive');
   });
