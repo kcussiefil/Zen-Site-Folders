@@ -49,6 +49,13 @@ assert.equal(group.groupContainer.hidden, true, 'closed group with no selected d
 nested.selected = true; win.gBrowser.selectedTab = nested; api.sync(group);
 assert.equal(group.groupContainer.hidden, false, 'selected split pane unhides the closed host');
 assert.equal(cleared.length, 0, 'healthy split members are never restyled');
+// Expanding after an older native animation must recover only stranded rows.
+group.collapsed = false;
+plain.style.getPropertyValue = k => k === 'height' ? '0px' : k === 'opacity' ? '0' : '';
+api.sync(group);
+assert(cleared.includes(plain), 'older hidden ordinary member is restored after split entry');
+assert(!cleared.includes(nested), 'split child remains owned by the native split group');
+plain.style.getPropertyValue = () => '';
 containsSplit = false; group.collapsed = false; api.sync(group);
 assert(calls.includes('expand'), 'ordinary native folder motion resumes after removing split');
 assert(/#tabbrowser-tabs tab-group\[split-view-group\]\s*\{\s*--zia-active-tab-bg:\s*var\(--zsf-selected-tab-fill/.test(css),
