@@ -342,8 +342,14 @@ const finish = arguments[arguments.length - 1];
     const split = a.group;
     assert(split === b.group && split?.hasAttribute('split-view-group'),
       'two tabs become a genuine native split group');
-    assert(split.group === h.group,
-      'the split wrapper must remain inside its original Site Folder');
+    // Zen creates a split wrapper as a top-level group even if its tabs
+    // previously belonged to a Site Folder. Reproduce the user's actual
+    // gesture by moving that wrapper into the existing group's container,
+    // the same native DOM operation Zia uses for nested folder drops.
+    h.group.groupContainer.appendChild(split);
+    await delay(180);
+    assert(split.group === h.group || split.closest('tab-group[data-zsf-site]') === h.group,
+      'the native split wrapper must now be nested in the Site Folder');
     click(h.group); await idle(h.group);
     assert(h.group.collapsed, 'native click must close split-bearing Site Folder');
     click(h.group); await idle(h.group);
