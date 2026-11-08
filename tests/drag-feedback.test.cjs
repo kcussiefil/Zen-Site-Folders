@@ -23,6 +23,20 @@ assert(css.includes('.zsf-drag-ghost') && !css.includes('.zsf-drop-guide'));
 assert(!src.includes('zsf-drop-guide'), 'remove redundant horizontal guide');
 assert(css.includes('pointer-events: none !important'));
 
+/* Zia's ::after group pseudo-element is the upper/lower hairline; unlike
+   ::before (the drop-target wash) it must never return on [zia-drop-slot]. */
+const ring = css.match(/#tabbrowser-tabs\s+tab-group\[data-zsf-site\]:not\(\[split-view-group\]\)::after\s*\{([^}]*)\}/);
+assert(ring, 'site-owned group hairline stays suppressed even when Zia sets drop-slot');
+assert(/content:\s*none\s*!important/.test(ring[1]) &&
+       /display:\s*none\s*!important/.test(ring[1]),
+  'Zia drop-slot opacity:1 must not recreate a decorative group border');
+assert(css.includes('tab-group[data-zsf-site]:not([split-view-group], [zia-drop-slot])::before'),
+  'retain Zia drop wash: only hide the group background outside drop-over');
+assert(css.includes('> .tab-group-container::after'),
+  'preserve Zia native empty-group/drop-slot placeholder');
+assert(!css.includes('tab-group[data-zsf-site]:not([split-view-group], [zia-drop-slot])::after'),
+  'do not exempt the unwanted hairline during drag');
+
 class Node {
   constructor(tag='div',className='') {
     this.localName=tag;this.className=className;this.children=[];this.parentElement=null;
