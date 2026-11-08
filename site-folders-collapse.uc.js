@@ -470,7 +470,7 @@
     observer = new MutationObserver(onMutations);
     observer.observe(tabs, { subtree: true, childList: true,
       attributes: true, attributeFilter: [
-        'data-zsf-site', 'collapsed', 'selected', 'multiselected', 'visuallyselected'
+        'data-zsf-site', 'collapsed', 'selected', 'multiselected'
       ] });
     scan();
   }
