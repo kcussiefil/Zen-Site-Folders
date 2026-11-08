@@ -125,6 +125,14 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                           ['undo',undo],['sort',sort],['clear',clear]
                         ].map(([key,btn])=>[key,btn.querySelector('.toolbarbutton-icon')
                           ?.getBoundingClientRect().toJSON()||null])),
+                        glyphTransforms:Object.fromEntries([
+                          ['undo',undo],['sort',sort],['clear',clear]
+                        ].map(([key,btn])=>[key,getComputedStyle(
+                          btn.querySelector('.toolbarbutton-icon')).transform])),
+                        glyphOpacity:Object.fromEntries([
+                          ['undo',undo],['sort',sort],['clear',clear]
+                        ].map(([key,btn])=>[key,parseFloat(getComputedStyle(
+                          btn.querySelector('.toolbarbutton-icon')).opacity)])),
                         clearLabelDisplay:label?getComputedStyle(label).display:null,
                         nativeCommand:clear.getAttribute('command'),
                         canClose:clear.hasAttribute('can-close'),
@@ -201,12 +209,12 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                     not shownAll['undoHidden'] and
                     not shownAll['canClose'] and
                     shownAll['nativeIconDisplay']!='none' and
-                    abs(shownAll['glyphRects']['undo']['width']-15)<1 and
-                    abs(shownAll['glyphRects']['undo']['height']-12.9)<1 and
-                    abs(shownAll['glyphRects']['sort']['width']-14.08)<1 and
-                    abs(shownAll['glyphRects']['sort']['height']-16)<1 and
-                    abs(shownAll['glyphRects']['clear']['width']-15.86)<1 and
-                    abs(shownAll['glyphRects']['clear']['height']-13)<1 and
+                    all(abs(shownAll['glyphRects'][key]['width']-expected)<1 and
+                            abs(shownAll['glyphRects'][key]['height']-expected)<1
+                        for key,expected in (('undo',14),('sort',15),('clear',14))) and
+                    all(shownAll['glyphTransforms'][key]=='none'
+                        for key in ('undo','sort','clear')) and
+                    abs(shownAll['glyphOpacity']['clear']-.88)<.03 and
                     'dart-down.svg' in shownAll['nativeIcon'] and
                     shownAll['clearLabelDisplay']=='none' and
                     shownAll['nativeCommand']=='cmd_zenCloseUnpinnedTabs' and
