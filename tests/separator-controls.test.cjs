@@ -3,7 +3,7 @@ const fs=require('node:fs'), path=require('node:path');
 const root=path.join(__dirname,'..'),css=fs.readFileSync(path.join(root,'userChrome.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'site-folders.uc.js'),'utf8');
 const manifest=require(path.join(root,'theme.json'));
-assert.equal(manifest.version,'0.8.5');
+assert.equal(manifest.version,'0.8.6');
 assert(css.includes('.pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator'),
   'only the separator row should shrink the line');
 assert(css.includes('position: absolute !important') &&
@@ -32,7 +32,9 @@ const ownIconRule=(selector) => {
   const rx = new RegExp('toolbarbutton\\.'+selector+' > \\.toolbarbutton-icon \\{([^}]+)\\}', 'g');
   const matches=[...css.matchAll(rx)];
   assert(matches.length>=1,'expected a distinct icon-size rule for '+selector);
-  return matches[matches.length-1][1];
+  // The last rule may apply a transform, not dimensions. Select the
+  // dimensions declaration instead of assuming every matching block is one.
+  return matches.map(m=>m[1]).reverse().find(rule=>rule.includes('width: '));
 };
 const verifyIcon=(selector,size) => {
   const rule=ownIconRule(selector);
@@ -51,4 +53,17 @@ assert(css.includes('width: 20px !important;') &&
 assert(css.includes('inset-inline-end: 59px !important;') &&
   css.includes('inset-inline-end: 32px !important;') &&
   css.includes('inset-inline-end: 5px !important;'),'original icon positions unchanged');
-console.log('PASS v0.8.5: 15/16/13 optical icons in 20px stationary right controls; Clear/Undo/wave intact');
+const optical = new Map([
+  ['zsf-undo-button','scaleY(0.86)'],
+  ['zsf-sort-button','scaleX(0.88)'],
+  ['zen-workspace-close-unpinned-tabs-button','scaleX(1.22)']
+]);
+for(const [selector,scale] of optical) {
+  const label='toolbarbutton.'+selector+' > .toolbarbutton-icon {';
+  const blocks=css.split(label).slice(1).map(part=>part.slice(0,part.indexOf('}')));
+  assert(blocks.some(block=>block.includes('transform: '+scale+' !important;')),
+    selector+' must have the exact calibrated optical transform '+scale);
+}
+assert(css.includes('transform-origin: 50% 50% !important;') &&
+  css.includes('transition: none !important;'),'glyphs transform about their center without animation');
+console.log('PASS v0.8.6: measured optical glyph corrections, unchanged icon boxes, stationary click targets and native Clear');

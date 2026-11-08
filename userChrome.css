@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.8.5 — optical icon sizing; stationary right-hand controls.
+/* Zen Site Folders v0.8.6 — measured glyph silhouette balance, stationary right controls.
    Native markup: one flex=1 toolbarseparator plus Zen Clear. Our actions
    remain inside this same native row; neither DOM order nor Zen handlers
    need replacing. The ROW :hover is the sole pointer reveal trigger. */
@@ -125,6 +125,30 @@
   height: 13px !important;
   min-height: 13px !important;
   max-height: 13px !important;
+}
+/* v0.8.6 optical corrections measured from a macOS 538x74 screenshot.
+   The image sizes above refer to SVG boxes, NOT the visible painted strokes.
+   Measured painted glyphs in v0.8.5 were: Undo 22x26, Group 26x22,
+   Clear 18x23 (physical screenshot pixels), all already aligned in center.
+   Scale the PAINTED IMAGE inside its fixed 20px hitbox to normalize to
+   roughly 22x22 without moving the button, replacing native SVGs, or
+   changing command handlers. No transition on SVG transforms. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {
+  transform-origin: 50% 50% !important;
+  transition: none !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zsf-undo-button > .toolbarbutton-icon {
+  transform: scaleY(0.86) !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zsf-sort-button > .toolbarbutton-icon {
+  transform: scaleX(0.88) !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {
+  transform: scaleX(1.22) !important;
 }
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-text {
