@@ -36,7 +36,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 | 項目 | 連結 |
 | --- | --- |
-| 目前版本 | **v0.8.3**，以 [`theme.json`](theme.json) 為準 |
+| 目前版本 | **v0.8.4**，以 [`theme.json`](theme.json) 為準 |
 | 版本整理 | [`CHANGELOG.md`](CHANGELOG.md) |
 | 完整各版說明 | [GitHub Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases)／[`releases/`](releases/) |
 | macOS 實機驗收 | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |

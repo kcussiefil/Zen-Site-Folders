@@ -1,37 +1,31 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'), path=require('node:path');
-const base=path.join(__dirname,'..');
-const css=fs.readFileSync(path.join(base,'userChrome.css'),'utf8');
-const js=fs.readFileSync(path.join(base,'site-folders.uc.js'),'utf8');
-const manifest=require(path.join(base,'theme.json'));
-assert.equal(manifest.version,'0.8.3');
-assert(css.includes(':has(> .zsf-sort-button):is(:hover, :focus-within)'),
-  'reveal must be triggered by separator hover/focus, never generic sidebar hover');
-assert(css.includes('toolbarbutton.zen-workspace-close-unpinned-tabs-button'));
-assert(css.includes("zen-icons/dart-down.svg"),
-  'Clear must reuse the Zen-native icon');
-assert(css.includes('> .toolbarbutton-text {\n  display: none !important;'),
-  'native Clear word must be hidden');
-assert(!css.includes('zen-has-implicit-hover'),
-  'no sidebar-wide hover trigger');
-const collapsed=css.slice(css.indexOf('/* Three controls share ONE hover trigger:'),
-  css.indexOf('/* Keep keyboard focus usable'));
-assert(collapsed.includes('width: 0 !important') &&
-  collapsed.includes('flex: 0 0 0px !important') &&
-  collapsed.includes('margin: 0 !important') &&
-  collapsed.includes('pointer-events: none !important'),
-  'hidden actions must release actual layout width, not merely fade');
-assert(css.includes('toolbarbutton.zsf-undo-button[hidden]') &&
-  css.includes('display: none !important'),
-  'undo with no valid snapshot must stay hidden');
-assert(css.includes('toolbarbutton.zen-workspace-close-unpinned-tabs-button:not([can-close="true"])'),
-  'Clear unavailable in Zen must not reserve an empty slot');
+const root=path.join(__dirname,'..'),css=fs.readFileSync(path.join(root,'userChrome.css'),'utf8');
+const js=fs.readFileSync(path.join(root,'site-folders.uc.js'),'utf8');
+const manifest=require(path.join(root,'theme.json'));
+assert.equal(manifest.version,'0.8.4');
+assert(css.includes('.pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator'),
+  'only the separator row should shrink the line');
+assert(css.includes('position: absolute !important') &&
+  css.includes('inset-inline-end: 59px') &&
+  css.includes('inset-inline-end: 32px') &&
+  css.includes('inset-inline-end: 5px'),
+  'all three right-aligned icons have fixed positions in Undo/Group/Clear order');
+assert(css.includes('transition: opacity .14s ease, visibility') &&
+  !css.includes('transition:\n    width'),
+  'fade icons without width/position transitions');
+assert(css.includes('zen-icons/dart-down.svg') &&
+  css.includes('toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {\n  display: flex !important'),
+  'override Zen icon hiding for protected selected tabs without replacing the native action');
+assert(!css.includes('toolbarbutton.zen-workspace-close-unpinned-tabs-button:not([can-close="true"])'),
+  'Clear must be available even without Zen can-close because other tabs may remain closable');
 assert(!css.includes('toolbarbutton.zen-workspace-close-unpinned-tabs-button {\n  display: flex !important;'),
-  'never override Zen user preference disabling Clear');
-assert(js.includes('rect.width > 6') &&
-  js.includes("svg.style.setProperty('--zsf-wave-width'"),
-  'wave must track physical separator line without zero-width buttons');
-assert(css.includes('.pinned-tabs-container-separator.zsf-is-sorting .zsf-wave') &&
-  css.includes('.pinned-tabs-container-separator.zsf-is-sorting > toolbarseparator'),
-  'retain original active sorting wave');
-console.log('PASS: 3 separator-local hover icons, Zen clear preference, zero-width hidden space, wave');
+  'preserve Zen preference that can hide native Clear');
+assert(css.includes('toolbarbutton.zsf-undo-button[hidden] {\n  display: none !important'),
+  'Undo with no snapshot must stay hidden');
+assert(js.includes('undoButton.hidden = !Boolean(snapshot)'),
+  'no saved snapshot must hide Undo from layout and pointer handling');
+assert(js.includes('lineRect.width') && !js.includes('rect.width > 6'),
+  'wave must follow true native separator geometry without invisible overlay controls');
+assert(css.includes('.pinned-tabs-container-separator.zsf-is-sorting .zsf-wave'));
+console.log('PASS v0.8.4: stationary right actions, Clear remains available, Undo conditional, line and wave');
