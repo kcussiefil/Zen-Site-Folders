@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.8.6 — measured glyph silhouette balance, stationary right controls.
+/* Zen Site Folders v0.8.7 — uniform, undistorted icon optical balance; stationary right controls.
    Native markup: one flex=1 toolbarseparator plus Zen Clear. Our actions
    remain inside this same native row; neither DOM order nor Zen handlers
    need replacing. The ROW :hover is the sole pointer reveal trigger. */
@@ -104,51 +104,51 @@
   fill: currentColor !important;
   -moz-context-properties: fill, fill-opacity !important;
 }
-/* Optical adjustment for Zen's three different SVG viewBoxes. The 20px
-   BUTTON boxes remain fixed, clickable, and centered; change only the
-   intrinsic icon artwork dimensions (not row/inset/hover/wave positions).
-   Undo = 15px via shared rule above, Folder = 16px, Clear = 13px. */
+/* Optical adjustment by intrinsic icon BOX size only (never stretch SVGs).
+   Zen's Undo/Folder native SVGs use 18x18; native Clear uses 12x12.
+   The macOS screenshot shows the painted shapes differ: Undo 22x26,
+   Group 26x22, Clear 18x23 physical pixels at v0.8.5 sizes.
+   Choosing Undo 14px, Group 15px, Clear 14px gives comparable painted
+   area while keeping natural roundness and aspect ratio. All remain
+   centered inside the unchanged 20x20px clickable toolbarbuttons. */
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton.zsf-sort-button > .toolbarbutton-icon {
-  width: 16px !important;
-  min-width: 16px !important;
-  max-width: 16px !important;
-  height: 16px !important;
-  min-height: 16px !important;
-  max-height: 16px !important;
+  width: 15px !important;
+  min-width: 15px !important;
+  max-width: 15px !important;
+  height: 15px !important;
+  min-height: 15px !important;
+  max-height: 15px !important;
 }
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {
-  width: 13px !important;
-  min-width: 13px !important;
-  max-width: 13px !important;
-  height: 13px !important;
-  min-height: 13px !important;
-  max-height: 13px !important;
+  width: 14px !important;
+  min-width: 14px !important;
+  max-width: 14px !important;
+  height: 14px !important;
+  min-height: 14px !important;
+  max-height: 14px !important;
+  /* Clear is a solid-fill SVG; its painted stroke is heavier than the
+     18px Nucleo outline icons when both are centered in a 20px target. */
+  opacity: .88 !important;
 }
-/* v0.8.6 optical corrections measured from a macOS 538x74 screenshot.
-   The image sizes above refer to SVG boxes, NOT the visible painted strokes.
-   Measured painted glyphs in v0.8.5 were: Undo 22x26, Group 26x22,
-   Clear 18x23 (physical screenshot pixels), all already aligned in center.
-   Scale the PAINTED IMAGE inside its fixed 20px hitbox to normalize to
-   roughly 22x22 without moving the button, replacing native SVGs, or
-   changing command handlers. No transition on SVG transforms. */
+/* The same image geometry is used at every hover state. Explicitly
+   override any inherited transform to prevent non-uniform scaling and
+   avoid motion or blur on first hover frame. */
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {
-  transform-origin: 50% 50% !important;
+  transform: none !important;
+  transform-origin: center center !important;
   transition: none !important;
 }
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton.zsf-undo-button > .toolbarbutton-icon {
-  transform: scaleY(0.86) !important;
-}
-.pinned-tabs-container-separator:has(> .zsf-sort-button) >
-  toolbarbutton.zsf-sort-button > .toolbarbutton-icon {
-  transform: scaleX(0.88) !important;
-}
-.pinned-tabs-container-separator:has(> .zsf-sort-button) >
-  toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {
-  transform: scaleX(1.22) !important;
+  width: 14px !important;
+  min-width: 14px !important;
+  max-width: 14px !important;
+  height: 14px !important;
+  min-height: 14px !important;
+  max-height: 14px !important;
 }
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-text {

@@ -3,7 +3,7 @@ const fs=require('node:fs'), path=require('node:path');
 const root=path.join(__dirname,'..'),css=fs.readFileSync(path.join(root,'userChrome.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'site-folders.uc.js'),'utf8');
 const manifest=require(path.join(root,'theme.json'));
-assert.equal(manifest.version,'0.8.6');
+assert.equal(manifest.version,'0.8.7');
 assert(css.includes('.pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator'),
   'only the separator row should shrink the line');
 assert(css.includes('position: absolute !important') &&
@@ -41,29 +41,24 @@ const verifyIcon=(selector,size) => {
   for(const prop of ['width','min-width','max-width','height','min-height','max-height'])
     assert(rule.includes(prop+': '+size+'px !important;'),selector+' must keep '+prop+' at '+size+'px');
 };
-verifyIcon('zsf-sort-button',16);
-verifyIcon('zen-workspace-close-unpinned-tabs-button',13);
+verifyIcon('zsf-sort-button',15);
+verifyIcon('zen-workspace-close-unpinned-tabs-button',14);
+verifyIcon('zsf-undo-button',14);
 const sharedStart=css.indexOf('toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {');
 assert(sharedStart>=0,'shared icon size base rule exists');
 const shared=css.slice(sharedStart,css.indexOf('}',sharedStart));
 assert(shared.includes('width: 15px !important;') &&
-  shared.includes('height: 15px !important;'),'Undo remains 15px in shared base');
+  shared.includes('height: 15px !important;'),'shared base 15px remains overridden by individual icon rules');
 assert(css.includes('width: 20px !important;') &&
   css.includes('height: 20px !important;'),'clickable toolbarbuttons remain 20x20');
 assert(css.includes('inset-inline-end: 59px !important;') &&
   css.includes('inset-inline-end: 32px !important;') &&
   css.includes('inset-inline-end: 5px !important;'),'original icon positions unchanged');
-const optical = new Map([
-  ['zsf-undo-button','scaleY(0.86)'],
-  ['zsf-sort-button','scaleX(0.88)'],
-  ['zen-workspace-close-unpinned-tabs-button','scaleX(1.22)']
-]);
-for(const [selector,scale] of optical) {
-  const label='toolbarbutton.'+selector+' > .toolbarbutton-icon {';
-  const blocks=css.split(label).slice(1).map(part=>part.slice(0,part.indexOf('}')));
-  assert(blocks.some(block=>block.includes('transform: '+scale+' !important;')),
-    selector+' must have the exact calibrated optical transform '+scale);
-}
-assert(css.includes('transform-origin: 50% 50% !important;') &&
-  css.includes('transition: none !important;'),'glyphs transform about their center without animation');
-console.log('PASS v0.8.6: measured optical glyph corrections, unchanged icon boxes, stationary click targets and native Clear');
+assert(!/scaleX\\(|scaleY\\(|scale\\(/.test(css.slice(0,css.indexOf('/* Notice rendering uses Zen'))),
+  'separator glyphs must not be distorted with nonuniform or uniform transforms');
+const sharedIconSelector='toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {';
+assert(css.split(sharedIconSelector).some(block=>block.includes('transform: none !important;')),
+  'explicitly cancel transforms without modifying 20px toolbarbuttons');
+assert(css.includes('opacity: .88 !important;'),
+  'the solid-fill native Clear should have a slightly softer ink weight');
+console.log('PASS v0.8.7: undistorted 14/15/14 optical balance, 20px targets, Clear tone, wave and alignment');
