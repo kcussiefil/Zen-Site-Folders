@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.7.5
+// @version      0.8.3
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -1374,16 +1374,21 @@
     const positionWave = () => {
       const hostRect = separator.getBoundingClientRect();
       const lineRect = line.getBoundingClientRect();
-      const controls = [...separator.querySelectorAll('toolbarbutton')].filter(button =>
-        !button.hidden && button.getClientRects().length &&
-        getComputedStyle(button).display !== 'none'
-      );
+      // Measure only buttons that currently occupy real layout space.
+      // Hidden hover controls keep their DOM elements (and getClientRects()),
+      // but their zero-width rectangles must NOT shorten the wave/line.
+      // Sampling every animation frame also follows the width transition
+      // immediately when the pointer enters/leaves this separator.
+      const controls = [...separator.querySelectorAll('toolbarbutton')]
+        .map(button => ({ button, rect: button.getBoundingClientRect() }))
+        .filter(({ button, rect }) => !button.hidden && rect.width > 6 &&
+          getComputedStyle(button).display !== 'none');
       const leftGuard = Math.max(lineRect.left,
-        ...controls.filter(button => button.getBoundingClientRect().left <= lineRect.left + 12)
-          .map(button => button.getBoundingClientRect().right + 12));
+        ...controls.filter(({ rect }) => rect.left <= lineRect.left + 12)
+          .map(({ rect }) => rect.right + 12));
       const rightGuard = Math.min(lineRect.right,
-        ...controls.filter(button => button.getBoundingClientRect().left > lineRect.left + 12)
-          .map(button => button.getBoundingClientRect().left - 12));
+        ...controls.filter(({ rect }) => rect.left > lineRect.left + 12)
+          .map(({ rect }) => rect.left - 12));
       const width = Math.max(0, rightGuard - leftGuard);
       svg.style.setProperty('--zsf-wave-left', Math.max(0, leftGuard - hostRect.left).toFixed(1) + 'px');
       svg.style.setProperty('--zsf-wave-width', width.toFixed(1) + 'px');

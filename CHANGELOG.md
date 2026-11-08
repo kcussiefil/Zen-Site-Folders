@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.8.3](releases/v0.8.3.md) | Reveal all three separator actions only on separator hover; use Zen's dart-down Clear icon; full-width line and adaptive sorting wave. |
 | [v0.8.2](releases/v0.8.2.md) | Reject native split-view group admission at the drop boundary; preserve standalone split and ordinary-tab moves. |
 | [v0.8.1](releases/v0.8.1.md) | Prevent repeated native expand animations on split-view group exit/re-entry; reduce drag layout clipping regressions. |
 | [v0.8.0](releases/v0.8.0.md) | Correct version carry-over after v0.7.9; identical functional behavior to historical v0.7.10. |

@@ -32,12 +32,13 @@ jobs:
           node --check site-folders-split-guard.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.8.2' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.8.3' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Test independent hover layer
         run: |
           node tests/hover-card.test.cjs
+          node tests/separator-controls.test.cjs
           node tests/zia-2.118-video-hover.test.cjs
           node tests/retired-blur-mod.test.cjs
           node tests/light-theme-contrast.test.cjs
@@ -112,6 +113,8 @@ jobs:
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot down folder" --output native-results/zia-landing-down-folder
       - name: Verify native split group admission is blocked
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "native split cannot join ordinary groups" --output native-results/split-no-group
+      - name: Verify native separator hover-only icons and full-length line
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "separator-hover" --output native-results/separator-hover
       - name: Verify nested Zen split has nonoverlapping expanded layout
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "nested split expanded folder" --output native-results/nested-split-layout
       - name: Verify real opening time survives native group collapse
