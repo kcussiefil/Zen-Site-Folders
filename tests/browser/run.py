@@ -121,6 +121,10 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         undoHidden:undo.hidden,
                         nativeIcon:getComputedStyle(clear).listStyleImage,
                         nativeIconDisplay:icon?getComputedStyle(icon).display:null,
+                        iconWidths:Object.fromEntries([
+                          ['undo',undo],['sort',sort],['clear',clear]
+                        ].map(([key,btn])=>[key,btn.querySelector('.toolbarbutton-icon')
+                          ?.getBoundingClientRect().width||0])),
                         clearLabelDisplay:label?getComputedStyle(label).display:null,
                         nativeCommand:clear.getAttribute('command'),
                         canClose:clear.hasAttribute('can-close'),
@@ -197,6 +201,9 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                     not shownAll['undoHidden'] and
                     not shownAll['canClose'] and
                     shownAll['nativeIconDisplay']!='none' and
+                    abs(shownAll['iconWidths']['undo']-15)<1 and
+                    abs(shownAll['iconWidths']['sort']-16)<1 and
+                    abs(shownAll['iconWidths']['clear']-13)<1 and
                     'dart-down.svg' in shownAll['nativeIcon'] and
                     shownAll['clearLabelDisplay']=='none' and
                     shownAll['nativeCommand']=='cmd_zenCloseUnpinnedTabs' and

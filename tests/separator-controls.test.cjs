@@ -3,7 +3,7 @@ const fs=require('node:fs'), path=require('node:path');
 const root=path.join(__dirname,'..'),css=fs.readFileSync(path.join(root,'userChrome.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'site-folders.uc.js'),'utf8');
 const manifest=require(path.join(root,'theme.json'));
-assert.equal(manifest.version,'0.8.4');
+assert.equal(manifest.version,'0.8.5');
 assert(css.includes('.pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator'),
   'only the separator row should shrink the line');
 assert(css.includes('position: absolute !important') &&
@@ -28,4 +28,27 @@ assert(js.includes('undoButton.hidden = !Boolean(snapshot)'),
 assert(js.includes('lineRect.width') && !js.includes('rect.width > 6'),
   'wave must follow true native separator geometry without invisible overlay controls');
 assert(css.includes('.pinned-tabs-container-separator.zsf-is-sorting .zsf-wave'));
-console.log('PASS v0.8.4: stationary right actions, Clear remains available, Undo conditional, line and wave');
+const ownIconRule=(selector) => {
+  const rx = new RegExp('toolbarbutton\\.'+selector+' > \\.toolbarbutton-icon \\{([^}]+)\\}', 'g');
+  const matches=[...css.matchAll(rx)];
+  assert(matches.length>=1,'expected a distinct icon-size rule for '+selector);
+  return matches[matches.length-1][1];
+};
+const verifyIcon=(selector,size) => {
+  const rule=ownIconRule(selector);
+  for(const prop of ['width','min-width','max-width','height','min-height','max-height'])
+    assert(rule.includes(prop+': '+size+'px !important;'),selector+' must keep '+prop+' at '+size+'px');
+};
+verifyIcon('zsf-sort-button',16);
+verifyIcon('zen-workspace-close-unpinned-tabs-button',13);
+const sharedStart=css.indexOf('toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {');
+assert(sharedStart>=0,'shared icon size base rule exists');
+const shared=css.slice(sharedStart,css.indexOf('}',sharedStart));
+assert(shared.includes('width: 15px !important;') &&
+  shared.includes('height: 15px !important;'),'Undo remains 15px in shared base');
+assert(css.includes('width: 20px !important;') &&
+  css.includes('height: 20px !important;'),'clickable toolbarbuttons remain 20x20');
+assert(css.includes('inset-inline-end: 59px !important;') &&
+  css.includes('inset-inline-end: 32px !important;') &&
+  css.includes('inset-inline-end: 5px !important;'),'original icon positions unchanged');
+console.log('PASS v0.8.5: 15/16/13 optical icons in 20px stationary right controls; Clear/Undo/wave intact');
