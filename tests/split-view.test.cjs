@@ -44,9 +44,9 @@ assert(!calls.includes('collapse') && !calls.includes('expand'), 'nested split b
 assert.equal(nested.label, 'Split web page title', 'native split tab title remains unchanged');
 group.collapsed = false; api.sync(group);
 assert.equal(group.groupContainer.hidden, false, 'expanded site folder shows its split and ordinary children');
-nested.selected = false; group.collapsed = true; api.sync(group);
+nested.selected = false; win.gBrowser.selectedTab = null; group.collapsed = true; api.sync(group);
 assert.equal(group.groupContainer.hidden, true, 'closed group with no selected descendant stays hidden');
-nested.selected = true; api.sync(group);
+nested.selected = true; win.gBrowser.selectedTab = nested; api.sync(group);
 assert.equal(group.groupContainer.hidden, false, 'selected split pane unhides the closed host');
 assert.equal(cleared.length, 0, 'healthy split members are never restyled');
 containsSplit = false; group.collapsed = false; api.sync(group);
