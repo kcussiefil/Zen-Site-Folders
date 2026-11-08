@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders
-// @version      0.8.3
+// @version      0.8.4
 // @description  Group all normal tabs by website and show locally cached favicons.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -1374,23 +1374,12 @@
     const positionWave = () => {
       const hostRect = separator.getBoundingClientRect();
       const lineRect = line.getBoundingClientRect();
-      // Measure only buttons that currently occupy real layout space.
-      // Hidden hover controls keep their DOM elements (and getClientRects()),
-      // but their zero-width rectangles must NOT shorten the wave/line.
-      // Sampling every animation frame also follows the width transition
-      // immediately when the pointer enters/leaves this separator.
-      const controls = [...separator.querySelectorAll('toolbarbutton')]
-        .map(button => ({ button, rect: button.getBoundingClientRect() }))
-        .filter(({ button, rect }) => !button.hidden && rect.width > 6 &&
-          getComputedStyle(button).display !== 'none');
-      const leftGuard = Math.max(lineRect.left,
-        ...controls.filter(({ rect }) => rect.left <= lineRect.left + 12)
-          .map(({ rect }) => rect.right + 12));
-      const rightGuard = Math.min(lineRect.right,
-        ...controls.filter(({ rect }) => rect.left > lineRect.left + 12)
-          .map(({ rect }) => rect.left - 12));
-      const width = Math.max(0, rightGuard - leftGuard);
-      svg.style.setProperty('--zsf-wave-left', Math.max(0, leftGuard - hostRect.left).toFixed(1) + 'px');
+      // Buttons are fixed-position, opacity-only overlays from v0.8.4.
+      // The native separator itself shrinks/expands when hovered.
+      // Measuring button rectangles here would clip the full-length wave
+      // even while those invisible controls are completely transparent.
+      const width = Math.max(0, lineRect.width);
+      svg.style.setProperty('--zsf-wave-left', Math.max(0, lineRect.left - hostRect.left).toFixed(1) + 'px');
       svg.style.setProperty('--zsf-wave-width', width.toFixed(1) + 'px');
       svg.style.visibility = width >= 24 ? 'visible' : 'hidden';
     };
@@ -1736,7 +1725,8 @@
   function addButton() {
     // Zen creates one native pinned-tabs separator per Space. Install into
     // all of them, not just the one that happened to be active at startup.
-    // The native toolbarseparator already has flex=1, keeping Clear at right.
+    // Keep native toolbarseparator and Zen Clear untouched; fixed visual order
+    // is controlled by CSS: [Undo] [Organize] [Clear], all on the right.
     for (const node of document.querySelectorAll('zen-workspace')) {
       const separator = node.pinnedTabsContainer?.separatorElement ||
         node.querySelector('.pinned-tabs-container-separator');
@@ -1768,8 +1758,8 @@
         separator.insertBefore(undoButton, line);
       }
 
-      // Remove the experimental third control left by a prior live update.
-      // Only the folder icon and the undo arrow should remain visible.
+      // Remove the experimental rescue control left by a prior live update.
+      // Zen Clear is the third native action, never a custom replacement.
       separator.querySelector('.zsf-rescue-button')?.remove();
 
       // Remove the v0.1.4 extra spacer if a live-reload preserved it.

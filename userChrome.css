@@ -1,148 +1,96 @@
-/* Zen Site Folders v0.8.3 — separator-local reveal and native Clear icon, Zia-safe. */
-/* Zen applies its own toolbarbutton background, padding and icon opacity
-   inside this separator. Fully reset those rules only for our controls. */
-.pinned-tabs-container-separator > toolbarbutton.zsf-sort-button,
-.pinned-tabs-container-separator > toolbarbutton.zsf-undo-button {
-  -moz-appearance: none !important;
-  appearance: none !important;
+/* Zen Site Folders v0.8.4 — fixed right-hand separator actions, fade only.
+   Native markup: one flex=1 toolbarseparator plus Zen Clear. Our actions
+   remain inside this same native row; neither DOM order nor Zen handlers
+   need replacing. The ROW :hover is the sole pointer reveal trigger. */
+
+/* Keep the original native line. It is full-length until the row is
+   hovered; it shortens by a margin, not by shifting the three icons. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button) {
+  position: relative !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) > toolbarseparator {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  margin-inline-end: 0 !important;
+  transition: margin-inline-end .15s ease !important;
+}
+/* Two icons when Undo is absent: [folder] [native Clear]. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator {
+  margin-inline-end: 55px !important;
+}
+/* Three icons when a valid pre-sort snapshot exists:
+   [Undo] [folder] [native Clear]. No phantom Undo width otherwise. */
+.pinned-tabs-container-separator:has(> .zsf-undo-button:not([hidden])):hover > toolbarseparator {
+  margin-inline-end: 82px !important;
+}
+/* Absolutely position all actions at their FINAL destination from frame 1.
+   Only opacity/visibility change: no width, flex, left/right, or transform
+   transitions on any button. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) {
+  position: absolute !important;
+  inset-block-start: 1px !important;
   box-sizing: border-box !important;
-  list-style-image: url('chrome://browser/skin/zen-icons/folder.svg') !important;
-  -moz-context-properties: fill, fill-opacity !important;
-  fill: currentColor !important;
+  width: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  flex: 0 0 20px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  gap: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: none !important;
+  overflow: visible !important;
+  cursor: default !important;
+  z-index: 2 !important;
+  transition: opacity .14s ease, visibility 0s linear .14s !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton.zsf-undo-button {
+  inset-inline-end: 59px !important;
+  list-style-image: url('chrome://browser/skin/zen-icons/arrow-rotate-anticlockwise.svg') !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 20px !important;
-  min-width: 20px !important;
-  max-width: 20px !important;
-  height: 20px !important;
-  min-height: 20px !important;
-  max-height: 20px !important;
-  padding: 0 !important;
-  padding-inline-start: 0 !important;
-  padding-inline-end: 0 !important;
-  margin: 0 6px 0 0 !important;
-  flex: 0 0 20px !important;
-  background: transparent !important;
-  background-image: none !important;
-  border: 0 !important;
-  border-radius: 4px !important;
-  box-shadow: none !important;
-  outline-offset: 0 !important;
-  color: inherit !important;
-  opacity: .76 !important;
-  pointer-events: auto !important;
-  cursor: default !important;
 }
-.pinned-tabs-container-separator > toolbarbutton.zsf-sort-button {
-  margin-inline-start: 1px !important;
-}
-.pinned-tabs-container-separator > toolbarbutton.zsf-undo-button {
-  list-style-image: url('chrome://browser/skin/zen-icons/arrow-rotate-anticlockwise.svg') !important;
-  margin-inline-end: 11px !important;
-}
-.pinned-tabs-container-separator > toolbarbutton.zsf-undo-button[hidden] {
-  display: none !important;
-}
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button) > .toolbarbutton-icon {
-  width: 15px !important;
-  min-width: 15px !important;
-  max-width: 15px !important;
-  height: 15px !important;
-  min-height: 15px !important;
-  max-height: 15px !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  opacity: .9 !important;
-  /* Both separator controls use native Zen SVGs with the toolbar foreground. */
-  color: inherit !important;
-  fill: currentColor !important;
-  -moz-context-properties: fill, fill-opacity !important;
-}
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button) > .toolbarbutton-text {
-  display: none !important;
-}
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button)[disabled] {
-  pointer-events: none !important;
-  opacity: .35 !important;
-}
-.pinned-tabs-container-separator > toolbarbutton:is(.zsf-sort-button, .zsf-undo-button):hover:not([disabled]) {
-  opacity: 1 !important;
-  background: color-mix(in srgb, currentColor 8%, transparent) !important;
-  background-image: none !important;
-}
-/* Three controls share ONE hover trigger: the separator row, not the
-   entire sidebar. Collapsed controls have zero actual layout width/margins,
-   so the native flex=1 separator becomes full-length; opacity alone would
-   leave permanent blank gaps. This overrides our older fixed 20px rules
-   without replacing any Zen/Zia command handlers. */
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
-  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zen-workspace-close-unpinned-tabs-button) {
-  box-sizing: border-box !important;
-  width: 0 !important;
-  min-width: 0 !important;
-  max-width: 0 !important;
-  flex: 0 0 0px !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  gap: 0 !important;
-  overflow: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  background: transparent !important;
-  background-image: none !important;
-  transition:
-    width .15s ease,
-    min-width .15s ease,
-    max-width .15s ease,
-    flex-basis .15s ease,
-    margin .15s ease,
-    opacity .10s ease !important;
-}
-/* Keep keyboard focus usable when moving the pointer away. The row's
-   hover remains true when the pointer crosses from the line to a button. */
-.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
-  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zen-workspace-close-unpinned-tabs-button) {
-  width: 20px !important;
-  min-width: 20px !important;
-  max-width: 20px !important;
-  flex: 0 0 20px !important;
-  overflow: visible !important;
-  opacity: .76 !important;
-  pointer-events: auto !important;
-}
-.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
   toolbarbutton.zsf-sort-button {
-  margin-inline-start: 1px !important;
-  margin-inline-end: 6px !important;
-}
-.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
-  toolbarbutton.zsf-undo-button {
-  margin-inline-end: 11px !important;
-}
-.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
-  toolbarbutton.zen-workspace-close-unpinned-tabs-button[can-close="true"] {
-  margin-inline-start: 7px !important;
-}
-/* Zen owns the real Clear command, its can-close state, and the preference
-   zen.view.show-clear-tabs-button. Never force display:flex on this native
-   control, or we'd override a user's preference to hide it entirely. */
-.pinned-tabs-container-separator:has(> .zsf-sort-button) >
-  toolbarbutton.zen-workspace-close-unpinned-tabs-button {
-  list-style-image: url('chrome://browser/skin/zen-icons/dart-down.svg') !important;
-  height: 20px !important;
-  min-height: 20px !important;
-  max-height: 20px !important;
+  inset-inline-end: 32px !important;
+  list-style-image: url('chrome://browser/skin/zen-icons/folder.svg') !important;
+  display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  color: inherit !important;
 }
+/* Do not force display on native Clear: its built-in preference can hide it.
+   can-close is NOT the command's availability: Zen strips that attribute
+   whenever a selected/sound-playing/PiP tab is protected, even though
+   there are OTHER closeable unpinned tabs. */
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
-  toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-text {
-  display: none !important;
+  toolbarbutton.zen-workspace-close-unpinned-tabs-button {
+  inset-inline-end: 5px !important;
+  list-style-image: url('chrome://browser/skin/zen-icons/dart-down.svg') !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
+/* Actual native Clear SVG must remain visible even without can-close.
+   Zen normally hides the icon with :not([can-close=true]) display:none. */
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {
+  display: -moz-box !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {
   width: 15px !important;
   min-width: 15px !important;
   max-width: 15px !important;
@@ -151,49 +99,67 @@
   max-height: 15px !important;
   padding: 0 !important;
   margin: 0 !important;
-  opacity: .9 !important;
+  opacity: 1 !important;
+  color: inherit !important;
   fill: currentColor !important;
   -moz-context-properties: fill, fill-opacity !important;
 }
-/* Zen intentionally hides the native icon unless the workspace has
-   closable tabs. A disabled Clear must not leave an empty 20px slot. */
-.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
-  toolbarbutton.zen-workspace-close-unpinned-tabs-button:not([can-close="true"]) {
-  width: 0 !important;
-  min-width: 0 !important;
-  max-width: 0 !important;
-  flex-basis: 0px !important;
-  margin: 0 !important;
-  opacity: 0 !important;
-  overflow: hidden !important;
+.pinned-tabs-container-separator:has(> .zsf-sort-button) >
+  toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-text {
+  display: none !important;
+}
+/* Pointer hovering the 22px separator (including its buttons) is enough.
+   Focus is NOT latched: leaving the row fades everything back out. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button):hover >
+  toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) {
+  opacity: .78 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transition: opacity .14s ease, visibility 0s linear 0s !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button):hover >
+  toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button):hover:not([disabled]) {
+  opacity: 1 !important;
+  background: color-mix(in srgb, currentColor 8%, transparent) !important;
+}
+.pinned-tabs-container-separator:has(> .zsf-sort-button):hover >
+  toolbarbutton:is(.zsf-undo-button, .zsf-sort-button)[disabled] {
+  opacity: .35 !important;
   pointer-events: none !important;
 }
-/* Do not revive Undo when there is no valid pre-sort snapshot. */
+/* Absolutely no Undo icon when there is no SessionStore snapshot. */
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton.zsf-undo-button[hidden] {
   display: none !important;
-}
-.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
-  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zen-workspace-close-unpinned-tabs-button):hover:not([disabled]) {
-  opacity: 1 !important;
-}
-/* Revealing controls must never reactivate an action Zen or ZSF disabled. */
-.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
-  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button)[disabled] {
-  opacity: .35 !important;
+  opacity: 0 !important;
   pointer-events: none !important;
 }
-/* Native flex=1 toolbarseparator handles the gap; never inject a spacer.
-   Wave overlay is measured against the actual line at click-time. */
-.pinned-tabs-container-separator:has(.zsf-sort-button) {
-  position: relative !important;
+/* If Zen's own preference hides Clear, avoid an invisible right-hand gap.
+   Do not override the native display:none media rule. */
+@media -moz-pref("zen.view.show-clear-tabs-button", false) {
+  .pinned-tabs-container-separator:has(> .zsf-sort-button) >
+    toolbarbutton.zsf-sort-button {
+    inset-inline-end: 5px !important;
+  }
+  .pinned-tabs-container-separator:has(> .zsf-sort-button) >
+    toolbarbutton.zsf-undo-button {
+    inset-inline-end: 32px !important;
+  }
+  .pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator {
+    margin-inline-end: 28px !important;
+  }
+  .pinned-tabs-container-separator:has(> .zsf-undo-button:not([hidden])):hover > toolbarseparator {
+    margin-inline-end: 55px !important;
+  }
 }
+/* Preserve the original sorting wave; its placement comes from the real
+   live toolbarseparator rect, so icon opacity never changes its geometry. */
 .pinned-tabs-container-separator .zsf-wave {
   position: absolute !important;
-  left: var(--zsf-wave-left, 32px) !important;
+  left: var(--zsf-wave-left, 4px) !important;
   right: auto !important;
   top: calc(50% - 6px) !important;
-  width: var(--zsf-wave-width, 50%) !important;
+  width: var(--zsf-wave-width, 90%) !important;
   height: 12px !important;
   opacity: 0 !important;
   pointer-events: none !important;

@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 const release = require('../theme.json');
-assert.equal(release.version, '0.8.3');
+assert.equal(release.version, '0.8.4');
 assert(css.includes('--zia-folder-swatch: transparent !important'), 'preserve original tint-free group design');
 assert(css.includes(':root[zia-light]:not(#zia-none):not(#zia-none-2) #tabbrowser-tabs'), 'use Zia light theme state');
 const lightRule = css.match(/:root\[zia-light\]:not\(#zia-none\):not\(#zia-none-2\) #tabbrowser-tabs\s+:is\(tab-group, zen-folder\)\[data-zsf-site\]:not\(\[split-view-group\]\)\s+> \.tab-group-label-container > \.tab-group-label\s*\{([^}]+)\}/);
