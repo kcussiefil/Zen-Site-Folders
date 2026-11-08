@@ -58,11 +58,8 @@ const optical = new Map([
 ]);
 for(const [selector,scale] of optical) {
   const label='toolbarbutton.'+selector+' > .toolbarbutton-icon {';
-  const needle=css.slice(css.indexOf(label),css.indexOf('}',css.indexOf(label))+1);
-  // Select the last declaration block for each icon; previous blocks set
-  // base dimensions, whereas these optical blocks set only transforms.
-  const blocks=css.matchAll(new RegExp('toolbarbutton\\\\.'+selector+' > \\\\.toolbarbutton-icon \\\\{([^}]+)\\\\}', 'g'));
-  assert([...blocks].some(m=>m[1].includes('transform: '+scale+' !important;')),
+  const blocks=css.split(label).slice(1).map(part=>part.slice(0,part.indexOf('}')));
+  assert(blocks.some(block=>block.includes('transform: '+scale+' !important;')),
     selector+' must have the exact calibrated optical transform '+scale);
 }
 assert(css.includes('transform-origin: 50% 50% !important;') &&
