@@ -331,6 +331,36 @@ const finish = arguments[arguments.length - 1];
     assert(h.group.groupContainer.getBoundingClientRect().height <= 1, 'leaving active folder must close remaining room');
     assert(!h.group.isZenFolder, 'ordinary group must remain ordinary');
   });
+  // Unlike a mocked container, this creates a REAL nested Zen split.
+  // In v0.7.9 the groupStart's collapsed negative margin survived opening:
+  // GitHub rows rendered over Bilibili/Cloudflare instead of taking up space.
+  await test('nested split expanded folder has nonoverlapping native layout', async h => {
+    assert(typeof gZenViewSplitter?.splitTabs === 'function', 'Zen split API must be available');
+    const [a, b] = [h.tabs[1], h.tabs[2]];
+    gZenViewSplitter.splitTabs([a, b], 'grid');
+    await delay(450);
+    const split = a.group;
+    assert(split === b.group && split?.hasAttribute('split-view-group'),
+      'two tabs become a genuine native split group');
+    assert(split.group === h.group,
+      'the split wrapper must remain inside its original Site Folder');
+    click(h.group); await idle(h.group);
+    assert(h.group.collapsed, 'native click must close split-bearing Site Folder');
+    click(h.group); await idle(h.group);
+    assert(!h.group.collapsed, 'native click must expand split-bearing Site Folder');
+    const margin = parseFloat(h.group.groupStartElement.style.marginTop) || 0;
+    assert(Math.abs(margin) < 3, 'expanded start margin must be zero, got '+margin);
+    const rect = node => node.getBoundingClientRect();
+    const first=rect(h.tabs[0]), middle=rect(split), last=rect(h.tabs[3]);
+    assert(first.height > 12 && middle.height > 12 && last.height > 12,
+      'other members and split wrapper must have full native heights');
+    assert(middle.top >= first.bottom - 3 && last.top >= middle.bottom - 3,
+      'expanded native rows must not overlap: '+JSON.stringify({first:first.toJSON(),
+        split:middle.toJSON(),last:last.toJSON(),margin}));
+    assert(a.label && b.label, 'both original split tab names are retained');
+    assert(h.tabs.every(tab => tab.isConnected && !tab.pinned),
+      'all tabs survive with unchanged pinned state');
+  });
   // Native DOM objects and real native move APIs, with a deliberately late placing callback.
   // Mouse/drag events in these race fixtures are synthetic, not physical trackpad acceptance.
   function gesture(h, source, target, before, lateMove = true) {

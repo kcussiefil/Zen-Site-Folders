@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.7.9
+// @version      0.7.10
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -105,50 +105,62 @@
     group._activeTabs ??= [];
     return true;
   }
-  // A Zen split is a nested tab-group, not a normal tab in group.tabs.
-  // The native folder animation's activeTabs and height/opacity bookkeeping
-  // cannot safely treat the split's internal tabs as direct children: doing
-  // so can hide every other row or leave a split tab's label invisible.
-  // Keep the split wrapper and its tab nodes entirely under Zen/Zia control.
+  // A split inside a Site Folder is a nested native Zen group. Its row
+  // geometry is owned by Zen's animations: clearing only [hidden] leaves the
+  // negative margin on groupStart, so all expanded rows overlay older groups.
   function splitChildren(group) {
     return [...(group?.querySelectorAll?.('tab-group[split-view-group]') || [])];
   }
-  function splitHostSync(group) {
+  function splitHostSync(group, force = false, membership = null) {
     if (!splitChildren(group).length) return false;
-    // Invalidate any old animation state so a pending promise cannot later
-    // re-hide a group after the split is dropped into it.
-    states.delete(group);
-    deferredRows.delete(group);
-    const box = group.groupContainer;
-    if (!box) return true;
-    const descendants = [...(group.querySelectorAll?.('tab.tabbrowser-tab') || [])];
-    const selected = descendants.some(tab => tab.isConnected &&
-      (tab.selected || tab.multiselected ||
-        tab.hasAttribute?.('visuallyselected'))) ||
-      window.gBrowser?.selectedTab?.closest?.(SELECTOR) === group;
-    const hide = !!group.collapsed && !selected;
-    let changed = box.hidden !== hide;
-    box.hidden = hide;
-    if (!group.collapsed) {
-      // Clear only stranded, fully hidden tab styles left by an earlier
-      // ordinary-folder animation. Never change labels, split membership,
-      // pinned state, native group flags or tabs being animated by Zen.
-      for (const tab of descendants) {
-        if (tab.group !== group &&
-            !tab.group?.hasAttribute?.('split-view-group')) continue;
-        if (tab.style?.getPropertyValue?.('height') !== '0px' ||
-            tab.style?.getPropertyValue?.('opacity') !== '0' ||
-            (tab.getAnimations?.() || []).some(a => a.pending || a.playState === 'running')) continue;
-        window.gZenFolders?.styleCleanup?.([tab]);
-        changed = true;
-      }
+    // Unlike the ordinary bridge, never retire individual split panes as
+    // direct tab rows. Use Zen's split-aware group-item collection instead.
+    if (!prepare(group)) return true;
+    const zen = window.gZenFolders;
+    if (typeof zen?.animateCollapse !== 'function' ||
+        typeof zen?.animateExpand !== 'function') return true;
+    const members = [...(group.querySelectorAll?.('tab.tabbrowser-tab') || [])];
+    const selected = members.filter(tab => tab.isConnected &&
+      (tab.selected || tab.multiselected));
+    const prior = states.get(group);
+    const sameMembers = prior?.members?.length === members.length &&
+      prior.members.every((tab, i) => tab === members[i]);
+    const sameSelected = prior?.selected?.length === selected.length &&
+      prior.selected.every((tab, i) => tab === selected[i]);
+    if (!force && !membership && prior?.collapsed === group.collapsed &&
+        sameMembers && (!group.collapsed || sameSelected)) return true;
+    const state = {
+      collapsed: group.collapsed, selected, members, finished: false,
+      deferredComplete: prior?.deferredComplete === true, done: null
+    };
+    states.set(group, state);
+    // Native expand settles groupStart.marginTop back to zero and restores
+    // actual row heights. Native collapse accounts for split siblings as one
+    // visible block. Do NOT replace these with box.hidden toggles, which
+    // broke sidebar layout in v0.7.9.
+    let job;
+    try {
+      job = group.collapsed ? zen.animateCollapse(group) : zen.animateExpand(group);
+    } catch (error) {
+      states.delete(group);
+      console.warn('[ZenSiteFoldersMotion] Native split host animation:', error);
+      return true;
     }
-    if (changed) window.gBrowser?.tabContainer?._invalidateCachedVisibleTabs?.();
+    state.done = Promise.resolve(job).catch(error => {
+      console.warn('[ZenSiteFoldersMotion] Native split host animation:', error);
+    }).finally(() => {
+      if (dead || !ours(group) || states.get(group) !== state) return;
+      state.finished = true;
+      if (state.deferredComplete) {
+        state.deferredComplete = false;
+        group.dispatchEvent(new window.CustomEvent('TabGroupAnimationComplete', { bubbles: true }));
+      }
+    });
     return true;
   }
   function sync(group, force = false, membership = null) {
     if (dead || !ours(group)) return;
-    if (splitHostSync(group) || !prepare(group)) return;
+    if (splitHostSync(group, force, membership) || !prepare(group)) return;
     const zen = window.gZenFolders;
     if (typeof zen?.animateCollapse !== 'function' ||
         typeof zen?.animateExpand !== 'function') return;
@@ -509,7 +521,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.7.9-split-safe', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.7.10-split-native-layout', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });
