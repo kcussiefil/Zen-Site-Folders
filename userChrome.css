@@ -177,6 +177,12 @@
   toolbarbutton:is(.zsf-sort-button, .zsf-undo-button, .zen-workspace-close-unpinned-tabs-button):hover:not([disabled]) {
   opacity: 1 !important;
 }
+/* Revealing controls must never reactivate an action Zen or ZSF disabled. */
+.pinned-tabs-container-separator:has(> .zsf-sort-button):is(:hover, :focus-within) >
+  toolbarbutton:is(.zsf-sort-button, .zsf-undo-button)[disabled] {
+  opacity: .35 !important;
+  pointer-events: none !important;
+}
 /* Native flex=1 toolbarseparator handles the gap; never inject a spacer.
    Wave overlay is measured against the actual line at click-time. */
 .pinned-tabs-container-separator:has(.zsf-sort-button) {
