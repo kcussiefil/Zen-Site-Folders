@@ -87,7 +87,7 @@
    Zen normally hides the icon with :not([can-close=true]) display:none. */
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {
-  display: -moz-box !important;
+  display: flex !important;
 }
 .pinned-tabs-container-separator:has(> .zsf-sort-button) >
   toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {

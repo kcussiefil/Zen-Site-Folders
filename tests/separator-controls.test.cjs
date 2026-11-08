@@ -15,7 +15,7 @@ assert(css.includes('transition: opacity .14s ease, visibility') &&
   !css.includes('transition:\n    width'),
   'fade icons without width/position transitions');
 assert(css.includes('zen-icons/dart-down.svg') &&
-  css.includes('toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {\n  display: -moz-box !important'),
+  css.includes('toolbarbutton.zen-workspace-close-unpinned-tabs-button > .toolbarbutton-icon {\n  display: flex !important'),
   'override Zen icon hiding for protected selected tabs without replacing the native action');
 assert(!css.includes('toolbarbutton.zen-workspace-close-unpinned-tabs-button:not([can-close="true"])'),
   'Clear must be available even without Zen can-close because other tabs may remain closable');
