@@ -375,11 +375,23 @@ const finish = arguments[arguments.length - 1];
     // should not replay its expand animation merely due to membership.
     const root=h.group.parentElement;
     root.insertBefore(split,h.group.nextElementSibling);
-    await delay(360); // finish the now-ordinary host's previous animation
+    await idle(h.group);
+    await delay(300); // isolate re-entry from the previous normal-group timeline
+    const beforeOverflow=h.group.groupContainer.style.overflowY;
+    const beforeMargin=h.group.groupStartElement.style.marginTop;
+    assert(beforeOverflow !== 'hidden',
+      'split exit must settle native clipping BEFORE re-entry: '+JSON.stringify({
+        overflow:beforeOverflow,margin:beforeMargin,closed:h.group.collapsed,
+        hidden:h.group.groupContainer.hidden
+      }));
     h.group.groupContainer.appendChild(split);
     await delay(40);  // sample while an erroneous 180 ms expand would run
     assert(h.group.groupContainer.style.overflowY !== 'hidden',
-      'split re-entry must not restart native expanded folder clipping');
+      'split re-entry must not restart native expanded folder clipping: '+JSON.stringify({
+        beforeOverflow,beforeMargin,overflow:h.group.groupContainer.style.overflowY,
+        margin:h.group.groupStartElement.style.marginTop,hidden:h.group.groupContainer.hidden,
+        collapsed:h.group.collapsed
+      }));
     assert(Math.abs(parseFloat(h.group.groupStartElement.style.marginTop)||0) < 3,
       'split re-entry into open folder must not leave negative spacer margin');
     await idle(h.group);
