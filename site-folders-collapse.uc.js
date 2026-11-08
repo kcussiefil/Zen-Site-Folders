@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.7.5
+// @version      0.7.9
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -105,8 +105,50 @@
     group._activeTabs ??= [];
     return true;
   }
+  // A Zen split is a nested tab-group, not a normal tab in group.tabs.
+  // The native folder animation's activeTabs and height/opacity bookkeeping
+  // cannot safely treat the split's internal tabs as direct children: doing
+  // so can hide every other row or leave a split tab's label invisible.
+  // Keep the split wrapper and its tab nodes entirely under Zen/Zia control.
+  function splitChildren(group) {
+    return [...(group?.querySelectorAll?.('tab-group[split-view-group]') || [])];
+  }
+  function splitHostSync(group) {
+    if (!splitChildren(group).length) return false;
+    // Invalidate any old animation state so a pending promise cannot later
+    // re-hide a group after the split is dropped into it.
+    states.delete(group);
+    deferredRows.delete(group);
+    const box = group.groupContainer;
+    if (!box) return true;
+    const descendants = [...(group.querySelectorAll?.('tab.tabbrowser-tab') || [])];
+    const selected = descendants.some(tab => tab.isConnected &&
+      (tab.selected || tab.multiselected ||
+        tab.hasAttribute?.('visuallyselected'))) ||
+      window.gBrowser?.selectedTab?.closest?.(SELECTOR) === group;
+    const hide = !!group.collapsed && !selected;
+    let changed = box.hidden !== hide;
+    box.hidden = hide;
+    if (!group.collapsed) {
+      // Clear only stranded, fully hidden tab styles left by an earlier
+      // ordinary-folder animation. Never change labels, split membership,
+      // pinned state, native group flags or tabs being animated by Zen.
+      for (const tab of descendants) {
+        if (tab.group !== group &&
+            !tab.group?.hasAttribute?.('split-view-group')) continue;
+        if (tab.style?.getPropertyValue?.('height') !== '0px' ||
+            tab.style?.getPropertyValue?.('opacity') !== '0' ||
+            (tab.getAnimations?.() || []).some(a => a.pending || a.playState === 'running')) continue;
+        window.gZenFolders?.styleCleanup?.([tab]);
+        changed = true;
+      }
+    }
+    if (changed) window.gBrowser?.tabContainer?._invalidateCachedVisibleTabs?.();
+    return true;
+  }
   function sync(group, force = false, membership = null) {
-    if (dead || !ours(group) || !prepare(group)) return;
+    if (dead || !ours(group)) return;
+    if (splitHostSync(group) || !prepare(group)) return;
     const zen = window.gZenFolders;
     if (typeof zen?.animateCollapse !== 'function' ||
         typeof zen?.animateExpand !== 'function') return;
@@ -316,7 +358,7 @@
       } else if (record.attributeName === 'collapsed') {
         scheduleGroupSync(record.target);
       } else {
-        scheduleGroupSync(record.target.group);
+        scheduleGroupSync(ours(record.target.group) ? record.target.group : record.target.closest?.(SELECTOR));
       }
     }
     if (structural) scheduleScan();
@@ -353,8 +395,15 @@
       if (state.selected.includes(previous) || state.selected.includes(current))
         affected.add(group);
     }
+    // In a split, tab.group points to the inner split wrapper, not the
+    // Site Folders host. Reconcile the host when the active pane changes.
+    for (const tab of [previous, current]) {
+      const host = tab?.closest?.(SELECTOR);
+      if (ours(host) && splitChildren(host).length) affected.add(host);
+    }
     for (const group of affected)
-      if (ours(group) && group.collapsed) scheduleGroupSync(group);
+      if (ours(group) && (group.collapsed || splitChildren(group).length))
+        scheduleGroupSync(group);
   }
   function onTabGrouped(event) {
     const tab = event.detail, group = tab?.group;
@@ -421,7 +470,7 @@
     observer = new MutationObserver(onMutations);
     observer.observe(tabs, { subtree: true, childList: true,
       attributes: true, attributeFilter: [
-        'data-zsf-site', 'collapsed', 'selected', 'multiselected'
+        'data-zsf-site', 'collapsed', 'selected', 'multiselected', 'visuallyselected'
       ] });
     scan();
   }
@@ -460,7 +509,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.6.9', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.7.9-split-safe', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });

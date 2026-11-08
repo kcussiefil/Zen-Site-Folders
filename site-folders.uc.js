@@ -578,6 +578,7 @@
 
   async function dissolveSingleMember(group, survivor) {
     if (autoUngrouping || running || !isOwnedCloseGroup(group) ||
+        group.querySelector?.('tab-group[split-view-group]') ||
         !survivor?.isConnected || survivor.group !== group ||
         [...(group.tabs || [])].filter(tab => tab.isConnected && tab.group === group).length !== 1)
       return false;
@@ -638,7 +639,11 @@
     const record = closingSiteGroups.get(group);
     if (!record || running || autoUngrouping ||
         document.documentElement?.hasAttribute?.('zia-dragging-tab')) return;
-    if (!isOwnedCloseGroup(group)) { clearCloseWatch(group); return; }
+    if (!isOwnedCloseGroup(group) ||
+        group.querySelector?.('tab-group[split-view-group]')) {
+      clearCloseWatch(group);
+      return;
+    }
     // A closing tab can remain connected during Zen's close animation.
     // Wait for its actual DOM departure, never a guessed 200–500ms timer.
     if ([...record.closing].some(tab => tab.isConnected && tab.group === group)) return;
