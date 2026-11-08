@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.8.1](releases/v0.8.1.md) | Prevent repeated native expand animations on split-view group exit/re-entry; reduce drag layout clipping regressions. |
 | [v0.8.0](releases/v0.8.0.md) | Correct version carry-over after v0.7.9; identical functional behavior to historical v0.7.10. |
 | [v0.7.10](releases/v0.7.10.md) | Restore Zen's native split-folder expand/collapse geometry; prevent overlapped rows after dragging a split inside. |
 | [v0.7.9](releases/v0.7.9.md) | Keep nested Zen split views visible and their titles intact in Site Folders; apply custom active-tab color to split containers. |

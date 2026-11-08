@@ -370,6 +370,35 @@ const finish = arguments[arguments.length - 1];
         order: rows.map(node => node === split ? 'split' : node.zsfTestName),
         rects:rects.map(box => box.toJSON()), margin}));
     assert(a.label && b.label, 'both original split tab names are retained');
+    // Mimic the next gesture in the user's video: the same split is moved
+    // out, then back into an ALREADY expanded site group. Native Zen
+    // should not replay its expand animation merely due to membership.
+    const root=h.group.parentElement;
+    root.insertBefore(split,h.group.nextElementSibling);
+    await delay(40); // snapshot the native split-exit boundary, not the settled end
+    const beforeOverflow=h.group.groupContainer.style.overflowY;
+    const beforeMargin=h.group.groupStartElement.style.marginTop;
+    assert(beforeOverflow !== 'hidden',
+      'split exit must NOT start a redundant native animation: '+JSON.stringify({
+        overflow:beforeOverflow,margin:beforeMargin,closed:h.group.collapsed,
+        hidden:h.group.groupContainer.hidden
+      }));
+    h.group.groupContainer.appendChild(split);
+    await delay(40);  // sample while an erroneous 180 ms expand would run
+    assert(h.group.groupContainer.style.overflowY !== 'hidden',
+      'split re-entry must not restart native expanded folder clipping: '+JSON.stringify({
+        beforeOverflow,beforeMargin,overflow:h.group.groupContainer.style.overflowY,
+        margin:h.group.groupStartElement.style.marginTop,hidden:h.group.groupContainer.hidden,
+        collapsed:h.group.collapsed
+      }));
+    assert(Math.abs(parseFloat(h.group.groupStartElement.style.marginTop)||0) < 3,
+      'split re-entry into open folder must not leave negative spacer margin');
+    await idle(h.group);
+    const after = [...h.group.groupContainer.children]
+      .filter(node => node === split || node === h.tabs[0] || node === h.tabs[3])
+      .map(rect);
+    assert(after.every((box,i) => i===0 || box.top>=after[i-1].bottom-3),
+      'split re-entry must preserve ordered nonoverlapping boxes');
     assert(h.tabs.every(tab => tab.isConnected && !tab.pinned),
       'all tabs survive with unchanged pinned state');
   });

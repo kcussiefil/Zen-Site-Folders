@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — native Zen/Zia folder motion
-// @version      0.8.0
+// @version      0.8.1
 // @description  Bridge ordinary site groups to Zen's folder animation entrypoints.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -129,8 +129,27 @@
       prior.selected.every((tab, i) => tab === selected[i]);
     if (!force && !membership && prior?.collapsed === group.collapsed &&
         sameMembers && (!group.collapsed || sameSelected)) return true;
+    // Moving a split wrapper into an ALREADY expanded Site Folder is a
+    // membership update, not an expand transition. Re-running Zen's
+    // animateExpand on each drag/selection replaces active WAAPI animations,
+    // hides the container's overflow for another 180 ms and can strand a
+    // ghost row after several quick drops. Preserve the existing native
+    // timeline and let the newly inserted split use its natural DOM size.
+    if (!group.collapsed && prior?.collapsed === false) {
+      const startMargin = parseFloat(group.groupStartElement?.style?.marginTop) || 0;
+      const nativeExpandPending = !prior.finished;
+      const alreadyLaidOut = !group.groupContainer?.hidden && Math.abs(startMargin) < .5;
+      if (nativeExpandPending || alreadyLaidOut) {
+        prior.members = members;
+        prior.selected = selected;
+        return true;
+      }
+      // A negative start margin after a previously closed group is different:
+      // the native expand path is required to restore row geometry.
+    }
     const state = {
       collapsed: group.collapsed, selected, members, finished: false,
+      splitHost: true,
       deferredComplete: prior?.deferredComplete === true, done: null
     };
     states.set(group, state);
@@ -168,6 +187,24 @@
     const members = [...group.tabs];
     const selected = members.filter(tab => tab.selected || tab.multiselected);
     const prior = states.get(group);
+    // The nested split just left an already-open Site Folder. There is no
+    // collapse/expand transition and the remaining ordinary tabs already
+    // occupy their natural rows. Starting ANOTHER animateExpand here clips
+    // the group for 180ms, racing the split's next Zia landing (observed as
+    // an unlabelled grey ghost after rapid reordering).
+    if (!force && !membership && prior?.splitHost && !collapsed &&
+        prior.collapsed === false) {
+      const startMargin = parseFloat(group.groupStartElement?.style?.marginTop) || 0;
+      if (!prior.finished ||
+          (!group.groupContainer?.hidden && Math.abs(startMargin) < .5)) {
+        prior.members = members;
+        prior.selected = selected;
+        prior.splitHost = false;
+        return;
+      }
+      // Nonzero collapsed shift is NOT a stable expanded host: let the
+      // native path repair it instead of suppressing needed relayout.
+    }
     const held = deferredRows.get(group);
     if (held && (!collapsed || selected.length || !members.includes(held)))
       deferredRows.delete(group);
@@ -521,7 +558,7 @@
     states.clear();
     delete window.__zsfCollapseV037;
   }
-  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.7.10-split-native-layout', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
+  window.__zsfCollapseV037 = { version: '0.4.2', revision: '0.8.1-split-reentry-guard', start, sync, whenIdle, prepareToMoveTabs, clearLegacyFlags, destroy };
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, { once: true });
   bind(window, 'unload', destroy, { once: true });
