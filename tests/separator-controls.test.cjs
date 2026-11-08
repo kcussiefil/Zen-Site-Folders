@@ -54,7 +54,8 @@ assert(css.includes('width: 20px !important;') &&
 assert(css.includes('inset-inline-end: 59px !important;') &&
   css.includes('inset-inline-end: 32px !important;') &&
   css.includes('inset-inline-end: 5px !important;'),'original icon positions unchanged');
-assert(!/scaleX\\(|scaleY\\(|scale\\(/.test(css.slice(0,css.indexOf('/* Notice rendering uses Zen'))),
+const separatorCss=css.slice(0,css.indexOf('/* Notice rendering uses Zen'));
+assert(!['scaleX(', 'scaleY(', 'scale('].some(pattern=>separatorCss.includes(pattern)),
   'separator glyphs must not be distorted with nonuniform or uniform transforms');
 const sharedIconSelector='toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {';
 assert(css.split(sharedIconSelector).some(block=>block.includes('transform: none !important;')),
