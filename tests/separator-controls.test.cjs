@@ -41,9 +41,11 @@ const verifyIcon=(selector,size) => {
 };
 verifyIcon('zsf-sort-button',16);
 verifyIcon('zen-workspace-close-unpinned-tabs-button',13);
-const shared = css.match(/toolbarbutton:is\\(\\.zsf-undo-button, \\.zsf-sort-button, \\.zen-workspace-close-unpinned-tabs-button\\) > \\.toolbarbutton-icon \\{([^}]+)\\}/);
-assert(shared && shared[1].includes('width: 15px !important;') &&
-  shared[1].includes('height: 15px !important;'),'Undo remains 15px in shared base');
+const sharedStart=css.indexOf('toolbarbutton:is(.zsf-undo-button, .zsf-sort-button, .zen-workspace-close-unpinned-tabs-button) > .toolbarbutton-icon {');
+assert(sharedStart>=0,'shared icon size base rule exists');
+const shared=css.slice(sharedStart,css.indexOf('}',sharedStart));
+assert(shared.includes('width: 15px !important;') &&
+  shared.includes('height: 15px !important;'),'Undo remains 15px in shared base');
 assert(css.includes('width: 20px !important;') &&
   css.includes('height: 20px !important;'),'clickable toolbarbuttons remain 20x20');
 assert(css.includes('inset-inline-end: 59px !important;') &&
