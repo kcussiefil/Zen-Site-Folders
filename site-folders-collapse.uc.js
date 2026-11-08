@@ -129,6 +129,24 @@
       prior.selected.every((tab, i) => tab === selected[i]);
     if (!force && !membership && prior?.collapsed === group.collapsed &&
         sameMembers && (!group.collapsed || sameSelected)) return true;
+    // Moving a split wrapper into an ALREADY expanded Site Folder is a
+    // membership update, not an expand transition. Re-running Zen's
+    // animateExpand on each drag/selection replaces active WAAPI animations,
+    // hides the container's overflow for another 180 ms and can strand a
+    // ghost row after several quick drops. Preserve the existing native
+    // timeline and let the newly inserted split use its natural DOM size.
+    if (!group.collapsed && prior?.collapsed === false) {
+      const startMargin = parseFloat(group.groupStartElement?.style?.marginTop) || 0;
+      const nativeExpandPending = !prior.finished;
+      const alreadyLaidOut = !group.groupContainer?.hidden && Math.abs(startMargin) < .5;
+      if (nativeExpandPending || alreadyLaidOut) {
+        prior.members = members;
+        prior.selected = selected;
+        return true;
+      }
+      // A negative start margin after a previously closed group is different:
+      // the native expand path is required to restore row geometry.
+    }
     const state = {
       collapsed: group.collapsed, selected, members, finished: false,
       deferredComplete: prior?.deferredComplete === true, done: null

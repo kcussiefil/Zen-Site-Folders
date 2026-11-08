@@ -17,12 +17,13 @@ const tab = (label, selected, owner) => ({
 const split={hasAttribute:k=>k==='split-view-group'};
 const nested=tab('Split pane name',true,split);
 const sibling=tab('Other group tab',false,null);
+const descendants=[sibling,nested];
 const group={
  isConnected:true,isZenFolder:false,pinned:false,collapsed:true,
  tabs:[sibling],groupContainer:{hidden:true,style:sty()},
  groupStartElement:{style:sty()},matches:()=>true,
  querySelectorAll:s=>s==='tab-group[split-view-group]'?[split]
-   :s==='tab.tabbrowser-tab'?[sibling,nested]:[],
+   :s==='tab.tabbrowser-tab'?descendants:[],
  removeAttribute:k=>attrs.delete(k),hasAttribute:k=>attrs.has(k),
  dispatchEvent:()=>{}
 };
@@ -58,6 +59,21 @@ const api=win.__zsfCollapseV037;
   assert.equal(group.groupContainer.hidden,false,'split host expanded');
   api.sync(group);await api.whenIdle(group);
   assert.deepEqual(calls,['collapse','expand'],'unchanged expanded host cannot restart layout animation');
+  // Actual native re-entry adds/removes descendants while the host is open.
+  // This must NOT call animateExpand for the already-visible host again.
+  const newPane = tab('Incoming split pane',false,split);
+  descendants.push(newPane);
+  api.sync(group);await api.whenIdle(group);
+  assert.deepEqual(calls,['collapse','expand'],
+    'adding a split child must not replay native expand on an open host');
+  newPane.selected=true;nested.selected=false;
+  api.sync(group);await api.whenIdle(group);
+  assert.deepEqual(calls,['collapse','expand'],
+    'changing the active split pane must not replay open-group animation');
+  descendants.pop();nested.selected=true;
+  api.sync(group);await api.whenIdle(group);
+  assert.deepEqual(calls,['collapse','expand'],
+    'removing a split child must not replay native expand');
   group.collapsed=true;api.sync(group);await api.whenIdle(group);
   assert.deepEqual(calls,['collapse','expand','collapse']);
   assert(/#tabbrowser-tabs tab-group\[split-view-group\]\s*\{\s*--zia-active-tab-bg:\s*var\(--zsf-selected-tab-fill/.test(css),
