@@ -32,7 +32,7 @@ jobs:
           node --check site-folders-split-guard.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.8.8' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.8.9' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Test independent hover layer
@@ -42,6 +42,7 @@ jobs:
           node tests/zia-2.118-video-hover.test.cjs
           node tests/retired-blur-mod.test.cjs
           node tests/light-theme-contrast.test.cjs
+          node tests/group-child-gap.test.cjs
           node tests/group-menu-order.test.cjs
           node tests/collapse.test.cjs
           node tests/split-view.test.cjs
