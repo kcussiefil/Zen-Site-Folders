@@ -3,7 +3,7 @@
   "name": "Zen Site Folders",
   "description": "Zen-native site folders with bottom-edge native drag-pointer synchronization, stable grouping and compact hover cards.",
   "author": "kcussiefil",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "style": {
     "chrome": "userChrome.css"
   },
@@ -60,5 +60,5 @@
     "zen"
   ],
   "homepage": "https://github.com/kcussiefil/Zen-Site-Folders",
-  "updatedAt": "2026-11-10T15:52:00.000Z"
+  "updatedAt": "2026-11-10T17:11:10.000Z"
 }
