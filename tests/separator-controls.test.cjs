@@ -3,7 +3,7 @@ const fs=require('node:fs'), path=require('node:path');
 const root=path.join(__dirname,'..'),css=fs.readFileSync(path.join(root,'userChrome.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'site-folders.uc.js'),'utf8');
 const manifest=require(path.join(root,'theme.json'));
-assert.equal(manifest.version,'0.8.8');
+assert.equal(manifest.version,'0.8.9');
 assert(css.includes('.pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator'),
   'only the separator row should shrink the line');
 assert(css.includes('position: absolute !important') &&
@@ -62,4 +62,4 @@ assert(css.split(sharedIconSelector).some(block=>block.includes('transform: none
   'explicitly cancel transforms without modifying 20px toolbarbuttons');
 assert(css.includes('opacity: .88 !important;'),
   'the solid-fill native Clear should have a slightly softer ink weight');
-console.log('PASS v0.8.8: undistorted 14/15/14 optical balance, 20px targets, Clear tone, wave and alignment');
+console.log('PASS v0.8.9: undistorted 14/15/14 optical balance, 20px targets, Clear tone, wave and alignment');
