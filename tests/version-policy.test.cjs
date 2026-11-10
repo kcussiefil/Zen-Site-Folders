@@ -11,4 +11,4 @@ assert.equal(/^\d+\.[0-9]\.[0-9]$/.test('0.7.10'), false,
   'A two-digit patch must never be accepted again');
 assert.equal(valid.test('0.8.0'), true);
 assert.equal(valid.test('1.0.0'), true);
-console.log('PASS: single-digit minor / patch with carry-over; published v0.8.7');
+console.log('PASS: single-digit minor / patch with carry-over; published v0.8.8');
