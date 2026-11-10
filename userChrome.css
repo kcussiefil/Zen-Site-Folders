@@ -1,4 +1,4 @@
-/* Zen Site Folders v0.8.7 — uniform, undistorted icon optical balance; stationary right controls.
+/* Zen Site Folders v0.8.8 — uniform, undistorted icon optical balance; stationary right controls.
    Native markup: one flex=1 toolbarseparator plus Zen Clear. Our actions
    remain inside this same native row; neither DOM order nor Zen handlers
    need replacing. The ROW :hover is the sole pointer reveal trigger. */
@@ -376,8 +376,10 @@
   cursor: pointer !important;
 }
 
+/* Match ordinary Zia tab hover: the token changes with the Space theme.
+   If Zia is absent, blend currentColor; never force a fixed grey fill. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container:hover {
-  background-color: color-mix(in srgb, currentColor 6%, transparent) !important;
+  background-color: var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 8%, transparent)) !important;
 }
 
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label {
@@ -755,11 +757,11 @@ tab-group[data-zsf-site][data-zsf-drag-source]
   contain: none !important;
 }
 
-/* A collapsed site folder paints one native-colored header, including its icon. */
+/* Collapsed and expanded headers share the transparent idle style.
+   A second background override here would suppress the hover feedback. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
 tab-group[data-zsf-site][collapsed]:not([split-view-group])
 > .tab-group-label-container {
-  background-color: transparent !important;
   outline: none !important;
 }
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs

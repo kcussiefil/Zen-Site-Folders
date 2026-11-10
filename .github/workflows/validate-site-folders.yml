@@ -32,7 +32,7 @@ jobs:
           node --check site-folders-split-guard.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.8.7' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.8.8' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Test independent hover layer

@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.8.8](releases/v0.8.8.md) | Match group-title hover to Zia's live tab hover color, including collapsed folders. |
 | [v0.8.7](releases/v0.8.7.md) | Restore natural SVG proportions; optical sizing Undo 14px, Group 15px, Clear 14px with softer Clear ink. |
 | [v0.8.6](releases/v0.8.6.md) | Normalize actual icon silhouettes with image-only scaleY/scaleX, preserving fixed buttons and native commands. |
 | [v0.8.5](releases/v0.8.5.md) | Optically balance separator icons: Undo 15px, Group 16px, Clear 13px; keep all three 20px hit targets and fixed positions. |

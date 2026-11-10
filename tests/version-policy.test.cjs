@@ -5,7 +5,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'theme.js
 const valid = /^\d+\.[0-9]\.[0-9]$/;
 assert.match(manifest.version, valid,
   'Minor and patch segments must each contain one digit. Use 0.7.9 -> 0.8.0, never 0.7.10.');
-assert.equal(manifest.version, '0.8.7',
+assert.equal(manifest.version, '0.8.8',
   'Current release version in this branch must be v0.8.7');
 assert.equal(/^\d+\.[0-9]\.[0-9]$/.test('0.7.10'), false,
   'A two-digit patch must never be accepted again');
