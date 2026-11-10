@@ -413,11 +413,21 @@
   color: var(--zia-sidebar-ink, rgb(28, 28, 32)) !important;
 }
 
-/* Do not override the ordinary tab-group container's margin, padding,
-   display, overflow, or tab indentation. Zia uses its own negative top
-   margin and 5px inner gap while running its native spring animation.
-   Unlike the v0.3.6 overrides, that geometry is never swapped at the end
-   of a close or when the selected tab changes. */
+/* v0.8.9: separate site-group title and first member by 3px without
+   changing group height. Zia normally uses -5px top / +5px bottom;
+   exchange 3px between them, including while collapsed/animating.
+   Never change member row height, child margins, transform, visibility,
+   transition or native drag/drop geometry. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
+tab-group[data-zsf-site]:not([split-view-group])
+> .tab-group-container:not([hidden]) {
+  margin-top: calc(3px - var(--zia-folder-inner-gap, 5px)) !important;
+  padding-bottom: calc(var(--zia-folder-inner-gap, 5px) - 3px) !important;
+}
+/* Keep Zia's native container display/overflow, child tab margins, and
+   indentation; do not switch spacing on [collapsed] or [zia-folder-holding].
+   The two spacing terms sum to zero in all states so native spring motion
+   does not have a late layout-size correction. */
 /* Share Zia's actual list classes / variables. Our popup remains an
    independent read-only DOM: do not overwrite Zia's #zia-folder-card. */
 #zsf-folder-hover-card {
