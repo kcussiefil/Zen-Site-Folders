@@ -187,7 +187,9 @@
       clearPress();
       return;
     }
-    if (gesture?.pressed && gesture.tab === tab) return;
+    // pointerdown followed by mousedown is one press only until it starts
+    // dragging. A fresh press after drop (which may omit mouseup) is new.
+    if (gesture?.pressed && gesture.tab === tab && !gesture.dragging) return;
     clearPress();
     if (tab === browser.selectedTab) return;
     refreshHooks();
