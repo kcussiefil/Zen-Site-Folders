@@ -1,8 +1,0 @@
-[
-  {
-    "property": "zen.sitefolders.background_drag.enabled",
-    "label": "Drag background tabs without activating or loading them",
-    "type": "checkbox",
-    "defaultValue": true
-  }
-]

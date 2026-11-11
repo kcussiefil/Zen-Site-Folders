@@ -9,11 +9,9 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'theme.json'), 'utf8
 const hover = fs.readFileSync(path.join(root, 'site-folders-hover.uc.js'), 'utf8');
 const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
-assert.equal(manifest.version, '0.9.2', 'release under test must be v0.9.2');
-assert.equal(manifest.preferences, 'preferences.json', 'background-drag preference must remain separate from the retired blur mod');
-const prefs = JSON.parse(fs.readFileSync(path.join(root, 'preferences.json'), 'utf8'));
-assert(prefs.length === 1 && prefs[0].property === 'zen.sitefolders.background_drag.enabled' &&
-  !JSON.stringify(prefs).includes('blur'), 'only the unrelated background drag switch is exposed');
+assert.equal(manifest.version, '0.9.3', 'release under test must be v0.9.3');
+assert(!Object.hasOwn(manifest, 'preferences'), 'background drag has no Sine controls');
+assert(!fs.existsSync(path.join(root, 'preferences.json')), 'remove obsolete exposed control file');
 assert(hover.includes('getComputedStyle(source)'), 'inherit Zia actual native preview paint');
 assert(hover.includes("Services.prefs.addObserver('zia.'"), 'react to Zia pref changes');
 assert(hover.includes('data-zsf-preview-sidebar-hold'), 'sidebar stays open over independent card');
