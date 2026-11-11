@@ -98,7 +98,9 @@
           '.tab-close-button, .tab-icon-overlay, .tab-audio-button, ' +
           '.tab-reset-button, .tab-reset-pin-button, .tab-note-icon-overlay, ' +
           'button, toolbarbutton, input')) return;
-    const tab = tabAt(event.target);
+    // Composed events may start inside Zen's anonymous/shadow tab chrome.
+    const tab = tabAt(event.target) || (event.composedPath?.() || [])
+      .find(node => isTab(node) && strip.contains(node));
     if (!tab || tab === browser.selectedTab || splitTab(tab) ||
         tab.hasAttribute?.('zen-glance-tab')) return;
     gesture = {tab, previous: browser.selectedTab, pressed: true,
@@ -106,7 +108,10 @@
   }
   function onMove(event) {
     if (!gesture?.pressed || gesture.dragging) return;
-    if (!(event.buttons & 1)) { clearPress(); return; }
+    // Gecko can report buttons=0 on a transition into native DnD even
+    // while the physical button is still held. Do not drop the guard here:
+    // only mouseup, Escape, or an owned finalization can end this press.
+    if (!(event.buttons & 1)) return;
     if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >= 5)
       gesture.dragging = true;
   }
@@ -123,7 +128,8 @@
       settle(held.tab);
       clearPress();
     } else {
-      // A mouseup can arrive without a click, for example after a cancelled drag.
+      // A release without an actual click can follow a cancelled native drag.
+      // Never wake the tab until a real click arrives.
       clickTimer = window.setTimeout(clearPress, 90);
     }
   }
@@ -142,8 +148,12 @@
     const source = event.dataTransfer?.mozGetDataAt?.(TAB_DROP_TYPE, 0) ||
       (event.type === 'dragend' ? tabAt(event.target) : null);
     if (!source) return;
-    if (gesture?.dragging && gesture.tab === source) clearPress();
-    else if (!landing.has(source)) return;
+    // dragend may signal native cancellation before the physical button is
+    // released. Keep the in-progress source guarded until mouseup, rather
+    // than permitting Zen to select/wake the tab while the pointer is held.
+    if (gesture?.dragging && gesture.tab === source) {
+      if (!gesture.pressed) clearPress();
+    } else if (!landing.has(source)) return;
     if (event.type === 'drop' && !strip.contains(event.target)) {
       clearLanding(source); // A page drop can intentionally activate a new split.
       return;
@@ -193,7 +203,9 @@
     listen('click', onClick);
     listen('drop', onFinish);
     listen('dragend', onFinish);
-    listen('deactivate', clearPress);
+    // A native drag may transiently deactivate chrome without a real mouseup.
+    // Keep the guard until the drag owns a matching drop/dragend or mouseup.
+    listen('deactivate', () => { if (!gesture?.dragging) clearPress(); });
     listen('keydown', event => { if (event.key === 'Escape') clearPress(); });
     listen('unload', destroy);
   }

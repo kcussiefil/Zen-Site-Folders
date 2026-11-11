@@ -152,6 +152,30 @@ function make(options = {}) {
   t.window.__zsfBackgroundDragV090.destroy();
 }
 {
+  const t = make();
+  t.background.pending = true;
+  t.fire('mousedown');
+  // Browser/drag service can emit a zero-buttons mousemove while still
+  // physically holding the left button. Never allow it to wake the tab.
+  t.fire('mousemove', t.background, {buttons: 0, clientY: 2});
+  t.browser.selectedTab = t.background;
+  assert.equal(t.browser.selectedTab, t.original,
+    'zero-buttons intermediate mousemove must not disarm selection protection');
+  t.fire('mousemove', t.background, {buttons: 1, clientY: 20});
+  t.fire('deactivate');
+  t.browser.selectedTab = t.background;
+  assert.equal(t.browser.selectedTab, t.original,
+    'transient deactivation during a held drag must not awaken the tab');
+  t.finish('dragend', t.background);
+  t.browser.selectedTab = t.background;
+  assert.equal(t.browser.selectedTab, t.original,
+    'premature dragend before physical mouseup must remain protected');
+  t.fire('mouseup', t.background, {buttons: 0});
+  t.flush();
+  assert.equal(t.background.pending, true);
+  t.window.__zsfBackgroundDragV090.destroy();
+}
+{
   const t = make({split: true});
   t.fire('mousedown'); t.browser.selectedTab = t.background;
   assert.equal(t.browser.selectedTab, t.background, 'split view keeps native handling');
