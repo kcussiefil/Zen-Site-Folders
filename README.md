@@ -39,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v0.9.3** (see `theme.json`) |
+| Current mod version | **v0.9.4** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -49,3 +49,5 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v0.9.4** adds event-driven recovery when the independent background-drag guard disappears after visiting Zen Settings or Sine reloads. It only checks on tab selection, browser focus, or a genuine tab pointer press; the drag engine itself remains exactly v0.9.2. Runtime diagnostics: `window.__zsfBackgroundDragRecoveryV094?.debug()` in the Browser Console.

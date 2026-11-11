@@ -1770,12 +1770,88 @@
     updateButtons();
   }
 
+  // BEGIN BACKGROUND_DRAG_RUNTIME_RECOVERY
+  // Sine's script bookkeeping can report a script as loaded after its native
+  // hooks failed to install. The ordinary Site Folders core stays alive while
+  // the optional drag guard has disappeared. Repair only on UI activity:
+  // no polling, drag transforms, tab reordering or video compositor changes.
+  const dragRecovery = (() => {
+    const key = '__zsfBackgroundDragV090';
+    const uri = 'chrome://sine/content/zen-site-folders/site-folders-background-drag.uc.js';
+    const pref = 'zen.sitefolders.background_drag.enabled';
+    let lastAttempt = 0;
+    let attempts = 0;
+    let lastEvent = '';
+    let lastResult = 'not-needed';
+    let lastError = '';
+    let stopped = false;
+    const active = () => !!window[key]?.debug?.().enabled;
+    function ensure(event) {
+      if (stopped) return;
+      if (window[key]) return;
+      lastEvent = typeof event === 'string' ? event : event?.type || 'unknown';
+      try {
+        if (!Services.prefs.getBoolPref(pref, true) ||
+            Services.prefs.getBoolPref('sine.mods.disable-all', false)) {
+          lastResult = 'disabled'; return;
+        }
+      } catch (_) {}
+      if (typeof window.gBrowser?.tabContainer?.tabDragAndDrop?.startTabDrag !== 'function') {
+        lastResult = 'native-not-ready'; return;
+      }
+      const now = Date.now();
+      if (now - lastAttempt < 1000) return;
+      lastAttempt = now;
+      attempts++;
+      try {
+        Services.scriptloader.loadSubScriptWithOptions(uri, {
+          target: window, ignoreCache: true
+        });
+        lastResult = window[key] ? 'recovered' : 'module-still-missing';
+        lastError = '';
+      } catch (error) {
+        lastResult = 'inject-failed';
+        lastError = String(error);
+        console.warn(TAG, 'Background drag recovery failed:', error);
+      }
+    }
+    function onTabSelect() { ensure('TabSelect'); }
+    function onFocus() { ensure('focus'); }
+    function onPointerDown(event) {
+      if (window[key] || event.button !== 0) return;
+      const path = event.composedPath?.() || [event.target];
+      const strip = window.gBrowser?.tabContainer;
+      // The last-chance fallback is confined to a real tab press and does not
+      // intercept or cancel either the source event or native drag behaviour.
+      if (path.some(node => node?.localName === 'tab' && strip?.contains(node)))
+        ensure('pointerdown');
+    }
+    function stop() {
+      stopped = true;
+      window.gBrowser?.tabContainer?.removeEventListener('TabSelect', onTabSelect);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pointerdown', onPointerDown, true);
+    }
+    function init() {
+      window.gBrowser.tabContainer.addEventListener('TabSelect', onTabSelect);
+      window.addEventListener('focus', onFocus);
+      window.addEventListener('pointerdown', onPointerDown, true);
+      window.addEventListener('unload', stop, {once: true});
+    }
+    return {init, stop, ensure,
+      debug: () => ({module: !!window[key], active: active(),
+        attempts, lastEvent, lastResult, lastError})};
+  })();
+  // END BACKGROUND_DRAG_RUNTIME_RECOVERY
+
   function initialize() {
     if (!window.gBrowser?.tabContainer || !window.gZenWorkspaces ||
         !document.querySelector('zen-workspace .pinned-tabs-container-separator')) {
       initTimer = setTimeout(initialize, 1000);
       return;
     }
+    window.__zsfBackgroundDragRecoveryV094 = dragRecovery;
+    dragRecovery.init();
     // Catch both in-progress and already-finished Zen workspace restoration.
     watchWorkspaceInitialization();
     // Use capture at the browser window: contextmenu on XUL toolbarbuttons
