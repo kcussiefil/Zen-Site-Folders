@@ -93,29 +93,47 @@ const finish = arguments[arguments.length - 1];
   // Real custom element click -> native setter -> native event -> native animations -> computed layout.
   await test('background tab sorting preserves inactive tab and ordinary click', async h => {
     const backgroundDrag = window.__zsfBackgroundDragV090;
-    assert(backgroundDrag && backgroundDrag.debug().enabled,
-      'background-drag module must be installed and enabled in native Zen');
-    const active = h.prefix, source = h.tabs[1];
-    const browserBefore = source.linkedBrowser;
-    assert(gBrowser.selectedTab === active && source !== active,
-      'fixture must begin on another active tab');
-    const send = (kind, y, buttons = 1) => source.dispatchEvent(new MouseEvent(kind, {
-      bubbles: true, composed: true, button: 0, buttons, clientX: 80, clientY: y
-    }));
-    send('mousedown', 130);
-    gBrowser.selectedTab = source;
-    assert(gBrowser.selectedTab === active,
-      'background mousedown must not activate or load the drag source');
-    send('mousemove', 155);
-    assert(backgroundDrag.debug().dragging, 'moving beyond threshold must enter drag mode');
-    send('mouseup', 155, 0);
-    assert(gBrowser.selectedTab === active && source.linkedBrowser === browserBefore,
-      'background drag must preserve selected tab and browser identity');
-    await delay(130);
-    send('mousedown', 130);
-    send('mouseup', 130, 0);
-    assert(gBrowser.selectedTab === source,
-      'an ordinary click on a background tab must still select it');
+    assert(backgroundDrag?.debug().enabled, 'background drag must be enabled');
+    const input = {window, document, navigator, console,
+      setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window)};
+    Services.scriptloader.loadSubScript('chrome://remote/content/external/EventUtils.js', input);
+
+    const selected = [], restored = [];
+    const onSelect = event => selected.push(event.target);
+    const onRestore = event => restored.push(event.target);
+    gBrowser.tabContainer.addEventListener('TabSelect', onSelect);
+    gBrowser.tabContainer.addEventListener('SSTabRestoring', onRestore);
+    try {
+      const [a, b, c, d] = h.tabs;
+      for (const tab of [a, b, c, d]) {
+        gBrowser.discardBrowser(tab);
+        assert(tab.hasAttribute('pending'), 'fixture must actually discard ' + tab.zsfTestName);
+      }
+      for (const [source, target] of [[a, c], [b, d], [c, b]]) {
+        const before = [...gBrowser.tabs].indexOf(source);
+        await input.synthesizePlainDragAndDrop({
+          srcElement: source, srcX: 80, srcY: 16, stepX: 0, stepY: 9,
+          destElement: target, finalX: 80, finalY: 28,
+        });
+        assert(source.isConnected && [...gBrowser.tabs].indexOf(source) !== before,
+          'drag must actually reorder ' + source.zsfTestName);
+        assert(gBrowser.selectedTab === h.prefix && source.hasAttribute('pending'),
+          'drag must preserve the active tab and keep ' + source.zsfTestName + ' unloaded');
+      }
+      assert(!selected.length && !restored.length,
+        'no dragged tab may be selected or even transiently restored');
+
+      // Click the same tab immediately after dragging it.
+      input.synthesizeMouse(c, 80, 16, {type: 'mousedown'}, window);
+      assert(gBrowser.selectedTab === h.prefix && c.hasAttribute('pending'),
+        'pressing a tab must still leave it asleep');
+      input.synthesizeMouse(c, 80, 16, {type: 'mouseup'}, window);
+      assert(gBrowser.selectedTab === c && same(selected, [c]),
+        'an ordinary click must select exactly the clicked tab');
+    } finally {
+      gBrowser.tabContainer.removeEventListener('TabSelect', onSelect);
+      gBrowser.tabContainer.removeEventListener('SSTabRestoring', onRestore);
+    }
   });
   await test('grouped tab real opening time persists independently of sorting', async h => {
     const openedKey = 'zsf-opened-at-real-v1';

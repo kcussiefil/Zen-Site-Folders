@@ -1,8 +1,9 @@
-// Zen Site Folders v0.9.0 — keep background tabs asleep while sorting.
+// Zen Site Folders v0.9.1 — keep background tabs asleep while sorting.
 // This layer does not replace native/Zia drop positioning or group animations.
 (() => {
   'use strict';
   const KEY = '__zsfBackgroundDragV090';
+  const TAB_DROP_TYPE = 'application/x-moz-tabbrowser-tab';
   const PREF = 'zen.sitefolders.background_drag.enabled';
   if (window[KEY]) return;
   let readinessAttempts = 0;
@@ -15,7 +16,8 @@
     return;
   }
 
-  let alive = true, gesture = null, dragDepth = 0, timer = null;
+  let alive = true, gesture = null, dragDepth = 0, clickTimer = null;
+  const landing = new Map();
   const undo = [], listeners = [];
   const enabled = () => {
     try { return alive && Services.prefs.getBoolPref(PREF, true); }
@@ -26,7 +28,7 @@
     const tab = node?.closest?.('tab, tabbrowser-tab, .tabbrowser-tab');
     return isTab(tab) && strip.contains(tab) ? tab : null;
   }
-  const splitTab = tab => !!tab?.closest?.(
+  const splitTab = tab => !!tab?.splitview || !!tab?.closest?.(
     'tab-group[split-view-group], tab-group[zen-split-view], tab-group[is-zen-split]');
   function descriptor(obj, key) {
     for (let p = obj; p; p = Object.getPrototypeOf(p)) {
@@ -47,8 +49,8 @@
     });
   }
   function guarded(tab) {
-    return enabled() && !!gesture && tab === gesture.tab &&
-      browser.selectedTab === gesture.previous && (gesture.pressed || gesture.dragging);
+    return enabled() && !!tab && !splitTab(tab) &&
+      (landing.has(tab) || (tab === gesture?.tab && (gesture.pressed || gesture.dragging)));
   }
   function wrapSelection(obj, key) {
     const d = descriptor(obj, key);
@@ -73,21 +75,23 @@
     window.addEventListener(name, fn, true);
     listeners.push(() => window.removeEventListener(name, fn, true));
   }
-  function clearTimer() {
-    if (timer !== null) window.clearTimeout(timer);
-    timer = null;
+  function clearPress() {
+    if (clickTimer !== null) window.clearTimeout(clickTimer);
+    clickTimer = null;
+    gesture = null;
   }
-  function clear() { clearTimer(); gesture = null; }
-  function releaseAfter(ms) {
-    clearTimer();
-    const held = gesture;
-    timer = window.setTimeout(() => {
-      timer = null;
-      if (gesture === held) gesture = null;
-    }, ms);
+  function clearLanding(tab) {
+    if (!landing.has(tab)) return;
+    window.clearTimeout(landing.get(tab));
+    landing.delete(tab);
+  }
+  function settle(tab) {
+    clearLanding(tab);
+    // Zia can finish the previous placement after the next press has begun.
+    landing.set(tab, window.setTimeout(() => landing.delete(tab), 90));
   }
   function onDown(event) {
-    clear();
+    clearPress();
     if (!enabled() || event.button !== 0 || event.shiftKey || event.ctrlKey ||
         event.altKey || event.metaKey || !strip.contains(event.target) ||
         event.target?.closest?.(
@@ -101,8 +105,8 @@
       dragging: false, x: event.clientX, y: event.clientY};
   }
   function onMove(event) {
-    if (!gesture || gesture.dragging) return;
-    if (!(event.buttons & 1)) { clear(); return; }
+    if (!gesture?.pressed || gesture.dragging) return;
+    if (!(event.buttons & 1)) { clearPress(); return; }
     if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >= 5)
       gesture.dragging = true;
   }
@@ -112,20 +116,40 @@
         gesture.tab.contains?.(event.target)) gesture.dragging = true;
   }
   function onUp(event) {
-    if (event.button !== 0 || !gesture) return;
+    if (event.button !== 0 || !gesture?.pressed) return;
     const held = gesture;
     held.pressed = false;
-    if (!held.dragging) {
-      if (held.tab.isConnected && tabAt(event.target) === held.tab &&
-          browser.selectedTab === held.previous)
-        browser.selectedTab = held.tab; // Real click: retain ordinary activation.
-      releaseAfter(0);
+    if (held.dragging) {
+      settle(held.tab);
+      clearPress();
     } else {
-      // Protect asynchronous native/Zia landing. Never delay the actual drop.
-      releaseAfter(90);
+      // A mouseup can arrive without a click, for example after a cancelled drag.
+      clickTimer = window.setTimeout(clearPress, 90);
     }
   }
-  function onDrop() { if (gesture?.dragging) releaseAfter(90); }
+  function onClick(event) {
+    if (event.button !== 0 || !gesture || gesture.pressed || gesture.dragging) return;
+    const {tab, previous} = gesture;
+    clearPress();
+    if (enabled() && tab.isConnected && tabAt(event.target) === tab &&
+        browser.selectedTab === previous) {
+      clearLanding(tab);
+      browser.selectedTab = tab;
+    }
+  }
+  function onFinish(event) {
+    if (!gesture?.dragging && !landing.size) return;
+    const source = event.dataTransfer?.mozGetDataAt?.(TAB_DROP_TYPE, 0) ||
+      (event.type === 'dragend' ? tabAt(event.target) : null);
+    if (!source) return;
+    if (gesture?.dragging && gesture.tab === source) clearPress();
+    else if (!landing.has(source)) return;
+    if (event.type === 'drop' && !strip.contains(event.target)) {
+      clearLanding(source); // A page drop can intentionally activate a new split.
+      return;
+    }
+    settle(source);
+  }
   function install() {
     if (!wrapSelection(browser, 'selectedTab'))
       throw Error('Native selectedTab accessor unavailable');
@@ -166,21 +190,23 @@
     listen('mousemove', onMove);
     listen('dragstart', onStart);
     listen('mouseup', onUp);
-    listen('drop', onDrop);
-    listen('dragend', onDrop);
-    listen('deactivate', clear);
-    listen('keydown', event => { if (event.key === 'Escape') clear(); });
+    listen('click', onClick);
+    listen('drop', onFinish);
+    listen('dragend', onFinish);
+    listen('deactivate', clearPress);
+    listen('keydown', event => { if (event.key === 'Escape') clearPress(); });
     listen('unload', destroy);
   }
   function destroy() {
     alive = false;
-    clear();
+    clearPress();
+    for (const tab of landing.keys()) clearLanding(tab);
     for (const fn of listeners.splice(0).reverse()) { try { fn(); } catch (_) {} }
     for (const fn of undo.splice(0).reverse()) { try { fn(); } catch (_) {} }
     if (window[KEY] === api) delete window[KEY];
   }
   const api = {
-    version: '0.9.0', destroy,
+    version: '0.9.1', destroy,
     debug: () => ({enabled: enabled(), holding: !!gesture,
       dragging: !!gesture?.dragging, dragDepth})
   };
