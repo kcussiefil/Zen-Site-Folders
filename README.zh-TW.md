@@ -38,7 +38,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 | 項目 | 連結 |
 | --- | --- |
-| 目前版本 | **v0.9.3**，以 [`theme.json`](theme.json) 為準 |
+| 目前版本 | **v0.9.4**，以 [`theme.json`](theme.json) 為準 |
 | 版本整理 | [`CHANGELOG.md`](CHANGELOG.md) |
 | 完整各版說明 | [GitHub Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases)／[`releases/`](releases/) |
 | macOS 實機驗收 | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |
@@ -47,3 +47,5 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 **單純整理文件不需要升版，也不會自行觸發 Sine 更新。**
 
 選取分頁顏色、原生右鍵選項及調色視窗已交由 [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5 獨立管理。背景分頁拖曳預設內建，不再提供 Sine 開關；必要時可透過 `about:config` 設定 `zen.sitefolders.background_drag.enabled=false` 停用。
+
+**v0.9.4** 增加事件式背景拖曳修復：進入 Zen 設定或 Sine 重新載入後，若背景拖曳模組消失，於切換分頁、視窗取得焦點或按下分頁時重新載入；不使用輪詢，也不更動 v0.9.2 已驗證的拖曳處理。瀏覽器主控台可檢查 `window.__zsfBackgroundDragRecoveryV094?.debug()`。

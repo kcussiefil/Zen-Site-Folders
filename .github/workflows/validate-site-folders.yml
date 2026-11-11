@@ -33,7 +33,7 @@ jobs:
           node --check site-folders-split-guard.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.9.3' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || Object.hasOwn(m,'preferences') || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.9.4' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || Object.hasOwn(m,'preferences') || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Test independent hover layer
@@ -59,6 +59,7 @@ jobs:
           node tests/undo-secondary-click.test.cjs
           node tests/drag-feedback.test.cjs
           node tests/background-tab-drag.test.cjs
+          node tests/background-drag-runtime-recovery.test.cjs
           node tests/native-single-landing.test.cjs
           node tests/native-edge-scroll.test.cjs
           node tests/nested-drop.test.cjs
