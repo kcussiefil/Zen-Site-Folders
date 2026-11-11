@@ -276,13 +276,15 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                     return client.js("""
                       const f=window.__zsfHeld,tab=f.tabs[f.serial];
                       const rect=tab.getBoundingClientRect(),style=getComputedStyle(tab);
+                      const order=[...document.querySelectorAll('#tabbrowser-tabs tab')]
+                        .filter(t=>f.tabs.includes(t)).map(t=>f.tabs.indexOf(t));
                       return {
                         serial:f.serial,
                         selected:f.tabs.indexOf(gBrowser.selectedTab),
-                        order:f.tabs.map(t=>t._tPos),
+                        order,
                         zia:document.documentElement.hasAttribute('zia-dragging-tab'),
-                        native:f.tabs.map(t=>({pending:t.hasAttribute('pending'),
-                          selected:t.selected,loc:t._tPos})),
+                        native:f.tabs.map(t=>({pending:t.hasAttribute('pending')||t.hasAttribute('discarded'),
+                          selected:t.selected,loc:order.indexOf(f.tabs.indexOf(t))})),
                         transform:style.transform,translate:style.translate,
                         top:rect.top,
                         api:window.__zsfBackgroundDragV090?.debug?.(),
@@ -299,9 +301,11 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                           const source=f.tabs[f.serial];
                           const hit=source.querySelector('.tab-label')||source.querySelector('.tab-content')||source;
                           const r=hit.getBoundingClientRect(),s=source.getBoundingClientRect();
+                          const order=[...document.querySelectorAll('#tabbrowser-tabs tab')]
+                            .filter(t=>f.tabs.includes(t)).map(t=>f.tabs.indexOf(t));
                           return {x:Math.round(Math.min(s.right-12,Math.max(s.left+25,r.left+r.width/2))),
                             y:Math.round(s.top+s.height/2),rect:s.toJSON(),
-                            sourcePos:source._tPos,
+                            sourcePos:order.indexOf(f.serial),
                             pending:source.hasAttribute('pending')||source.hasAttribute('discarded'),
                             selected:f.tabs.indexOf(gBrowser.selectedTab)};
                         """,[serial])['value']
@@ -335,7 +339,7 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         failures.append('trial '+str(i+1)+' unexpectedly activates background tab')
                     if dragging and (cancelled or not held['zia']):
                         failures.append('trial '+str(i+1)+' native drag cancelled before release')
-                    if s['afterRelease']['order'][i+1] >= s['coords']['sourcePos']:
+                    if s['afterRelease']['order'].index(i+1) >= s['coords']['sourcePos']:
                         failures.append('trial '+str(i+1)+' did not retain upward native sorting')
                     if s['coords']['pending'] and not s['afterRelease']['native'][i+1]['pending']:
                         failures.append('trial '+str(i+1)+' woke a discarded source tab')
