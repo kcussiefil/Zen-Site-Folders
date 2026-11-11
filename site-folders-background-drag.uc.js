@@ -159,6 +159,7 @@
     } else if (!landing.has(source)) return;
     if (event.type === 'drop' && !strip.contains(event.target)) {
       clearLanding(source); // A page drop can intentionally activate a new split.
+      if (gesture?.tab === source) clearPress();
       return;
     }
     settle(source);
