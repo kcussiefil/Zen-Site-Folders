@@ -252,8 +252,12 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                     if snap.get('error'): raise RuntimeError(str(snap['error']))
                     # Headless macOS can deliver a different final coordinate
                     # from the requested WebDriver position during a drag.
+                    # Linux may deliver mousemove throughout the drag instead.
+                    event_types = ('dragover',)
+                    if report['browser']['platform'] == 'Linux':
+                        event_types += ('mousemove',)
                     delivered_y = next((e['y'] for e in reversed(snap['events'])
-                                        if e['type'] == 'dragover'), None)
+                                        if e['type'] in event_types), None)
                     snap['deliveredY'] = delivered_y
                     snap['error'] = (round(snap['headerTop'] + snap['grabOffset'] - delivered_y, 2)
                                      if delivered_y is not None else None)

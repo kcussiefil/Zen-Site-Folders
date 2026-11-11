@@ -53,11 +53,14 @@ const finish = arguments[arguments.length - 1];
     // Zia's native whole-folder drop is stateful, so validate it in the
     // dedicated, fresh-profile CI step rather than after 21 fixtures have
     // left native animations and workspace history in the same process.
+    // Test discarded tabs separately as well, since moving and restoring
+    // them changes the workspace observed by later cases.
     if (!selectedCase && ((name.startsWith('site v072 ') || name.startsWith('site v073 ') || name.startsWith('site v075 ')) ||
         name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
         name.startsWith('native member drag edge scroll') ||
         (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance')) ||
-        name.startsWith('incremental organize puts incoming tabs above existing members')))
+        name.startsWith('incremental organize puts incoming tabs above existing members') ||
+        name.startsWith('background tab sorting preserves inactive tab')))
       return;
     try {
       const h = await fixture(name);
