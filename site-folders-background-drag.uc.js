@@ -1,10 +1,14 @@
-// Zen Site Folders v0.9.0 — keep background tabs asleep while sorting.
+// Zen Site Folders v0.9.1 — keep background tabs asleep while sorting.
 // This layer does not replace native/Zia drop positioning or group animations.
 (() => {
   'use strict';
   const KEY = '__zsfBackgroundDragV090';
+  const TAB_DROP_TYPE = 'application/x-moz-tabbrowser-tab';
   const PREF = 'zen.sitefolders.background_drag.enabled';
-  if (window[KEY]) return;
+  // Sine can hot-reload a corrected version in the same Zen window.
+  // Never leave the v0.9.0 wrappers active and silently skip the fix.
+  if (window[KEY]?.version === '0.9.1') return;
+  window[KEY]?.destroy?.();
   let readinessAttempts = 0;
   function boot() {
   const browser = window.gBrowser;
@@ -15,7 +19,8 @@
     return;
   }
 
-  let alive = true, gesture = null, dragDepth = 0, timer = null;
+  let alive = true, gesture = null, dragDepth = 0, clickTimer = null;
+  const landing = new Map();
   const undo = [], listeners = [];
   const enabled = () => {
     try { return alive && Services.prefs.getBoolPref(PREF, true); }
@@ -26,7 +31,7 @@
     const tab = node?.closest?.('tab, tabbrowser-tab, .tabbrowser-tab');
     return isTab(tab) && strip.contains(tab) ? tab : null;
   }
-  const splitTab = tab => !!tab?.closest?.(
+  const splitTab = tab => !!tab?.splitview || !!tab?.closest?.(
     'tab-group[split-view-group], tab-group[zen-split-view], tab-group[is-zen-split]');
   function descriptor(obj, key) {
     for (let p = obj; p; p = Object.getPrototypeOf(p)) {
@@ -47,8 +52,8 @@
     });
   }
   function guarded(tab) {
-    return enabled() && !!gesture && tab === gesture.tab &&
-      browser.selectedTab === gesture.previous && (gesture.pressed || gesture.dragging);
+    return enabled() && !!tab && !splitTab(tab) &&
+      (landing.has(tab) || (tab === gesture?.tab && (gesture.pressed || gesture.dragging)));
   }
   function wrapSelection(obj, key) {
     const d = descriptor(obj, key);
@@ -73,36 +78,43 @@
     window.addEventListener(name, fn, true);
     listeners.push(() => window.removeEventListener(name, fn, true));
   }
-  function clearTimer() {
-    if (timer !== null) window.clearTimeout(timer);
-    timer = null;
+  function clearPress() {
+    if (clickTimer !== null) window.clearTimeout(clickTimer);
+    clickTimer = null;
+    gesture = null;
   }
-  function clear() { clearTimer(); gesture = null; }
-  function releaseAfter(ms) {
-    clearTimer();
-    const held = gesture;
-    timer = window.setTimeout(() => {
-      timer = null;
-      if (gesture === held) gesture = null;
-    }, ms);
+  function clearLanding(tab) {
+    if (!landing.has(tab)) return;
+    window.clearTimeout(landing.get(tab));
+    landing.delete(tab);
+  }
+  function settle(tab) {
+    clearLanding(tab);
+    // Zia can finish the previous placement after the next press has begun.
+    landing.set(tab, window.setTimeout(() => landing.delete(tab), 90));
   }
   function onDown(event) {
-    clear();
+    clearPress();
     if (!enabled() || event.button !== 0 || event.shiftKey || event.ctrlKey ||
         event.altKey || event.metaKey || !strip.contains(event.target) ||
         event.target?.closest?.(
           '.tab-close-button, .tab-icon-overlay, .tab-audio-button, ' +
           '.tab-reset-button, .tab-reset-pin-button, .tab-note-icon-overlay, ' +
           'button, toolbarbutton, input')) return;
-    const tab = tabAt(event.target);
+    // Composed events may start inside Zen's anonymous/shadow tab chrome.
+    const tab = tabAt(event.target) || (event.composedPath?.() || [])
+      .find(node => isTab(node) && strip.contains(node));
     if (!tab || tab === browser.selectedTab || splitTab(tab) ||
         tab.hasAttribute?.('zen-glance-tab')) return;
     gesture = {tab, previous: browser.selectedTab, pressed: true,
       dragging: false, x: event.clientX, y: event.clientY};
   }
   function onMove(event) {
-    if (!gesture || gesture.dragging) return;
-    if (!(event.buttons & 1)) { clear(); return; }
+    if (!gesture?.pressed || gesture.dragging) return;
+    // Gecko can report buttons=0 on a transition into native DnD even
+    // while the physical button is still held. Do not drop the guard here:
+    // only mouseup, Escape, or an owned finalization can end this press.
+    if (!(event.buttons & 1)) return;
     if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >= 5)
       gesture.dragging = true;
   }
@@ -112,20 +124,46 @@
         gesture.tab.contains?.(event.target)) gesture.dragging = true;
   }
   function onUp(event) {
-    if (event.button !== 0 || !gesture) return;
+    if (event.button !== 0 || !gesture?.pressed) return;
     const held = gesture;
     held.pressed = false;
-    if (!held.dragging) {
-      if (held.tab.isConnected && tabAt(event.target) === held.tab &&
-          browser.selectedTab === held.previous)
-        browser.selectedTab = held.tab; // Real click: retain ordinary activation.
-      releaseAfter(0);
+    if (held.dragging) {
+      settle(held.tab);
+      clearPress();
     } else {
-      // Protect asynchronous native/Zia landing. Never delay the actual drop.
-      releaseAfter(90);
+      // A release without an actual click can follow a cancelled native drag.
+      // Never wake the tab until a real click arrives.
+      clickTimer = window.setTimeout(clearPress, 90);
     }
   }
-  function onDrop() { if (gesture?.dragging) releaseAfter(90); }
+  function onClick(event) {
+    if (event.button !== 0 || !gesture || gesture.pressed || gesture.dragging) return;
+    const {tab, previous} = gesture;
+    clearPress();
+    if (enabled() && tab.isConnected && tabAt(event.target) === tab &&
+        browser.selectedTab === previous) {
+      clearLanding(tab);
+      browser.selectedTab = tab;
+    }
+  }
+  function onFinish(event) {
+    if (!gesture?.dragging && !landing.size) return;
+    const source = event.dataTransfer?.mozGetDataAt?.(TAB_DROP_TYPE, 0) ||
+      (event.type === 'dragend' ? tabAt(event.target) : null);
+    if (!source) return;
+    // dragend may signal native cancellation before the physical button is
+    // released. Keep the in-progress source guarded until mouseup, rather
+    // than permitting Zen to select/wake the tab while the pointer is held.
+    if (gesture?.dragging && gesture.tab === source) {
+      if (!gesture.pressed) clearPress();
+    } else if (!landing.has(source)) return;
+    if (event.type === 'drop' && !strip.contains(event.target)) {
+      clearLanding(source); // A page drop can intentionally activate a new split.
+      if (gesture?.tab === source) clearPress();
+      return;
+    }
+    settle(source);
+  }
   function install() {
     if (!wrapSelection(browser, 'selectedTab'))
       throw Error('Native selectedTab accessor unavailable');
@@ -154,6 +192,26 @@
         return normal;
       }
     });
+    // Zen normally captures a native drag image. Asking PageThumbs for an
+    // unloaded source can wake it during startTabDrag; omit only that capture.
+    let thumbs = window.PageThumbs || null;
+    if (!thumbs) {
+      try { thumbs = ChromeUtils.importESModule(
+        'resource://gre/modules/PageThumbs.sys.mjs').PageThumbs; }
+      catch (_) {}
+    }
+    if (thumbs && typeof thumbs.captureToCanvas === 'function') {
+      wrapMethod(thumbs, 'captureToCanvas', original => function (sourceBrowser, ...args) {
+        const tab = gesture?.tab;
+        const asleep = tab?.hasAttribute?.('pending') || tab?.hasAttribute?.('discarded') ||
+          (!tab?.linkedPanel && 'linkedPanel' in (tab || {}));
+        if (enabled() && dragDepth && asleep &&
+            (tab?.linkedBrowser === sourceBrowser ||
+              browser.getTabForBrowser?.(sourceBrowser) === tab))
+          return Promise.resolve();
+        return original.call(this, sourceBrowser, ...args);
+      });
+    }
     wrapMethod(dnd, 'startTabDrag', original => function (event, item, ...args) {
       if (!enabled() || !gesture || gesture.tab !== item)
         return original.call(this, event, item, ...args);
@@ -166,21 +224,29 @@
     listen('mousemove', onMove);
     listen('dragstart', onStart);
     listen('mouseup', onUp);
-    listen('drop', onDrop);
-    listen('dragend', onDrop);
-    listen('deactivate', clear);
-    listen('keydown', event => { if (event.key === 'Escape') clear(); });
+    listen('click', onClick);
+    listen('drop', onFinish);
+    listen('dragend', onFinish);
+    // A native drag may transiently deactivate chrome without a real mouseup.
+    // Keep the guard until the drag owns a matching drop/dragend or mouseup.
+    listen('deactivate', () => { if (!gesture?.dragging) clearPress(); });
+    // Explicit keyboard navigation is a new user action; do not let an
+    // aborted OS drag leave a stale guard on that tab indefinitely.
+    listen('keydown', event => {
+      if (event.key === 'Escape' || !gesture?.pressed) clearPress();
+    });
     listen('unload', destroy);
   }
   function destroy() {
     alive = false;
-    clear();
+    clearPress();
+    for (const tab of landing.keys()) clearLanding(tab);
     for (const fn of listeners.splice(0).reverse()) { try { fn(); } catch (_) {} }
     for (const fn of undo.splice(0).reverse()) { try { fn(); } catch (_) {} }
     if (window[KEY] === api) delete window[KEY];
   }
   const api = {
-    version: '0.9.0', destroy,
+    version: '0.9.1', destroy,
     debug: () => ({enabled: enabled(), holding: !!gesture,
       dragging: !!gesture?.dragging, dragDepth})
   };

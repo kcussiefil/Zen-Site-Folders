@@ -53,11 +53,14 @@ const finish = arguments[arguments.length - 1];
     // Zia's native whole-folder drop is stateful, so validate it in the
     // dedicated, fresh-profile CI step rather than after 21 fixtures have
     // left native animations and workspace history in the same process.
+    // Test discarded tabs separately as well, since moving and restoring
+    // them changes the workspace observed by later cases.
     if (!selectedCase && ((name.startsWith('site v072 ') || name.startsWith('site v073 ') || name.startsWith('site v075 ')) ||
         name.startsWith('Zia single-controller group drop lands at the displayed slot') ||
         name.startsWith('native member drag edge scroll') ||
         (window.__ziaLoaded === true && name.startsWith('whole group drag animates neighbour avoidance')) ||
-        name.startsWith('incremental organize puts incoming tabs above existing members')))
+        name.startsWith('incremental organize puts incoming tabs above existing members') ||
+        name.startsWith('background tab sorting preserves inactive tab')))
       return;
     try {
       const h = await fixture(name);
@@ -93,29 +96,80 @@ const finish = arguments[arguments.length - 1];
   // Real custom element click -> native setter -> native event -> native animations -> computed layout.
   await test('background tab sorting preserves inactive tab and ordinary click', async h => {
     const backgroundDrag = window.__zsfBackgroundDragV090;
-    assert(backgroundDrag && backgroundDrag.debug().enabled,
-      'background-drag module must be installed and enabled in native Zen');
-    const active = h.prefix, source = h.tabs[1];
-    const browserBefore = source.linkedBrowser;
-    assert(gBrowser.selectedTab === active && source !== active,
-      'fixture must begin on another active tab');
-    const send = (kind, y, buttons = 1) => source.dispatchEvent(new MouseEvent(kind, {
-      bubbles: true, composed: true, button: 0, buttons, clientX: 80, clientY: y
-    }));
-    send('mousedown', 130);
-    gBrowser.selectedTab = source;
-    assert(gBrowser.selectedTab === active,
-      'background mousedown must not activate or load the drag source');
-    send('mousemove', 155);
-    assert(backgroundDrag.debug().dragging, 'moving beyond threshold must enter drag mode');
-    send('mouseup', 155, 0);
-    assert(gBrowser.selectedTab === active && source.linkedBrowser === browserBefore,
-      'background drag must preserve selected tab and browser identity');
-    await delay(130);
-    send('mousedown', 130);
-    send('mouseup', 130, 0);
-    assert(gBrowser.selectedTab === source,
-      'an ordinary click on a background tab must still select it');
+    assert(backgroundDrag?.debug().enabled, 'background drag must be enabled');
+    const input = {window, document, navigator, console,
+      setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window)};
+    Services.scriptloader.loadSubScript('chrome://remote/content/external/EventUtils.js', input);
+
+    async function reorder(source, target) {
+      if (Services.appinfo.OS !== 'Linux') {
+        await input.synthesizePlainDragAndDrop({
+          srcElement: source, srcX: 80, srcY: 16, stepX: 0, stepY: 9,
+          destElement: target, finalX: 80, finalY: 28,
+        });
+        return;
+      }
+
+      // Headless Linux dispatches dragstart but does not start an OS drag
+      // session. Supply the DOM drag events and let Zen build the payload.
+      const transfer = new DataTransfer();
+      const from = source.getBoundingClientRect(), to = target.getBoundingClientRect();
+      const x = from.left + 80, start = from.top + 16, end = to.top + 28;
+      const send = (node, type, y) => node.dispatchEvent(new DragEvent(type, {
+        bubbles: true, composed: true, cancelable: true, dataTransfer: transfer,
+        clientX: x, clientY: y, screenX: window.mozInnerScreenX + x,
+        screenY: window.mozInnerScreenY + y,
+      }));
+      input.synthesizeMouse(source, 80, 16, {type: 'mousedown'}, window);
+      send(source, 'dragstart', start);
+      assert(transfer.mozItemCount === 1 &&
+        transfer.mozGetDataAt('application/x-moz-tabbrowser-tab', 0) === source,
+        'Zen must put only the dragged tab in the payload');
+      send(target, 'dragenter', end);
+      send(target, 'dragover', end);
+      await delay(0);
+      send(target, 'drop', end);
+      Object.defineProperty(transfer, 'dropEffect', {value: 'move'});
+      send(source, 'dragend', end);
+      input.synthesizeMouse(target, 80, 28, {type: 'mouseup'}, window);
+      await delay(0);
+    }
+
+    const selected = [], restored = [];
+    const onSelect = event => selected.push(event.target);
+    const onRestore = event => restored.push(event.target);
+    gBrowser.tabContainer.addEventListener('TabSelect', onSelect);
+    gBrowser.tabContainer.addEventListener('SSTabRestoring', onRestore);
+    try {
+      const [a, b, c, d] = h.tabs;
+      for (const tab of [a, b, c, d]) {
+        gBrowser.discardBrowser(tab);
+        assert(tab.hasAttribute('pending'), 'fixture must actually discard ' + tab.zsfTestName);
+      }
+      for (const [source, target] of [[a, c], [b, d], [c, b]]) {
+        const before = [...gBrowser.tabs].indexOf(source);
+        await reorder(source, target);
+        assert(source.isConnected && [...gBrowser.tabs].indexOf(source) !== before,
+          'drag must actually reorder ' + source.zsfTestName);
+        assert(gBrowser.selectedTab === h.prefix && source.hasAttribute('pending'),
+          'drag must preserve the active tab and keep ' + source.zsfTestName + ' unloaded');
+      }
+      assert(!selected.length && !restored.length,
+        'no dragged tab may be selected or even transiently restored');
+
+      // Wait for synthetic Linux drops to finish painting their final hit target.
+      if (Services.appinfo.OS === 'Linux') await delay(450);
+      input.synthesizeMouse(c, 80, 16, {type: 'mousedown'}, window);
+      assert(gBrowser.selectedTab === h.prefix && c.hasAttribute('pending'),
+        'pressing a tab must still leave it asleep');
+      input.synthesizeMouse(c, 80, 16, {type: 'mouseup'}, window);
+      assert(gBrowser.selectedTab === c && same(selected, [c]),
+        'an ordinary click must select exactly the clicked tab: ' +
+        JSON.stringify({active: gBrowser.selectedTab.zsfTestName, selected: names(selected)}));
+    } finally {
+      gBrowser.tabContainer.removeEventListener('TabSelect', onSelect);
+      gBrowser.tabContainer.removeEventListener('SSTabRestoring', onRestore);
+    }
   });
   await test('grouped tab real opening time persists independently of sorting', async h => {
     const openedKey = 'zsf-opened-at-real-v1';
