@@ -33,7 +33,7 @@ jobs:
           node --check site-folders-split-guard.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.9.1' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || m.preferences !== 'preferences.json' || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.9.2' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || m.preferences !== 'preferences.json' || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Test independent hover layer
@@ -91,6 +91,12 @@ jobs:
           ref: v2.121.4
           path: .runtime/zia-2.121.4
           persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: z1n-k/zia
+          ref: v2.122.4
+          path: .runtime/zia-2.122.4
+          persist-credentials: false
       - name: Install pinned Zen 1.24b
         shell: bash
         run: |
@@ -118,6 +124,8 @@ jobs:
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "background-held-native-pointer" --output native-results/held-background
       - name: Verify held native background drags with Zia 2.121.4
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.121.4 --case "background-held-native-pointer" --output native-results/held-background-zia-21214
+      - name: Verify held native background drags with Zia 2.122.4
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.122.4 --case "background-held-native-pointer" --output native-results/held-background-zia-21224
       - name: Verify isolated Zia group landing first
         run: |
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot up tab" --output native-results/zia-landing-up-tab
