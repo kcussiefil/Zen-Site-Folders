@@ -5,7 +5,10 @@
   const KEY = '__zsfBackgroundDragV090';
   const TAB_DROP_TYPE = 'application/x-moz-tabbrowser-tab';
   const PREF = 'zen.sitefolders.background_drag.enabled';
-  if (window[KEY]) return;
+  // Sine can hot-reload a corrected version in the same Zen window.
+  // Never leave the v0.9.0 wrappers active and silently skip the fix.
+  if (window[KEY]?.version === '0.9.1') return;
+  window[KEY]?.destroy?.();
   let readinessAttempts = 0;
   function boot() {
   const browser = window.gBrowser;
@@ -188,6 +191,26 @@
         return normal;
       }
     });
+    // Zen normally captures a native drag image. Asking PageThumbs for an
+    // unloaded source can wake it during startTabDrag; omit only that capture.
+    let thumbs = window.PageThumbs || null;
+    if (!thumbs) {
+      try { thumbs = ChromeUtils.importESModule(
+        'resource://gre/modules/PageThumbs.sys.mjs').PageThumbs; }
+      catch (_) {}
+    }
+    if (thumbs && typeof thumbs.captureToCanvas === 'function') {
+      wrapMethod(thumbs, 'captureToCanvas', original => function (sourceBrowser, ...args) {
+        const tab = gesture?.tab;
+        const asleep = tab?.hasAttribute?.('pending') || tab?.hasAttribute?.('discarded') ||
+          (!tab?.linkedPanel && 'linkedPanel' in (tab || {}));
+        if (enabled() && dragDepth && asleep &&
+            (tab?.linkedBrowser === sourceBrowser ||
+              browser.getTabForBrowser?.(sourceBrowser) === tab))
+          return Promise.resolve();
+        return original.call(this, sourceBrowser, ...args);
+      });
+    }
     wrapMethod(dnd, 'startTabDrag', original => function (event, item, ...args) {
       if (!enabled() || !gesture || gesture.tab !== item)
         return original.call(this, event, item, ...args);
@@ -206,7 +229,11 @@
     // A native drag may transiently deactivate chrome without a real mouseup.
     // Keep the guard until the drag owns a matching drop/dragend or mouseup.
     listen('deactivate', () => { if (!gesture?.dragging) clearPress(); });
-    listen('keydown', event => { if (event.key === 'Escape') clearPress(); });
+    // Explicit keyboard navigation is a new user action; do not let an
+    // aborted OS drag leave a stale guard on that tab indefinitely.
+    listen('keydown', event => {
+      if (event.key === 'Escape' || !gesture?.pressed) clearPress();
+    });
     listen('unload', destroy);
   }
   function destroy() {

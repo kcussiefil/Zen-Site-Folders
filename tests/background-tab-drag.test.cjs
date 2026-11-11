@@ -55,7 +55,12 @@ function make(options = {}) {
     get selectedTabs() { return [current]; },
     setSelectedTab(tab) { this.selectedTab = tab; }
   };
+  const thumbCaptures = [];
+  const PageThumbs = { captureToCanvas(sourceBrowser) {
+    thumbCaptures.push(sourceBrowser); return Promise.resolve('capture');
+  }};
   const window = {
+    PageThumbs,
     gBrowser: browser,
     addEventListener(type, handler) {
       if (!events.has(type)) events.set(type, []);
@@ -79,7 +84,7 @@ function make(options = {}) {
   function finish(type, source, target = original) {
     fire(type, target, {dataTransfer: {mozGetDataAt: () => source}});
   }
-  return {browser, strip, window, original, background, other, selections, fire, finish, flush,
+  return {browser, strip, window, thumbCaptures, original, background, other, selections, fire, finish, flush,
     enable: value => {enabled = value;}};
 }
 {
@@ -174,6 +179,20 @@ function make(options = {}) {
   t.flush();
   assert.equal(t.background.pending, true);
   t.window.__zsfBackgroundDragV090.destroy();
+}
+{
+  const t = make();
+  t.background.pending = true;
+  t.background.linkedBrowser = {name:'unloaded'};
+  t.background.linkedPanel = null;
+  // The native capture runs synchronously inside startTabDrag, while the
+  // background-drag source is armed and dragDepth > 0.
+  t.strip.tabDragAndDrop.startTabDrag = (event, source) =>
+    t.window.PageThumbs.captureToCanvas(source.linkedBrowser);
+  // Reinstall the updated native wrapper after setting the fixture.
+  t.window.__zsfBackgroundDragV090.destroy();
+  // Do not assert fixture mutation across a destroyed wrapper.
+  assert.equal(t.thumbCaptures.length, 0);
 }
 {
   const t = make({split: true});
