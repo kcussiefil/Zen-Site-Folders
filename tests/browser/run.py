@@ -65,7 +65,8 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                 report['zia'] = {name: hashlib.sha256((zia / name).read_bytes()).hexdigest()
                                  for name in ['zia.uc.js', 'chrome.css']}
             scripts += [args.repo / name for name in ['site-folders.uc.js', 'site-folders-hover.uc.js',
-                         'site-folders-menu.uc.js', 'site-folders-collapse.uc.js', 'site-folders-drag.uc.js', 'site-folders-split-guard.uc.js']]
+                         'site-folders-menu.uc.js', 'site-folders-collapse.uc.js', 'site-folders-background-drag.uc.js',
+                         'site-folders-drag.uc.js', 'site-folders-split-guard.uc.js']]
             styles.append(args.repo / 'userChrome.css')
             for style in styles:
                 client.js('''const s=Services;

@@ -120,6 +120,8 @@ jobs:
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "separator-hover" --output native-results/separator-hover
       - name: Verify nested Zen split has nonoverlapping expanded layout
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "nested split expanded folder" --output native-results/nested-split-layout
+      - name: Verify background tabs can be dragged without activation
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "background tab sorting preserves inactive tab" --output native-results/background-tab-drag
       - name: Verify real opening time survives native group collapse
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "grouped tab real opening time" --output native-results/grouped-open-age
       - name: Verify incremental site grouping preserves newest-first and manual order

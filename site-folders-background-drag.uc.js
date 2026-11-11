@@ -5,10 +5,15 @@
   const KEY = '__zsfBackgroundDragV090';
   const PREF = 'zen.sitefolders.background_drag.enabled';
   if (window[KEY]) return;
+  let readinessAttempts = 0;
+  function boot() {
   const browser = window.gBrowser;
   const strip = browser?.tabContainer;
   const dnd = strip?.tabDragAndDrop;
-  if (!browser || !strip || typeof dnd?.startTabDrag !== 'function') return;
+  if (!browser || !strip || typeof dnd?.startTabDrag !== 'function') {
+    if (++readinessAttempts <= 20) window.setTimeout(boot, 100);
+    return;
+  }
 
   let alive = true, gesture = null, dragDepth = 0, timer = null;
   const undo = [], listeners = [];
@@ -185,4 +190,8 @@
     console.warn('[ZenSiteFoldersBackgroundDrag] Native hooks unavailable:', error);
     destroy(); // Fail closed; leave Zen's original selection behavior intact.
   }
+  }
+  // Sine may evaluate chrome scripts before Zen has initialized native DnD.
+  if (typeof document === 'undefined' || document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot, {once: true});
 })();
