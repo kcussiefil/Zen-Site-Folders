@@ -19,7 +19,9 @@ function make(options = {}) {
   const selections = [];
   const tab = (name, extra = {}) => ({
     localName: 'tab', name, isConnected: true, multiselected: false,
-    hasAttribute: () => false, contains(node) { return node === this; },
+    hasAttribute(name) { return name === 'pending' && !!this.pending ||
+      name === 'discarded' && !!this.discarded; },
+    contains(node) { return node === this; },
     closest(selector) {
       if (selector.startsWith('tab, ')) return this;
       if (selector.startsWith('tab-group[') && extra.split) return {};
@@ -28,6 +30,9 @@ function make(options = {}) {
   });
   const original = tab('original'), background = tab('background', options);
   const other = tab('other');
+  for (const t of [original, background, other]) {
+    t.linkedBrowser = {owner:t.name}; t.linkedPanel = 'tab-panel';
+  }
   const tabs = [original, background, other];
   current = original;
   selectedItem = original;
@@ -35,8 +40,9 @@ function make(options = {}) {
     contains: node => tabs.includes(node),
     tabDragAndDrop: { startTabDrag(event, source) {
       strip.selectedItem = source;
+      const thumbnail = window.PageThumbs.captureToCanvas(source.linkedBrowser);
       return { selected: browser.selectedTab, elements: browser.selectedElements,
-        selectedTabs: browser.selectedTabs };
+        selectedTabs: browser.selectedTabs, thumbnail };
     }}
   };
   Object.defineProperty(strip, 'selectedItem', {
@@ -53,6 +59,9 @@ function make(options = {}) {
     },
     get selectedElements() { return [current]; },
     get selectedTabs() { return [current]; },
+    getTabForBrowser(sourceBrowser) {
+      return tabs.find(tab => tab.linkedBrowser === sourceBrowser);
+    },
     setSelectedTab(tab) { this.selectedTab = tab; }
   };
   const thumbCaptures = [];
@@ -106,6 +115,7 @@ function make(options = {}) {
   t.strip.selectedItem = t.background;
   assert.equal(t.browser.selectedTab, t.original);
   const payload = t.strip.tabDragAndDrop.startTabDrag({}, t.background);
+  assert.equal(t.thumbCaptures.length, 0, 'do not capture a pending tab during native drag');
   assert.equal(payload.selected, t.original);
   assert.equal(payload.elements[0], t.background, 'native drag must carry source tab');
   t.fire('mousemove', t.background, {clientY: 20});
@@ -182,17 +192,10 @@ function make(options = {}) {
 }
 {
   const t = make();
-  t.background.pending = true;
-  t.background.linkedBrowser = {name:'unloaded'};
-  t.background.linkedPanel = null;
-  // The native capture runs synchronously inside startTabDrag, while the
-  // background-drag source is armed and dragDepth > 0.
-  t.strip.tabDragAndDrop.startTabDrag = (event, source) =>
-    t.window.PageThumbs.captureToCanvas(source.linkedBrowser);
-  // Reinstall the updated native wrapper after setting the fixture.
+  t.fire('mousedown');
+  t.strip.tabDragAndDrop.startTabDrag({}, t.background);
+  assert.equal(t.thumbCaptures.length, 1, 'loaded backgrounds retain native drag preview');
   t.window.__zsfBackgroundDragV090.destroy();
-  // Do not assert fixture mutation across a destroyed wrapper.
-  assert.equal(t.thumbCaptures.length, 0);
 }
 {
   const t = make({split: true});
