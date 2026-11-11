@@ -108,6 +108,8 @@ jobs:
             trap - EXIT
             echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/Zen.app/Contents/MacOS/zen" >> "$GITHUB_ENV"
           fi
+      - name: Verify three consecutive held native background drags
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "background-held-native-pointer" --output native-results/held-background
       - name: Verify isolated Zia group landing first
         run: |
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "displayed slot up tab" --output native-results/zia-landing-up-tab

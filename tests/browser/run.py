@@ -236,6 +236,102 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                                     'reason':None if good else 'See separatorHover geometry and native click'}]
                 try: client.call('WebDriver:ReleaseActions',{})
                 except Exception: pass
+            elif args.case == 'background-held-native-pointer':
+                fixture = client.js("""
+                  const principal=Services.scriptSecurityManager.getSystemPrincipal();
+                  const make=(s)=>gBrowser.addTab('about:blank#zsf-held-'+s,{triggeringPrincipal:principal});
+                  const tabs=['active','a','b','c','d'].map(make);
+                  gBrowser.selectedTab=tabs[0];
+                  document.documentElement.setAttribute('zen-sidebar-expanded','true');
+                  window.__zsfHeld={tabs,events:[],serial:0};
+                  const kinds=['mousedown','mousemove','mouseup','click','dragstart','dragover','dragend','drop','deactivate'];
+                  for(const type of kinds) window.addEventListener(type,e=>{
+                    const f=window.__zsfHeld;
+                    if(!f || f.events.length>250)return;
+                    const node=e.target?.closest?.('tab');
+                    f.events.push({event:type,buttons:e.buttons,source:node&&f.tabs.indexOf(node),
+                      selected:f.tabs.indexOf(gBrowser.selectedTab),
+                      zia:document.documentElement.hasAttribute('zia-dragging-tab'),
+                      held:window.__zsfBackgroundDragV090?.debug?.()});
+                  },true);
+                  gBrowser.tabContainer.addEventListener('TabSelect',()=>{
+                    const f=window.__zsfHeld;
+                    f?.events.push({event:'TabSelect',selected:f.tabs.indexOf(gBrowser.selectedTab)});
+                  });
+                  return {api:!!window.__zsfBackgroundDragV090,selected:gBrowser.selectedTab===tabs[0]};
+                """)['value']
+                if not fixture['api'] or not fixture['selected']:
+                    raise RuntimeError('background drag module/fixture not ready: '+str(fixture))
+                def action(parts):
+                    return client.call('WebDriver:PerformActions',{
+                        'actions':[{'type':'pointer','id':'zsf-held-mouse',
+                            'parameters':{'pointerType':'mouse'},'actions':parts}]
+                    })
+                def snapshot():
+                    return client.js("""
+                      const f=window.__zsfHeld,tab=f.tabs[f.serial];
+                      const rect=tab.getBoundingClientRect(),style=getComputedStyle(tab);
+                      return {
+                        serial:f.serial,
+                        selected:f.tabs.indexOf(gBrowser.selectedTab),
+                        order:f.tabs.map(t=>t._tPos),
+                        zia:document.documentElement.hasAttribute('zia-dragging-tab'),
+                        native:f.tabs.map(t=>({pending:t.hasAttribute('pending'),
+                          selected:t.selected,loc:t._tPos})),
+                        transform:style.transform,translate:style.translate,
+                        top:rect.top,
+                        api:window.__zsfBackgroundDragV090?.debug?.(),
+                        events:f.events.slice(-100)
+                      };
+                    """)['value']
+                samples=[]
+                try:
+                    for serial in [1,2,3]:
+                        coords=client.js("""
+                          const f=window.__zsfHeld;
+                          f.serial=arguments[0];
+                          f.events.length=0;
+                          const source=f.tabs[f.serial];
+                          const hit=source.querySelector('.tab-label')||source.querySelector('.tab-content')||source;
+                          const r=hit.getBoundingClientRect(),s=source.getBoundingClientRect();
+                          return {x:Math.round(Math.min(s.right-12,Math.max(s.left+25,r.left+r.width/2))),
+                            y:Math.round(s.top+s.height/2),rect:s.toJSON(),
+                            selected:f.tabs.indexOf(gBrowser.selectedTab)};
+                        """,[serial])['value']
+                        x,y=coords['x'],coords['y']
+                        # Keep the pointer physically down through several moves and probes.
+                        action([{'type':'pointerMove','origin':'viewport','x':x,'y':y,'duration':50}])
+                        action([{'type':'pointerDown','button':0}])
+                        for diff in [12,31,51]:
+                            action([{'type':'pointerMove','origin':'viewport','x':x,
+                                'y':max(60,y-diff),'duration':230}])
+                            time.sleep(.07)
+                        while_down=snapshot()
+                        time.sleep(.32)
+                        still_down=snapshot()
+                        action([{'type':'pointerUp','button':0}])
+                        time.sleep(.25)
+                        after=snapshot()
+                        samples.append({'coords':coords,'whileDown':while_down,
+                            'stillDown':still_down,'afterRelease':after})
+                finally:
+                    try:client.call('WebDriver:ReleaseActions',{})
+                    except Exception:pass
+                report['heldSamples']=samples
+                failures=[]
+                for i,s in enumerate(samples):
+                    w=s['whileDown'];held=s['stillDown']
+                    dragging=any(e['event']=='dragstart' for e in w['events'])
+                    cancelled=any(e['event'] in ('mouseup','dragend','drop') for e in held['events'])
+                    if not dragging:failures.append('trial '+str(i+1)+' no native dragstart')
+                    if w['selected']!=0 or held['selected']!=0:
+                        failures.append('trial '+str(i+1)+' unexpectedly activates background tab')
+                    if dragging and (cancelled or not held['zia']):
+                        failures.append('trial '+str(i+1)+' native drag cancelled before release')
+                report['results']=[{'name':'three consecutive physical held background drags',
+                    'status':'PASS' if not failures else 'FAIL',
+                    'reason':'; '.join(failures) if failures else None}]
+                report['eventMode']='real WebDriver pointerDown -> sustained pointerMove -> probes -> pointerUp'
             elif args.case == 'real-bottom-pointer':
                 setup = client.async_js(pathlib.Path(__file__).with_name('real-bottom-setup.js').read_text(), [])['value']
                 if setup.get('error'): raise RuntimeError('Pointer fixture: '+setup['error'])
