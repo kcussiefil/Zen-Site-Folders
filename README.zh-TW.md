@@ -15,6 +15,8 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 - **獨立分頁排序：** 明確按下整理時才調整符合條件的獨立網頁分頁；無可靠開啟時間的舊分頁採保守排序。
 - **剩餘單頁自動解散：** 關閉群組成員後只剩一頁時，可自動解散此 MOD 所建立的群組；手動拖出分頁不觸發此行為。
 
+- **背景分頁拖曳：** 未選取或已卸載的分頁可直接拖曳排序，不先切換或喚醒；一般點擊仍會切換。可在 Sine 偏好設定單獨關閉（預設開啟）；Split View 沿用 Zen 原生行為。
+
 ## 安裝
 
 1. 安裝 Zen Browser、[Sine](https://github.com/CosmoCreeper/Sine) 與 [Zia](https://github.com/z1n-k/zia)，目前預覽樣式以 **Zia 2.118** 為相容基準。
@@ -36,7 +38,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 | 項目 | 連結 |
 | --- | --- |
-| 目前版本 | **v0.8.9**，以 [`theme.json`](theme.json) 為準 |
+| 目前版本 | **v0.9.0**，以 [`theme.json`](theme.json) 為準 |
 | 版本整理 | [`CHANGELOG.md`](CHANGELOG.md) |
 | 完整各版說明 | [GitHub Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases)／[`releases/`](releases/) |
 | macOS 實機驗收 | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |

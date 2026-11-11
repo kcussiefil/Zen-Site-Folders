@@ -15,6 +15,8 @@ Zen Site Folders is a [Sine](https://github.com/CosmoCreeper/Sine) mod for Zen B
 - **Sensible standalone tabs:** remaining independent web tabs are ordered on an explicit Organize action, with a fallback for unknown opening times.
 - **Automatic single-member cleanup:** closing a tab may dissolve a Site Folders-owned group when exactly one member remains; manually dragging a tab out does not trigger this behavior.
 
+- **Background-tab dragging:** move unselected or discarded tabs without selecting them first; normal clicks still activate them. Toggle in Sine preferences (enabled by default). Split-view tabs keep Zen's native behavior.
+
 ## Requirements and installation
 
 1. Install Zen Browser, [Sine](https://github.com/CosmoCreeper/Sine) and [Zia](https://github.com/z1n-k/zia). The current preview integration targets **Zia 2.118**.
@@ -37,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v0.8.9** (see `theme.json`) |
+| Current mod version | **v0.9.0** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |

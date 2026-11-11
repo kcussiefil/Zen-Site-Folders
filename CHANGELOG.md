@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.9.0](releases/v0.9.0.md) | Drag background or unloaded tabs without activating them; preserve click, native/Zia ordering and split-view behavior. |
 | [v0.8.9](releases/v0.8.9.md) | Add 3px gap between site group titles and member tabs with unchanged net height and animations. |
 | [v0.8.8](releases/v0.8.8.md) | Match group-title hover to Zia's live tab hover color, including collapsed folders. |
 | [v0.8.7](releases/v0.8.7.md) | Restore natural SVG proportions; optical sizing Undo 14px, Group 15px, Clear 14px with softer Clear ink. |

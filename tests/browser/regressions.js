@@ -91,6 +91,32 @@ const finish = arguments[arguments.length - 1];
     return { workspaceId, value };
   }
   // Real custom element click -> native setter -> native event -> native animations -> computed layout.
+  await test('background tab sorting preserves inactive tab and ordinary click', async h => {
+    const backgroundDrag = window.__zsfBackgroundDragV090;
+    assert(backgroundDrag && backgroundDrag.debug().enabled,
+      'background-drag module must be installed and enabled in native Zen');
+    const active = h.prefix, source = h.tabs[1];
+    const browserBefore = source.linkedBrowser;
+    assert(gBrowser.selectedTab === active && source !== active,
+      'fixture must begin on another active tab');
+    const send = (kind, y, buttons = 1) => source.dispatchEvent(new MouseEvent(kind, {
+      bubbles: true, composed: true, button: 0, buttons, clientX: 80, clientY: y
+    }));
+    send('mousedown', 130);
+    gBrowser.selectedTab = source;
+    assert(gBrowser.selectedTab === active,
+      'background mousedown must not activate or load the drag source');
+    send('mousemove', 155);
+    assert(backgroundDrag.debug().dragging, 'moving beyond threshold must enter drag mode');
+    send('mouseup', 155, 0);
+    assert(gBrowser.selectedTab === active && source.linkedBrowser === browserBefore,
+      'background drag must preserve selected tab and browser identity');
+    await delay(130);
+    send('mousedown', 130);
+    send('mouseup', 130, 0);
+    assert(gBrowser.selectedTab === source,
+      'an ordinary click on a background tab must still select it');
+  });
   await test('grouped tab real opening time persists independently of sorting', async h => {
     const openedKey = 'zsf-opened-at-real-v1';
     const saved = h.tabs.map(tab => Number(SessionStore.getCustomTabValue(tab, openedKey)));

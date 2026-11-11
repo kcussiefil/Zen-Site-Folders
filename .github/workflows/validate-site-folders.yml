@@ -28,11 +28,12 @@ jobs:
           node --check site-folders-menu.uc.js
           node --check site-folders-collapse.uc.js
           node --check site-folders-drag.uc.js
+          node --check site-folders-background-drag.uc.js
           node --check site-folders-top-drop.uc.js
           node --check site-folders-split-guard.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.8.9' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.9.0' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || m.preferences !== 'preferences.json' || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Test independent hover layer
@@ -58,6 +59,7 @@ jobs:
           node tests/color-editor.test.cjs
           node tests/undo-secondary-click.test.cjs
           node tests/drag-feedback.test.cjs
+          node tests/background-tab-drag.test.cjs
           node tests/native-single-landing.test.cjs
           node tests/native-edge-scroll.test.cjs
           node tests/nested-drop.test.cjs
@@ -118,6 +120,8 @@ jobs:
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "separator-hover" --output native-results/separator-hover
       - name: Verify nested Zen split has nonoverlapping expanded layout
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "nested split expanded folder" --output native-results/nested-split-layout
+      - name: Verify background tabs can be dragged without activation
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "background tab sorting preserves inactive tab" --output native-results/background-tab-drag
       - name: Verify real opening time survives native group collapse
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "grouped tab real opening time" --output native-results/grouped-open-age
       - name: Verify incremental site grouping preserves newest-first and manual order
