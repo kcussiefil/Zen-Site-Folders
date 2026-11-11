@@ -94,6 +94,11 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                       triggeringPrincipal:Services.scriptSecurityManager.getSystemPrincipal()
                     }));
                   gBrowser.selectedTab=tabs[0];
+                  // Explicitly unload two real background tabs. A successful
+                  // drag must not select them or cause pending restoration.
+                  for (const index of [1,3]) {
+                    try { gBrowser.discardBrowser?.(tabs[index]); } catch (_) {}
+                  }
                   document.documentElement.setAttribute('zen-sidebar-expanded','true');
                   Services.prefs.setBoolPref('zen.view.show-clear-tabs-button',true);
                   const sep=ws.querySelector('.pinned-tabs-container-separator');
@@ -243,11 +248,13 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                   const tabs=['active','a','b','c','d'].map(make);
                   gBrowser.selectedTab=tabs[0];
                   document.documentElement.setAttribute('zen-sidebar-expanded','true');
-                  window.__zsfHeld={tabs,events:[],serial:0};
+                  window.__zsfHeld={tabs,events:[],counts:{},serial:0};
                   const kinds=['mousedown','mousemove','mouseup','click','dragstart','dragover','dragend','drop','deactivate'];
                   for(const type of kinds) window.addEventListener(type,e=>{
                     const f=window.__zsfHeld;
-                    if(!f || f.events.length>250)return;
+                    if(!f)return;
+                    f.counts[type]=(f.counts[type]||0)+1;
+                    if(f.events.length>250)return;
                     const node=e.target?.closest?.('tab');
                     f.events.push({event:type,buttons:e.buttons,source:node&&f.tabs.indexOf(node),
                       selected:f.tabs.indexOf(gBrowser.selectedTab),
@@ -271,16 +278,19 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                     return client.js("""
                       const f=window.__zsfHeld,tab=f.tabs[f.serial];
                       const rect=tab.getBoundingClientRect(),style=getComputedStyle(tab);
+                      const order=[...document.querySelectorAll('#tabbrowser-tabs tab')]
+                        .filter(t=>f.tabs.includes(t)).map(t=>f.tabs.indexOf(t));
                       return {
                         serial:f.serial,
                         selected:f.tabs.indexOf(gBrowser.selectedTab),
-                        order:f.tabs.map(t=>t._tPos),
+                        order,
                         zia:document.documentElement.hasAttribute('zia-dragging-tab'),
-                        native:f.tabs.map(t=>({pending:t.hasAttribute('pending'),
-                          selected:t.selected,loc:t._tPos})),
+                        native:f.tabs.map(t=>({pending:t.hasAttribute('pending')||t.hasAttribute('discarded'),
+                          selected:t.selected,loc:order.indexOf(f.tabs.indexOf(t))})),
                         transform:style.transform,translate:style.translate,
                         top:rect.top,
                         api:window.__zsfBackgroundDragV090?.debug?.(),
+                        counts:{...f.counts},
                         events:f.events.slice(-100)
                       };
                     """)['value']
@@ -291,11 +301,16 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                           const f=window.__zsfHeld;
                           f.serial=arguments[0];
                           f.events.length=0;
+                          f.counts={};
                           const source=f.tabs[f.serial];
                           const hit=source.querySelector('.tab-label')||source.querySelector('.tab-content')||source;
                           const r=hit.getBoundingClientRect(),s=source.getBoundingClientRect();
+                          const order=[...document.querySelectorAll('#tabbrowser-tabs tab')]
+                            .filter(t=>f.tabs.includes(t)).map(t=>f.tabs.indexOf(t));
                           return {x:Math.round(Math.min(s.right-12,Math.max(s.left+25,r.left+r.width/2))),
                             y:Math.round(s.top+s.height/2),rect:s.toJSON(),
+                            sourcePos:order.indexOf(f.serial),
+                            pending:source.hasAttribute('pending')||source.hasAttribute('discarded'),
                             selected:f.tabs.indexOf(gBrowser.selectedTab)};
                         """,[serial])['value']
                         x,y=coords['x'],coords['y']
@@ -328,6 +343,13 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         failures.append('trial '+str(i+1)+' unexpectedly activates background tab')
                     if dragging and (cancelled or not held['zia']):
                         failures.append('trial '+str(i+1)+' native drag cancelled before release')
+                    counts=s['afterRelease'].get('counts',{})
+                    if not counts.get('drop',0):
+                        failures.append('trial '+str(i+1)+' headless native driver sent no drop; ordering inconclusive')
+                    elif s['afterRelease']['order'].index(i+1) >= s['coords']['sourcePos']:
+                        failures.append('trial '+str(i+1)+' native drop fired but sorting did not persist')
+                    if s['coords']['pending'] and not s['afterRelease']['native'][i+1]['pending']:
+                        failures.append('trial '+str(i+1)+' woke a discarded source tab')
                 report['results']=[{'name':'three consecutive physical held background drags',
                     'status':'PASS' if not failures else 'FAIL',
                     'reason':'; '.join(failures) if failures else None}]

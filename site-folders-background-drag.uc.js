@@ -1,4 +1,4 @@
-// Zen Site Folders v0.9.1 — keep background tabs asleep while sorting.
+// Zen Site Folders v0.9.2 — keep background tabs asleep while sorting.
 // This layer does not replace native/Zia drop positioning or group animations.
 (() => {
   'use strict';
@@ -7,7 +7,7 @@
   const PREF = 'zen.sitefolders.background_drag.enabled';
   // Sine can hot-reload a corrected version in the same Zen window.
   // Never leave the v0.9.0 wrappers active and silently skip the fix.
-  if (window[KEY]?.version === '0.9.1') return;
+  if (window[KEY]?.version === '0.9.2') return;
   window[KEY]?.destroy?.();
   let readinessAttempts = 0;
   function boot() {
@@ -22,6 +22,14 @@
   let alive = true, gesture = null, dragDepth = 0, clickTimer = null;
   const landing = new Map();
   const undo = [], listeners = [];
+  let browserGuard = null, stripGuard = null, dragGuard = null;
+  const trace = [];
+  function record(kind, detail = '') {
+    try { if (!Services.prefs.getBoolPref('zen.sitefolders.background_drag.debug', false)) return; }
+    catch (_) { return; }
+    trace.push({kind, detail, time: Date.now()});
+    if (trace.length > 80) trace.shift();
+  }
   const enabled = () => {
     try { return alive && Services.prefs.getBoolPref(PREF, true); }
     catch (_) { return alive; }
@@ -30,6 +38,24 @@
   function tabAt(node) {
     const tab = node?.closest?.('tab, tabbrowser-tab, .tabbrowser-tab');
     return isTab(tab) && strip.contains(tab) ? tab : null;
+  }
+  // XUL/Sine/Zia overlays can retarget a trusted mouse event to an ancestor
+  // outside the tab strip. The *composed path*, not event.target, owns the tab.
+  function sourceOf(event) {
+    const direct = tabAt(event?.target);
+    if (direct) return direct;
+    const path = event?.composedPath?.() || [];
+    return path.find(node => {
+      try { return isTab(node) && strip.contains(node); }
+      catch (_) { return false; }
+    }) || null;
+  }
+  const CONTROLS = '.tab-close-button, .tab-icon-overlay, .tab-audio-button, ' +
+    '.tab-reset-button, .tab-reset-pin-button, .tab-note-icon-overlay, ' +
+    'button, toolbarbutton, input';
+  function onControl(event) {
+    return (event.composedPath?.() || [event.target]).some(node =>
+      node?.matches?.(CONTROLS));
   }
   const splitTab = tab => !!tab?.splitview || !!tab?.closest?.(
     'tab-group[split-view-group], tab-group[zen-split-view], tab-group[is-zen-split]');
@@ -58,21 +84,26 @@
   function wrapSelection(obj, key) {
     const d = descriptor(obj, key);
     if (!d?.get || !d?.set) return false;
-    replace(obj, key, {
+    const next = {
       configurable: true, enumerable: d.enumerable,
       get() { return d.get.call(this); },
-      set(tab) { if (!guarded(tab)) return d.set.call(this, tab); }
-    });
-    return true;
+      set(tab) {
+        if (guarded(tab)) { record('blocked-selection', key); return; }
+        return d.set.call(this, tab);
+      }
+    };
+    replace(obj, key, next);
+    return next;
   }
   function wrapMethod(obj, key, callback) {
     const d = descriptor(obj, key), original = obj[key];
     if (!d || typeof original !== 'function') return false;
-    replace(obj, key, {
+    const next = {
       configurable: true, enumerable: d.enumerable, writable: true,
       value: callback(original)
-    });
-    return true;
+    };
+    replace(obj, key, next);
+    return next;
   }
   function listen(name, fn) {
     window.addEventListener(name, fn, true);
@@ -93,21 +124,78 @@
     // Zia can finish the previous placement after the next press has begun.
     landing.set(tab, window.setTimeout(() => landing.delete(tab), 90));
   }
+  // If Zen or another Sine module replaces an accessor after our first
+  // drag, refresh ownership on the next real press. Never alter drag ordering.
+  function sameHook(obj, key, expected) {
+    if (!expected) return false;
+    const live = Object.getOwnPropertyDescriptor(obj, key);
+    return live?.get === expected.get && live?.set === expected.set &&
+      live?.value === expected.value;
+  }
+  function nativeDragWrapper(original) {
+    return function (event, item, ...args) {
+      if (!enabled() || !isTab(item) || splitTab(item) ||
+          item.hasAttribute?.('zen-glance-tab'))
+        return original.call(this, event, item, ...args);
+      // A valid native drag has an authoritative source even if the
+      // preceding mousedown was retargeted or another listener consumed it.
+      if (gesture?.tab !== item) {
+        const previous = browser.selectedTab;
+        if (previous !== item) {
+          gesture = {tab: item, previous, pressed: false, dragging: true,
+            x: event?.clientX ?? 0, y: event?.clientY ?? 0};
+          record('recovered-native-drag');
+        } else {
+          record('native-source-already-selected');
+        }
+      }
+      if (gesture?.tab !== item) return original.call(this, event, item, ...args);
+      gesture.dragging = true;
+      dragDepth++;
+      try { return original.call(this, event, item, ...args); }
+      finally { dragDepth--; }
+    };
+  }
+  function refreshHooks() {
+    if (!alive) return;
+    try {
+      if (!sameHook(browser, 'selectedTab', browserGuard)) {
+        browserGuard = wrapSelection(browser, 'selectedTab');
+        record('reinstalled-browser-selection');
+      }
+      if (stripGuard && !sameHook(strip, 'selectedItem', stripGuard)) {
+        stripGuard = wrapSelection(strip, 'selectedItem');
+        record('reinstalled-strip-selection');
+      }
+      if (!sameHook(dnd, 'startTabDrag', dragGuard)) {
+        dragGuard = wrapMethod(dnd, 'startTabDrag', nativeDragWrapper);
+        record('reinstalled-native-drag');
+      }
+    } catch (error) {
+      console.warn('[ZenSiteFoldersBackgroundDrag] Unable to refresh native guards:', error);
+    }
+  }
   function onDown(event) {
-    clearPress();
     if (!enabled() || event.button !== 0 || event.shiftKey || event.ctrlKey ||
-        event.altKey || event.metaKey || !strip.contains(event.target) ||
-        event.target?.closest?.(
-          '.tab-close-button, .tab-icon-overlay, .tab-audio-button, ' +
-          '.tab-reset-button, .tab-reset-pin-button, .tab-note-icon-overlay, ' +
-          'button, toolbarbutton, input')) return;
-    // Composed events may start inside Zen's anonymous/shadow tab chrome.
-    const tab = tabAt(event.target) || (event.composedPath?.() || [])
-      .find(node => isTab(node) && strip.contains(node));
-    if (!tab || tab === browser.selectedTab || splitTab(tab) ||
-        tab.hasAttribute?.('zen-glance-tab')) return;
+        event.altKey || event.metaKey) return;
+    const tab = sourceOf(event);
+    // A separate retargeted mousedown can follow a pointerdown in Gecko.
+    // It must NOT erase the background tab armed by pointerdown.
+    if (!tab) return;
+    if (onControl(event) || splitTab(tab) ||
+        tab.hasAttribute?.('zen-glance-tab')) {
+      clearPress();
+      return;
+    }
+    // pointerdown followed by mousedown is one press only until it starts
+    // dragging. A fresh press after drop (which may omit mouseup) is new.
+    if (gesture?.pressed && gesture.tab === tab && !gesture.dragging) return;
+    clearPress();
+    if (tab === browser.selectedTab) return;
+    refreshHooks();
     gesture = {tab, previous: browser.selectedTab, pressed: true,
       dragging: false, x: event.clientX, y: event.clientY};
+    record('armed-press', event.type);
   }
   function onMove(event) {
     if (!gesture?.pressed || gesture.dragging) return;
@@ -119,9 +207,15 @@
       gesture.dragging = true;
   }
   function onStart(event) {
-    if (!gesture) return;
-    if (event.composedPath?.().includes(gesture.tab) ||
-        gesture.tab.contains?.(event.target)) gesture.dragging = true;
+    const source = sourceOf(event);
+    if (!source) return;
+    if (!gesture && enabled() && source !== browser.selectedTab &&
+        !splitTab(source) && !source.hasAttribute?.('zen-glance-tab')) {
+      gesture = {tab: source, previous: browser.selectedTab, pressed: true,
+        dragging: true, x: event.clientX, y: event.clientY};
+      record('recovered-dragstart');
+    }
+    if (gesture?.tab === source) gesture.dragging = true;
   }
   function onUp(event) {
     if (event.button !== 0 || !gesture?.pressed) return;
@@ -140,7 +234,7 @@
     if (event.button !== 0 || !gesture || gesture.pressed || gesture.dragging) return;
     const {tab, previous} = gesture;
     clearPress();
-    if (enabled() && tab.isConnected && tabAt(event.target) === tab &&
+    if (enabled() && tab.isConnected && sourceOf(event) === tab &&
         browser.selectedTab === previous) {
       clearLanding(tab);
       browser.selectedTab = tab;
@@ -165,9 +259,9 @@
     settle(source);
   }
   function install() {
-    if (!wrapSelection(browser, 'selectedTab'))
-      throw Error('Native selectedTab accessor unavailable');
-    wrapSelection(strip, 'selectedItem');
+    browserGuard = wrapSelection(browser, 'selectedTab');
+    if (!browserGuard) throw Error('Native selectedTab accessor unavailable');
+    stripGuard = wrapSelection(strip, 'selectedItem');
     wrapMethod(browser, 'setSelectedTab', original => function (tab, ...args) {
       if (guarded(tab)) return undefined;
       return original.call(this, tab, ...args);
@@ -212,14 +306,9 @@
         return original.call(this, sourceBrowser, ...args);
       });
     }
-    wrapMethod(dnd, 'startTabDrag', original => function (event, item, ...args) {
-      if (!enabled() || !gesture || gesture.tab !== item)
-        return original.call(this, event, item, ...args);
-      gesture.dragging = true;
-      dragDepth++;
-      try { return original.call(this, event, item, ...args); }
-      finally { dragDepth--; }
-    });
+    dragGuard = wrapMethod(dnd, 'startTabDrag', nativeDragWrapper);
+    if (!dragGuard) throw Error('Native startTabDrag unavailable');
+    listen('pointerdown', onDown);
     listen('mousedown', onDown);
     listen('mousemove', onMove);
     listen('dragstart', onStart);
@@ -246,9 +335,14 @@
     if (window[KEY] === api) delete window[KEY];
   }
   const api = {
-    version: '0.9.1', destroy,
+    version: '0.9.2', destroy,
     debug: () => ({enabled: enabled(), holding: !!gesture,
-      dragging: !!gesture?.dragging, dragDepth})
+      dragging: !!gesture?.dragging, dragDepth,
+      guards: {
+        browser: sameHook(browser, 'selectedTab', browserGuard),
+        strip: !stripGuard || sameHook(strip, 'selectedItem', stripGuard),
+        drag: sameHook(dnd, 'startTabDrag', dragGuard)
+      }, trace: trace.slice()})
   };
   window[KEY] = api;
   try { install(); }

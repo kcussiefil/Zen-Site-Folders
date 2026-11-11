@@ -223,4 +223,110 @@ function make(options = {}) {
   t.browser.selectedTab = t.background;
   assert.equal(t.browser.selectedTab, t.background, 'all native descriptors restored');
 }
-console.log('PASS: background tab drag, click selection, pending preservation, native payload, split, pref, modifiers, teardown');
+// Regression: an overlay can retarget the event outside the native strip,
+// while the composed path still contains the real background tab. v0.9.1
+// returned before resolving this path and activated the unloaded tab.
+{
+  const t = make();
+  t.background.pending = true;
+  const overlay = {closest() {return null;}, matches() {return false;}};
+  t.fire('mousedown', overlay, {
+    composedPath: () => [overlay, t.background, t.strip]
+  });
+  t.browser.selectedTab = t.background;
+  assert.equal(t.browser.selectedTab, t.original,
+    'retargeted mousedown must guard the native tab before selection');
+  const payload = t.strip.tabDragAndDrop.startTabDrag({}, t.background);
+  assert.equal(payload.elements[0], t.background,
+    'retargeted press must still drag the correct background tab');
+  t.fire('mouseup', t.background);
+  t.finish('drop', t.background);
+  assert.equal(t.background.pending, true);
+  t.window.__zsfBackgroundDragV090.destroy();
+}
+// Regression: a trusted pointerdown can locate the real tab before XUL
+// retargets mousedown to another surface. A second press event must NOT
+// clear the gesture and wake the discarded background tab.
+{
+  const t = make();
+  t.background.pending = true;
+  const overlay = {closest() {return null;}, matches() {return false;}};
+  t.fire('pointerdown', t.background);
+  t.fire('mousedown', overlay);
+  t.browser.selectedTab = t.background;
+  assert.equal(t.browser.selectedTab, t.original,
+    'retargeted mousedown must not clear pointerdown protection');
+  t.strip.tabDragAndDrop.startTabDrag({}, t.background);
+  t.fire('mouseup', t.background);
+  t.finish('drop', t.background);
+  assert.equal(t.background.pending, true);
+  t.window.__zsfBackgroundDragV090.destroy();
+}
+// Regression: native startTabDrag can arrive without a captured mousedown.
+// Recover the real drag source instead of passing through Zen's selecting path.
+{
+  const t = make();
+  t.background.pending = true;
+  const payload = t.strip.tabDragAndDrop.startTabDrag({}, t.background);
+  assert.equal(payload.elements[0], t.background);
+  assert.equal(t.browser.selectedTab, t.original);
+  assert.equal(t.background.pending, true);
+  t.finish('dragend', t.background);
+  t.window.__zsfBackgroundDragV090.destroy();
+}
+// Regression: after the first drag, a different MOD may replace the accessor.
+// The second physical mousedown must reinstall a guard before native selection.
+{
+  const t = make();
+  t.background.pending = t.other.pending = true;
+  t.fire('mousedown', t.background);
+  t.strip.tabDragAndDrop.startTabDrag({}, t.background);
+  t.fire('mouseup', t.background);
+  t.finish('drop', t.background);
+  t.flush();
+  const descriptor = Object.getOwnPropertyDescriptor(t.browser, 'selectedTab');
+  Object.defineProperty(t.browser, 'selectedTab', {
+    configurable: true,
+    get() {return descriptor.get.call(this);},
+    set(tab) {return descriptor.set.call(this, tab);}
+  });
+  t.fire('mousedown', t.other);
+  t.browser.selectedTab = t.other;
+  assert.equal(t.browser.selectedTab, t.original,
+    'second press must repair overwritten native selection guard');
+  assert.equal(t.other.pending, true);
+  t.strip.tabDragAndDrop.startTabDrag({}, t.other);
+  t.fire('mouseup', t.other);
+  t.finish('drop', t.other);
+  t.window.__zsfBackgroundDragV090.destroy();
+}
+// Ten distinct consecutive drags, including a retargeted overlay on every
+// alternate pass. None may select or wake the source; clicks remain separate.
+{
+  const t = make();
+  t.background.pending = t.other.pending = true;
+  const overlay = {closest() {return null;}, matches() {return false;}};
+  for (let i=0; i<10; i++) {
+    const source = i % 2 ? t.other : t.background;
+    if (i % 2) {
+      t.fire('mousedown', overlay, {
+        composedPath: () => [overlay, source, t.strip]
+      });
+    } else {
+      t.fire('mousedown', source);
+    }
+    t.browser.selectedTab = source;
+    t.strip.tabDragAndDrop.startTabDrag({}, source);
+    t.fire('mousemove', source, {clientY: 20, buttons: 1});
+    assert.equal(t.browser.selectedTab, t.original);
+    t.fire('mouseup', source);
+    t.finish('drop', source);
+    t.flush();
+  }
+  assert.deepEqual(t.selections, [], 'ten consecutive drags must never select');
+  assert.equal(t.background.pending, true);
+  assert.equal(t.other.pending, true);
+  t.window.__zsfBackgroundDragV090.destroy();
+}
+
+console.log('PASS: background tab drag, click selection, pending preservation, native payload, split, pref, modifiers, retargeted hit paths, repeated drags, rehook, teardown');
