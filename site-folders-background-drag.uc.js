@@ -176,16 +176,24 @@
     }
   }
   function onDown(event) {
-    clearPress();
     if (!enabled() || event.button !== 0 || event.shiftKey || event.ctrlKey ||
         event.altKey || event.metaKey) return;
     const tab = sourceOf(event);
-    if (!tab || onControl(event) || tab === browser.selectedTab ||
-        splitTab(tab) || tab.hasAttribute?.('zen-glance-tab')) return;
+    // A separate retargeted mousedown can follow a pointerdown in Gecko.
+    // It must NOT erase the background tab armed by pointerdown.
+    if (!tab) return;
+    if (onControl(event) || splitTab(tab) ||
+        tab.hasAttribute?.('zen-glance-tab')) {
+      clearPress();
+      return;
+    }
+    if (gesture?.pressed && gesture.tab === tab) return;
+    clearPress();
+    if (tab === browser.selectedTab) return;
     refreshHooks();
     gesture = {tab, previous: browser.selectedTab, pressed: true,
       dragging: false, x: event.clientX, y: event.clientY};
-    record('armed-press');
+    record('armed-press', event.type);
   }
   function onMove(event) {
     if (!gesture?.pressed || gesture.dragging) return;
@@ -298,6 +306,7 @@
     }
     dragGuard = wrapMethod(dnd, 'startTabDrag', nativeDragWrapper);
     if (!dragGuard) throw Error('Native startTabDrag unavailable');
+    listen('pointerdown', onDown);
     listen('mousedown', onDown);
     listen('mousemove', onMove);
     listen('dragstart', onStart);
