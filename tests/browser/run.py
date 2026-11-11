@@ -248,11 +248,13 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                   const tabs=['active','a','b','c','d'].map(make);
                   gBrowser.selectedTab=tabs[0];
                   document.documentElement.setAttribute('zen-sidebar-expanded','true');
-                  window.__zsfHeld={tabs,events:[],serial:0};
+                  window.__zsfHeld={tabs,events:[],counts:{},serial:0};
                   const kinds=['mousedown','mousemove','mouseup','click','dragstart','dragover','dragend','drop','deactivate'];
                   for(const type of kinds) window.addEventListener(type,e=>{
                     const f=window.__zsfHeld;
-                    if(!f || f.events.length>250)return;
+                    if(!f)return;
+                    f.counts[type]=(f.counts[type]||0)+1;
+                    if(f.events.length>250)return;
                     const node=e.target?.closest?.('tab');
                     f.events.push({event:type,buttons:e.buttons,source:node&&f.tabs.indexOf(node),
                       selected:f.tabs.indexOf(gBrowser.selectedTab),
@@ -288,6 +290,7 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         transform:style.transform,translate:style.translate,
                         top:rect.top,
                         api:window.__zsfBackgroundDragV090?.debug?.(),
+                        counts:{...f.counts},
                         events:f.events.slice(-100)
                       };
                     """)['value']
@@ -298,6 +301,7 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                           const f=window.__zsfHeld;
                           f.serial=arguments[0];
                           f.events.length=0;
+                          f.counts={};
                           const source=f.tabs[f.serial];
                           const hit=source.querySelector('.tab-label')||source.querySelector('.tab-content')||source;
                           const r=hit.getBoundingClientRect(),s=source.getBoundingClientRect();
@@ -339,8 +343,11 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         failures.append('trial '+str(i+1)+' unexpectedly activates background tab')
                     if dragging and (cancelled or not held['zia']):
                         failures.append('trial '+str(i+1)+' native drag cancelled before release')
-                    if s['afterRelease']['order'].index(i+1) >= s['coords']['sourcePos']:
-                        failures.append('trial '+str(i+1)+' did not retain upward native sorting')
+                    counts=s['afterRelease'].get('counts',{})
+                    if not counts.get('drop',0):
+                        failures.append('trial '+str(i+1)+' headless native driver sent no drop; ordering inconclusive')
+                    elif s['afterRelease']['order'].index(i+1) >= s['coords']['sourcePos']:
+                        failures.append('trial '+str(i+1)+' native drop fired but sorting did not persist')
                     if s['coords']['pending'] and not s['afterRelease']['native'][i+1]['pending']:
                         failures.append('trial '+str(i+1)+' woke a discarded source tab')
                 report['results']=[{'name':'three consecutive physical held background drags',
