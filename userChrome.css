@@ -781,19 +781,6 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
   outline: none !important;
 }
 
-/* Preview: one selected-tab fill, inside or outside an expanded folder. */
-#tabbrowser-tabs .tabbrowser-tab:not([zen-essential]) {
-  --zia-active-tab-bg: var(--zsf-selected-tab-fill, rgba(255, 255, 255, 0.08)) !important;
-  --zia-active-tab-bg-folder: var(--zsf-selected-tab-fill, rgba(255, 255, 255, 0.08)) !important;
-}
-
-/* A split paints its selection on its tab-group container, not the child
-   tab backgrounds. Supply the SAME user-selected fill at that wrapper so
-   Zen/Zia keep their native split layout, titles, shine and hover state. */
-#tabbrowser-tabs tab-group[split-view-group] {
-  --zia-active-tab-bg: var(--zsf-selected-tab-fill, rgba(255, 255, 255, 0.08)) !important;
-}
-
 /* The native Zia card's computed box-shadow supplies its border/edge.
    Do not layer a separate hairline over the live-mirrored glass styling. */
 #zsf-folder-hover-card .zsf-hover-age {
@@ -805,97 +792,11 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
   margin-inline-start: 0;flex: 0 0 auto;opacity: 0;
 }
 #zsf-folder-hover-card .zsf-hover-row:hover > .zsf-hover-action[zia-act="close"] { opacity: .8; }
-#zsf-folder-hover-card .zsf-hover-row[zia-selected] { background: var(--zsf-selected-tab-fill, rgba(255,255,255,.08)); }
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]
 > .tab-group-label-container > .tab-group-label::after {
   background-image: url("chrome://sine/content/zen-site-folders/folder-chevron.svg") !important;
   stroke: currentColor !important;
 }
-/* Anchored non-modal color editor; share Zen/Zia colors and compact sidebar. */
-#zsf-color-dialog {
-  position: fixed !important; right: auto !important; bottom: auto !important;
-  margin: 0 !important; box-sizing: border-box !important;
-  width: min(310px, calc(100vw - 16px)) !important;
-  max-height: calc(100vh - 16px) !important; overflow-y: auto !important;
-  padding: 16px !important; z-index: 2147483647 !important;
-  color-scheme: dark !important; color: #fbfbfe !important;
-  background: color-mix(in srgb, var(--zia-tab-card-bg, #262626) 78%, transparent) !important;
-  backdrop-filter: blur(24px) saturate(1.45) !important;
-  border: 0.5px solid rgba(255,255,255,.15) !important; border-radius: 16px !important;
-  box-shadow: 0 10px 32px rgba(0,0,0,.3) !important;
-  font: menu !important; -moz-window-dragging: no-drag !important;
-}
-#zsf-color-dialog::backdrop { background: transparent !important; }
-#zsf-color-dialog .zsf-color-heading-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; margin-bottom: 16px;
-}
-#zsf-color-dialog h3 { margin: 0; font-size: 15px; font-weight: 600; }
-#zsf-color-dialog .zsf-color-dismiss {
-  appearance: none; border: 0; background: none; color: inherit;
-  opacity: .65; cursor: pointer; font-size: 20px; line-height: 1;
-  width: 24px; height: 24px; padding: 0;
-}
-#zsf-color-dialog .zsf-color-picker-row,
-#zsf-color-dialog .zsf-color-opacity-heading {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; width: 100%;
-}
-#zsf-color-dialog .zsf-color-picker-controls {
-  display: inline-flex; align-items: center; gap: 8px;
-}
-#zsf-color-dialog input[type="color"] {
-  box-sizing: border-box; width: 46px; height: 30px; padding: 2px;
-  margin: 0; cursor: pointer;
-}
-#zsf-color-dialog .zsf-color-hex {
-  min-width: 65px; font-size: 12px; font-variant-numeric: tabular-nums;
-  opacity: .75; text-align: end;
-}
-#zsf-color-dialog .zsf-color-opacity { margin-top: 16px; }
-#zsf-color-dialog .zsf-color-percent {
-  min-width: 44px; text-align: end; font-variant-numeric: tabular-nums;
-}
-#zsf-color-dialog input[type="range"] {
-  box-sizing: border-box; display: block; width: 100%; margin: 10px 0 0; padding: 0;
-}
-#zsf-color-dialog .zsf-color-sample {
-  margin-top: 16px; padding: 9px; background: rgba(125,125,125,.08); border-radius: 10px;
-}
-#zsf-color-dialog .zsf-color-sample-caption {
-  display: block; font-size: 11px; opacity: .65; margin-bottom: 7px;
-}
-#zsf-color-dialog .zsf-color-sample-tab {
-  padding: 9px 10px; border-radius: 8px;
-  background: var(--zsf-selected-tab-fill, rgba(255,255,255,.08));
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-#zsf-color-dialog .zsf-color-actions {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 7px; margin-top: 16px; padding-top: 14px;
-  border-top: 1px solid rgba(125,125,125,.18);
-}
-#zsf-color-dialog .zsf-color-confirm { display: flex; gap: 7px; }
-#zsf-color-dialog .zsf-color-button {
-  appearance: none; cursor: pointer; border: 0; border-radius: 9px;
-  min-height: 30px; padding: 5px 10px; color: inherit;
-  background: rgba(130,130,130,.18);
-  font: inherit; font-size: 12px; white-space: nowrap;
-}
-#zsf-color-dialog .zsf-color-reset { background: transparent; opacity: .78; padding-inline: 3px; }
-#zsf-color-dialog .zsf-color-save { background: #007aff; color: white; font-weight: 600; }
-#zsf-color-dialog .zsf-color-button:hover { filter: brightness(1.15); }
-:root[zia-light] #zsf-color-dialog {
-  color-scheme: light !important; color: #15141a !important;
-  border-color: rgba(0,0,0,.13) !important;
-}
-:root[zen-compact-mode="true"] #navigator-toolbox[data-zsf-color-sidebar-hold]:not([animate="true"]) {
-  translate: none !important; visibility: visible !important;
-}
-:root[zen-compact-mode="true"] #navigator-toolbox[data-zsf-color-sidebar-hold] #titlebar {
-  visibility: visible !important;
-}
-
 /* External entry previews first without modifying Zia's inline translate. */
 #tabbrowser-tabs tab-group[data-zsf-entry-first] > .tab-group-container {
   translate: 0 var(--zsf-entry-room, 0px) !important;

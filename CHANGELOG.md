@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.9.3](releases/v0.9.3.md) | Keep proven background drag always on (hidden kill switch); hand selected-tab colour UI and CSS to HG v0.4.5. |
 | [v0.9.2](releases/v0.9.2.md) | Harden background drag against retargeted presses and overwritten native hooks; add diagnostics and coverage. |
 | [v0.9.1](releases/v0.9.1.md) | Keep background-tab protection active during overlapping drop and press events. |
 | [v0.9.0](releases/v0.9.0.md) | Drag background or unloaded tabs without activating them; preserve click, native/Zia ordering and split-view behavior. |

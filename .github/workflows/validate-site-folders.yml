@@ -33,7 +33,7 @@ jobs:
           node --check site-folders-split-guard.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.9.2' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || m.preferences !== 'preferences.json' || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.9.3' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || Object.hasOwn(m,'preferences') || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Test independent hover layer
@@ -56,7 +56,6 @@ jobs:
           node tests/real-opened-session.test.cjs
           node tests/standalone-rules.test.cjs
           node tests/selected-color-age.test.cjs
-          node tests/color-editor.test.cjs
           node tests/undo-secondary-click.test.cjs
           node tests/drag-feedback.test.cjs
           node tests/background-tab-drag.test.cjs
@@ -188,8 +187,6 @@ jobs:
           git archive f0b71ddee8f9caefad2864030e3f14fe714669b4 | tar -x -C .runtime/baseline
           python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --repo .runtime/baseline --output native-results/baseline && exit 1 || test -f native-results/baseline/results.json
           python3 tests/browser/check-baseline.py native-results/baseline/results.json
-      - name: Verify selected-color panel in isolated native Zen
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "selected color editor" --output native-results/selected-color-panel
       - name: Compare whole native regression to v0.6.4 baseline
         shell: bash
         run: |
