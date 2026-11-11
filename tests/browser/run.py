@@ -64,13 +64,17 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                 styles.append(zia / 'chrome.css')
                 report['zia'] = {name: hashlib.sha256((zia / name).read_bytes()).hexdigest()
                                  for name in ['zia.uc.js', 'chrome.css']}
-            scripts += [args.repo / name for name in ['site-folders.uc.js', 'site-folders-hover.uc.js',
-                         'site-folders-menu.uc.js', 'site-folders-collapse.uc.js']]
-            background_drag = args.repo / 'site-folders-background-drag.uc.js'
-            # The archived comparison versions predate this script.
-            if args.repo == pathlib.Path(__file__).resolve().parents[2] or background_drag.is_file():
-                scripts.append(background_drag)
-            scripts += [args.repo / name for name in ['site-folders-drag.uc.js', 'site-folders-split-guard.uc.js']]
+            archived = args.repo != pathlib.Path(__file__).resolve().parents[2]
+            for name in ['site-folders.uc.js', 'site-folders-hover.uc.js', 'site-folders-menu.uc.js',
+                         'site-folders-collapse.uc.js', 'site-folders-background-drag.uc.js',
+                         'site-folders-drag.uc.js', 'site-folders-split-guard.uc.js']:
+                script = args.repo / name
+                # The archived comparison versions predate these two modules.
+                if archived and not script.is_file() and name in (
+                    'site-folders-background-drag.uc.js', 'site-folders-split-guard.uc.js'
+                ):
+                    continue
+                scripts.append(script)
             styles.append(args.repo / 'userChrome.css')
             for style in styles:
                 client.js('''const s=Services;
@@ -246,7 +250,13 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                     snap = client.js(pathlib.Path(__file__).with_name('real-bottom-snapshot.js').read_text())['value']
                     snap['targetY'] = target_y
                     if snap.get('error'): raise RuntimeError(str(snap['error']))
-                    snap['error'] = round(snap['headerTop']+snap['grabOffset']-target_y,2)
+                    # Headless macOS can deliver a different final coordinate
+                    # from the requested WebDriver position during a drag.
+                    delivered_y = next((e['y'] for e in reversed(snap['events'])
+                                        if e['type'] == 'dragover'), None)
+                    snap['deliveredY'] = delivered_y
+                    snap['error'] = (round(snap['headerTop'] + snap['grabOffset'] - delivered_y, 2)
+                                     if delivered_y is not None else None)
                     samples.append(snap)
                 x,y=int(setup['x']),int(setup['y'])
                 try:
@@ -263,10 +273,14 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         except Exception: pass
                 report['pointerSamples'] = samples
                 moved = any(any(e.get('type')=='dragstart' for e in s['events']) for s in samples)
-                anchored = moved and any(s['zia'] for s in samples) and all(abs(s['error'])<8 for s in samples if s['zia'])
+                delivered = [s for s in samples if s['zia'] and s['deliveredY'] is not None]
+                anchored = (moved and len(delivered) == len(samples) and
+                            delivered[0]['deliveredY'] - delivered[-1]['deliveredY'] >= 40 and
+                            all(abs(s['error']) < 8 for s in delivered))
                 report['results'] = [{'name':'real bottom pointer starts anchored',
                                       'status':'PASS' if anchored else 'FAIL',
-                                      'reason':None if anchored else 'No real dragstart or >8px drift'}]
+                                      'reason':None if anchored else
+                                      'Missing native drag, <40px delivered travel, or >=8px drift'}]
                 report['eventMode']='WebDriver pointer actions through native browser input, not synthetic dispatchEvent'
             else:
                 result = client.async_js(pathlib.Path(__file__).with_name('regressions.js').read_text(), [args.case])['value']

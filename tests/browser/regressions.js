@@ -98,6 +98,40 @@ const finish = arguments[arguments.length - 1];
       setTimeout: window.setTimeout.bind(window), clearTimeout: window.clearTimeout.bind(window)};
     Services.scriptloader.loadSubScript('chrome://remote/content/external/EventUtils.js', input);
 
+    async function reorder(source, target) {
+      if (Services.appinfo.OS !== 'Linux') {
+        await input.synthesizePlainDragAndDrop({
+          srcElement: source, srcX: 80, srcY: 16, stepX: 0, stepY: 9,
+          destElement: target, finalX: 80, finalY: 28,
+        });
+        return;
+      }
+
+      // Headless Linux dispatches dragstart but does not start an OS drag
+      // session. Supply the DOM drag events and let Zen build the payload.
+      const transfer = new DataTransfer();
+      const from = source.getBoundingClientRect(), to = target.getBoundingClientRect();
+      const x = from.left + 80, start = from.top + 16, end = to.top + 28;
+      const send = (node, type, y) => node.dispatchEvent(new DragEvent(type, {
+        bubbles: true, composed: true, cancelable: true, dataTransfer: transfer,
+        clientX: x, clientY: y, screenX: window.mozInnerScreenX + x,
+        screenY: window.mozInnerScreenY + y,
+      }));
+      input.synthesizeMouse(source, 80, 16, {type: 'mousedown'}, window);
+      send(source, 'dragstart', start);
+      assert(transfer.mozItemCount === 1 &&
+        transfer.mozGetDataAt('application/x-moz-tabbrowser-tab', 0) === source,
+        'Zen must put only the dragged tab in the payload');
+      send(target, 'dragenter', end);
+      send(target, 'dragover', end);
+      await delay(0);
+      send(target, 'drop', end);
+      Object.defineProperty(transfer, 'dropEffect', {value: 'move'});
+      send(source, 'dragend', end);
+      input.synthesizeMouse(target, 80, 28, {type: 'mouseup'}, window);
+      await delay(0);
+    }
+
     const selected = [], restored = [];
     const onSelect = event => selected.push(event.target);
     const onRestore = event => restored.push(event.target);
@@ -111,10 +145,7 @@ const finish = arguments[arguments.length - 1];
       }
       for (const [source, target] of [[a, c], [b, d], [c, b]]) {
         const before = [...gBrowser.tabs].indexOf(source);
-        await input.synthesizePlainDragAndDrop({
-          srcElement: source, srcX: 80, srcY: 16, stepX: 0, stepY: 9,
-          destElement: target, finalX: 80, finalY: 28,
-        });
+        await reorder(source, target);
         assert(source.isConnected && [...gBrowser.tabs].indexOf(source) !== before,
           'drag must actually reorder ' + source.zsfTestName);
         assert(gBrowser.selectedTab === h.prefix && source.hasAttribute('pending'),
@@ -123,13 +154,15 @@ const finish = arguments[arguments.length - 1];
       assert(!selected.length && !restored.length,
         'no dragged tab may be selected or even transiently restored');
 
-      // Click the same tab immediately after dragging it.
+      // Wait for synthetic Linux drops to finish painting their final hit target.
+      if (Services.appinfo.OS === 'Linux') await delay(450);
       input.synthesizeMouse(c, 80, 16, {type: 'mousedown'}, window);
       assert(gBrowser.selectedTab === h.prefix && c.hasAttribute('pending'),
         'pressing a tab must still leave it asleep');
       input.synthesizeMouse(c, 80, 16, {type: 'mouseup'}, window);
       assert(gBrowser.selectedTab === c && same(selected, [c]),
-        'an ordinary click must select exactly the clicked tab');
+        'an ordinary click must select exactly the clicked tab: ' +
+        JSON.stringify({active: gBrowser.selectedTab.zsfTestName, selected: names(selected)}));
     } finally {
       gBrowser.tabContainer.removeEventListener('TabSelect', onSelect);
       gBrowser.tabContainer.removeEventListener('SSTabRestoring', onRestore);
