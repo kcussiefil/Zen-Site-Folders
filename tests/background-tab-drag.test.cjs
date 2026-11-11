@@ -4,6 +4,10 @@ const vm = require('node:vm');
 const path = require('node:path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'site-folders-background-drag.uc.js'), 'utf8');
 new vm.Script(src);
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'theme.json'), 'utf8'));
+const prefs = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'preferences.json'), 'utf8'));
+assert.equal(manifest.preferences, 'preferences.json');
+assert.deepEqual(prefs.map(p => p.property), ['zen.sitefolders.background_drag.enabled']);
 assert(!src.includes('preventDefault(') && !src.includes('stopPropagation('),
   'Do not intercept native/Zia drag or click events');
 assert(!/moveTab(?:To|Before|After)|addTabToGroup|ungroupTab/.test(src),
