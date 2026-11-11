@@ -244,6 +244,24 @@ function make(options = {}) {
   assert.equal(t.background.pending, true);
   t.window.__zsfBackgroundDragV090.destroy();
 }
+// Regression: a trusted pointerdown can locate the real tab before XUL
+// retargets mousedown to another surface. A second press event must NOT
+// clear the gesture and wake the discarded background tab.
+{
+  const t = make();
+  t.background.pending = true;
+  const overlay = {closest() {return null;}, matches() {return false;}};
+  t.fire('pointerdown', t.background);
+  t.fire('mousedown', overlay);
+  t.browser.selectedTab = t.background;
+  assert.equal(t.browser.selectedTab, t.original,
+    'retargeted mousedown must not clear pointerdown protection');
+  t.strip.tabDragAndDrop.startTabDrag({}, t.background);
+  t.fire('mouseup', t.background);
+  t.finish('drop', t.background);
+  assert.equal(t.background.pending, true);
+  t.window.__zsfBackgroundDragV090.destroy();
+}
 // Regression: native startTabDrag can arrive without a captured mousedown.
 // Recover the real drag source instead of passing through Zen's selecting path.
 {
