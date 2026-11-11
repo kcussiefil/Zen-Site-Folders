@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 const manifest = require('../theme.json');
-assert.equal(manifest.version, '0.9.2');
+assert.equal(manifest.version, '0.9.3');
 const pattern = /:root\[zen-sidebar-expanded="true"\]\s+#tabbrowser-tabs\s+tab-group\[data-zsf-site\]:not\(\[split-view-group\]\)\s*> \.tab-group-container:not\(\[hidden\]\)\s*\{([^}]*)\}/;
 const match = css.match(pattern);
 assert(match, 'spacing must target only ordinary owned site group containers');
@@ -19,6 +19,6 @@ for (const innerGap of [3, 4, 5, 6, 8]) {
   const bottom = innerGap - 3;
   assert.equal(top + bottom, 0, 'balanced spacing must preserve the total group height');
 }
-assert(css.includes('--zia-active-tab-bg: var(--zsf-selected-tab-fill'),
-  'selected-tab translucent background paint must be unchanged');
+assert(!css.includes('--zia-active-tab-bg: var(--zsf-selected-tab-fill'),
+  'HG owns selected-tab paint; Site Folders must not override it');
 console.log('PASS v0.8.9: +3px first-tab separation; zero net height; native animation and drag spacing untouched');

@@ -3,7 +3,7 @@ const fs=require('node:fs'), path=require('node:path');
 const root=path.join(__dirname,'..'),css=fs.readFileSync(path.join(root,'userChrome.css'),'utf8');
 const js=fs.readFileSync(path.join(root,'site-folders.uc.js'),'utf8');
 const manifest=require(path.join(root,'theme.json'));
-assert.equal(manifest.version,'0.9.2');
+assert.equal(manifest.version,'0.9.3');
 assert(css.includes('.pinned-tabs-container-separator:has(> .zsf-sort-button):hover > toolbarseparator'),
   'only the separator row should shrink the line');
 assert(css.includes('position: absolute !important') &&
