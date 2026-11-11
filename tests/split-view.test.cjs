@@ -87,7 +87,7 @@ const api=win.__zsfCollapseV037;
     'split return to expanded host must not replay native expand');
   group.collapsed=true;api.sync(group);await api.whenIdle(group);
   assert.deepEqual(calls,['collapse','expand','collapse']);
-  assert(/#tabbrowser-tabs tab-group\[split-view-group\]\s*\{\s*--zia-active-tab-bg:\s*var\(--zsf-selected-tab-fill/.test(css),
-    'split group retains user-selected background color');
-  console.log('PASS: split native collapse/expand, no negative margin on open, visible siblings, stable title and color');
+  assert(!/#tabbrowser-tabs tab-group\[split-view-group\]\s*\{\s*--zia-active-tab-bg:\s*var\(--zsf-selected-tab-fill/.test(css),
+    'Site Folders must not override the selected split colour now owned by HDR Guard');
+  console.log('PASS: split native collapse/expand, no negative margin on open, visible siblings, stable title and HG-owned color');
 })().catch(e=>{console.error(e);process.exitCode=1;});
