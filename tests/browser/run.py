@@ -94,6 +94,11 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                       triggeringPrincipal:Services.scriptSecurityManager.getSystemPrincipal()
                     }));
                   gBrowser.selectedTab=tabs[0];
+                  // Explicitly unload two real background tabs. A successful
+                  // drag must not select them or cause pending restoration.
+                  for (const index of [1,3]) {
+                    try { gBrowser.discardBrowser?.(tabs[index]); } catch (_) {}
+                  }
                   document.documentElement.setAttribute('zen-sidebar-expanded','true');
                   Services.prefs.setBoolPref('zen.view.show-clear-tabs-button',true);
                   const sep=ws.querySelector('.pinned-tabs-container-separator');
@@ -296,6 +301,8 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                           const r=hit.getBoundingClientRect(),s=source.getBoundingClientRect();
                           return {x:Math.round(Math.min(s.right-12,Math.max(s.left+25,r.left+r.width/2))),
                             y:Math.round(s.top+s.height/2),rect:s.toJSON(),
+                            sourcePos:source._tPos,
+                            pending:source.hasAttribute('pending')||source.hasAttribute('discarded'),
                             selected:f.tabs.indexOf(gBrowser.selectedTab)};
                         """,[serial])['value']
                         x,y=coords['x'],coords['y']
@@ -328,6 +335,10 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
                         failures.append('trial '+str(i+1)+' unexpectedly activates background tab')
                     if dragging and (cancelled or not held['zia']):
                         failures.append('trial '+str(i+1)+' native drag cancelled before release')
+                    if s['afterRelease']['order'][i+1] >= s['coords']['sourcePos']:
+                        failures.append('trial '+str(i+1)+' did not retain upward native sorting')
+                    if s['coords']['pending'] and not s['afterRelease']['native'][i+1]['pending']:
+                        failures.append('trial '+str(i+1)+' woke a discarded source tab')
                 report['results']=[{'name':'three consecutive physical held background drags',
                     'status':'PASS' if not failures else 'FAIL',
                     'reason':'; '.join(failures) if failures else None}]
