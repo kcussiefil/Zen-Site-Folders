@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.9.5](releases/v0.9.5.md) | Preview cards dim unloaded tabs using Zia's setting, with live pending-state updates and no card rerender. |
 | [v0.9.4](releases/v0.9.4.md) | Event-driven self-recovery when native background-drag guard disappears at runtime; no change to drag engine. |
 | [v0.9.3](releases/v0.9.3.md) | Keep proven background drag always on (hidden kill switch); hand selected-tab colour UI and CSS to HG v0.4.5. |
 | [v0.9.2](releases/v0.9.2.md) | Harden background drag against retargeted presses and overwritten native hooks; add diagnostics and coverage. |
