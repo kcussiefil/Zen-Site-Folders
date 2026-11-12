@@ -824,3 +824,28 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
     transition: transform 100ms ease-out !important;
   }
 }
+
+
+/* Zia Dim asleep tabs: match its dark/light favicon and title strength.
+   Only fade our hover card's tab content, never the row/background/actions.
+   -moz-pref updates live when the user toggles the setting. */
+@media -moz-pref("zia.tabs.dim-asleep") {
+  :root:not(#zia-none) #zsf-folder-hover-card
+  .zsf-hover-row[data-zsf-asleep="true"]:not([zia-selected="true"]) > .zsf-hover-icon {
+    filter: opacity(0.55) !important;
+    transition: filter 0.15s ease;
+  }
+  :root:not(#zia-none) #zsf-folder-hover-card
+  .zsf-hover-row[data-zsf-asleep="true"]:not([zia-selected="true"]) > .zsf-hover-title {
+    filter: opacity(0.6) !important;
+    transition: filter 0.15s ease;
+  }
+  :root[zia-light]:not(#zia-none) #zsf-folder-hover-card
+  .zsf-hover-row[data-zsf-asleep="true"]:not([zia-selected="true"]) > .zsf-hover-icon {
+    filter: opacity(0.75) !important;
+  }
+  :root[zia-light]:not(#zia-none) #zsf-folder-hover-card
+  .zsf-hover-row[data-zsf-asleep="true"]:not([zia-selected="true"]) > .zsf-hover-title {
+    filter: opacity(0.8) !important;
+  }
+}

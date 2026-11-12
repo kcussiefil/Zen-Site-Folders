@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 const manifest = require('../theme.json');
-assert.equal(manifest.version, '0.9.4');
+assert.equal(manifest.version, '0.9.5');
 const pattern = /:root\[zen-sidebar-expanded="true"\]\s+#tabbrowser-tabs\s+tab-group\[data-zsf-site\]:not\(\[split-view-group\]\)\s*> \.tab-group-container:not\(\[hidden\]\)\s*\{([^}]*)\}/;
 const match = css.match(pattern);
 assert(match, 'spacing must target only ordinary owned site group containers');

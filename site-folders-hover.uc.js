@@ -28,6 +28,7 @@
   let destroyed = false;
   let hoverHost = null;
   const handlers = [];
+  let asleepObserver = null;
 
   function bind(target, type, handler, options) {
     if (!target?.addEventListener) return;
@@ -247,11 +248,53 @@
     const stamp = realOpenedAt(tab);node.textContent = ageText(stamp);
     node.title = stamp ? '開啟時間：' + new Date(stamp).toLocaleString() : '原始開啟時間未知';
   }
+  // Follow Firefox's real unloaded-tab state, not a cached preview state.
+  // Do not dim the entire row: that would also fade actions and affect
+  // Zia's selected-row paint. CSS decides whether Zia's preference is on.
+  function syncAsleepRow(row) {
+    const tab = row?.zsfTab;
+    if (!tab) return;
+    if (tab.hasAttribute('pending') && !tab.selected &&
+        !tab.hasAttribute('selected') && !tab.hasAttribute('visuallyselected')) {
+      row.setAttribute('data-zsf-asleep', 'true');
+    } else {
+      row.removeAttribute('data-zsf-asleep');
+    }
+  }
+
+  // A restoring tab can lose [pending] without a TabAttrModified event.
+  // Observe only while the card is visible; change the affected row's
+  // data attribute in-place to preserve scrolling, layout and animation.
+  function watchAsleepTabs() {
+    if (typeof MutationObserver !== 'function') return;
+    if (!asleepObserver) {
+      asleepObserver = new MutationObserver(mutations => {
+        if (!activeGroup?.isConnected || !card || card.hidden) return;
+        const rows = card.querySelector('.zsf-hover-list')?.children;
+        if (!rows) return;
+        for (const change of mutations) {
+          const tab = change.target;
+          if (tab?.group !== activeGroup) continue;
+          for (const row of rows) {
+            if (row.zsfTab === tab) syncAsleepRow(row);
+          }
+        }
+      });
+    }
+    asleepObserver.disconnect();
+    const container = window.gBrowser?.tabContainer;
+    if (container) asleepObserver.observe(container, {
+      attributes: true, subtree: true,
+      attributeFilter: ['pending', 'selected', 'visuallyselected']
+    });
+  }
+
   function makeRow(tab) {
     const row = el('div', 'zia-folder-card-row zsf-hover-row');
     row.setAttribute('role', 'button');
     row.setAttribute('tabindex', '0');
     row.zsfTab = tab;
+    syncAsleepRow(row);
     if (tab.selected) { row.setAttribute('zia-selected', 'true'); row.setAttribute('data-selected', 'true'); }
     const icon = el('img', 'zia-folder-card-icon zsf-hover-icon');
     try {
@@ -379,6 +422,7 @@
     ageTimer = null;
     clearOpen();
     clearClose();
+    asleepObserver?.disconnect();
     holdSidebar(false);
     if (refreshTimer != null) clearTimeout(refreshTimer);
     refreshTimer = null;
@@ -444,6 +488,7 @@
     activeGroup = group;
     activeLabel = label;
     card.hidden = false;
+    watchAsleepTabs();
     syncNativePaint();
     ageTimer ??= setInterval(() => {
       if (!card || card.hidden) return;
@@ -615,6 +660,8 @@
     }
     handlers.length = 0;
     stopPaintWatch();
+    asleepObserver?.disconnect();
+    asleepObserver = null;
     card?.remove();
     card = null;
     if (window.__zsfGroupHoverV037 === api) delete window.__zsfGroupHoverV037;

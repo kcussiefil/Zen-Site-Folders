@@ -71,6 +71,12 @@ async function main() {
       'collapsed compatibility must not add another geometry or animation controller');
   }
   assert(css.includes('#zsf-folder-hover-card'));
+  assert(css.includes('@media -moz-pref("zia.tabs.dim-asleep")'), 'follow live Zia dim-asleep preference');
+  assert(css.includes('.zsf-hover-row[data-zsf-asleep="true"]:not([zia-selected="true"]) > .zsf-hover-icon'), 'dim only pending tab icon');
+  assert(css.includes('.zsf-hover-row[data-zsf-asleep="true"]:not([zia-selected="true"]) > .zsf-hover-title'), 'dim only pending tab title');
+  for (const strength of ['0.55', '0.6', '0.75', '0.8']) {
+    assert(css.includes('filter: opacity(' + strength + ')'), 'Zia dark/light fade strength ' + strength);
+  }
   // Zia 2.117.x uses a pseudo-element hairline when zia.glass is off,
   // and disables card blur behind an HDR/SDR video. Mirror exactly those
   // two native guards without changing the custom preview layout.
@@ -137,6 +143,7 @@ async function main() {
   });
   const first = makeTab('YouTube video 1', true);
   const second = makeTab('YouTube video 2');
+  second.hasAttribute = name => name === 'pending';
   const originalZiaWave = 'url("data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%2016%2016%22%3E%3C%2Fsvg%3E#3")';
   first.style = { getPropertyValue: name =>
     name === '--zia-sound-wave' ? originalZiaWave : '' };
@@ -197,6 +204,13 @@ async function main() {
       prefObserverRemoved = true;
     }
   } };
+  const observers = [];
+  class FakeMutationObserver {
+    constructor(callback) { this.callback = callback; this.active = false; observers.push(this); }
+    observe(_node, options) { this.options = options; this.active = true; }
+    disconnect() { this.active = false; }
+    emit(records) { if (this.active) this.callback(records); }
+  }
   const document = {
     readyState: 'complete', documentElement: root,
     getElementById: id =>
@@ -205,7 +219,7 @@ async function main() {
     createElementNS: (_ns, type) => new FakeNode(type),
   };
   vm.runInNewContext(source, {
-    window, document, console, Services, setTimeout, clearTimeout,
+    window, document, console, Services, MutationObserver: FakeMutationObserver, setTimeout, clearTimeout,
     setInterval: () => 1, clearInterval: () => {},
     getComputedStyle: node => {
       assert.equal(node, ziaCard, 'read Zia native card rather than our popup');
@@ -242,7 +256,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.9.4');
+  assert.equal(manifest.version, '0.9.5');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
@@ -250,6 +264,20 @@ async function main() {
   assert.equal(rows[0].zsfTab, first);
   assert.equal(rows[1].zsfTab, second);
   assert.equal(rows[2].dataset.action, 'new');
+  assert.equal(rows[1].getAttribute('data-zsf-asleep'), 'true', 'pending tab must be marked asleep');
+  assert(!rows[0].hasAttribute('data-zsf-asleep'), 'selected tab must stay bright');
+  assert(!rows[2].hasAttribute('data-zsf-asleep'), 'New Tab action must stay bright');
+  const asleepObserver = observers.find(o => o.options?.attributeFilter?.includes('pending'));
+  assert(asleepObserver?.active, 'pending state watched while card is visible');
+  const listBeforeRestore = popup.querySelector('.zsf-hover-list');
+  const countBeforeRestore = listBeforeRestore.replaceCount;
+  second.hasAttribute = () => false;
+  asleepObserver.emit([{type: 'attributes', attributeName: 'pending', target: second}]);
+  assert(!rows[1].hasAttribute('data-zsf-asleep'), 'restored tab brightens without reopening card');
+  assert.equal(listBeforeRestore.replaceCount, countBeforeRestore, 'asleep updates must not rerender card or move rows');
+  second.hasAttribute = name => name === 'pending';
+  asleepObserver.emit([{type: 'attributes', attributeName: 'pending', target: second}]);
+  assert.equal(rows[1].getAttribute('data-zsf-asleep'), 'true', 'unloaded tab dims without reopening card');
   assert.equal(rows[0].getAttribute('zia-selected'), 'true', 'selected row uses Zia highlight');
   assert(rows[0].className.includes('zia-folder-card-row'), 'Zia list styling is inherited');
   assert.equal(rows[0].children.length, 5, 'row has favicon, animated sound bars, title, opening age, close');
@@ -282,6 +310,7 @@ async function main() {
   popup.events.click({ target: rows[1], stopPropagation() {} });
   assert.equal(browser.selectedTab, second, 'click must select correct tab');
   assert(popup.hidden, 'popup should hide after selection');
+  assert(!asleepObserver.active, 'closing preview disconnects pending observer');
   assert(!host.hasAttribute('data-zsf-preview-sidebar-hold'),
     'choosing a preview tab must release compact sidebar');
   assert(!popup.hasAttribute('data-open'), 'close clears animation flag so it restarts next time');
@@ -348,6 +377,7 @@ async function main() {
   assert(!host.hasAttribute('data-zsf-preview-sidebar-hold'),
     'unload must not leave compact sidebar locked');
   assert.equal(popup.isConnected, false, 'unload must remove the popup');
+  assert(!asleepObserver.active, 'destroy must disconnect pending observer');
   assert(prefObserverRemoved, 'unload must remove the Zia preference watcher');
   assert.equal(Object.keys(host.events).length, 0, 'unload must remove host listeners');
   console.log('PASS: hover preview, click selection, native-folder exclusion, explicit new tab, cleanup, safety guards');
