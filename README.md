@@ -50,7 +50,9 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
 
-**v0.9.9** adds native, unpinned manual groups: drag a standalone tab onto the center of another standalone tab and hold briefly, then drop to group; alternatively Command-select several plain tabs and choose **建立普通群組** from the tab context menu. Same-site groups use the site's name and favicon; mixed groups default to 新群組 with a folder icon. Right-click a manual group to rename, change its icon or ungroup. Automatic site organizing leaves these groups intact. Disable drag creation via `zen.sitefolders.manual_group_drag.enabled=false` in `about:config` (context-menu creation remains available).\n\n**v0.9.8** fixes Sine update detection by advancing the manifest's `updatedAt` field; no browser behavior changes.
+**v0.9.9** adds native, unpinned manual groups: drag a standalone tab onto the center of another standalone tab and hold briefly, then drop to group; alternatively Command-select several plain tabs and choose **建立普通群組** from the tab context menu. Same-site groups use the site's name and favicon; mixed groups default to 新群組 with a folder icon. Right-click a manual group to rename, change its icon or ungroup. Automatic site organizing leaves these groups intact. Disable drag creation via `zen.sitefolders.manual_group_drag.enabled=false` in `about:config` (context-menu creation remains available).
+
+**v0.9.8** fixes Sine update detection by advancing the manifest's `updatedAt` field; no browser behavior changes.
 
 **v0.9.7** corrects related background tab placement after selecting a collapsed Site Folder from its hover card, and uses Zia's exact asleep-icon opacity instead of a parent-filter ratio.
 
