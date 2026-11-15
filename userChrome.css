@@ -335,7 +335,9 @@
   position: absolute !important;
   inset-block: 0 !important;
   inset-inline-start: 0 !important;
-  width: 0 !important;
+  width: 100% !important;
+  transform: scaleX(0);
+  transform-origin: left center !important;
   z-index: 0 !important;
   background: color-mix(in srgb, currentColor 10%, transparent) !important;
   pointer-events: none !important;
@@ -344,11 +346,11 @@
   animation: zsf-manual-horizontal-fill var(--zsf-hold-ms, 500ms) linear both !important;
 }
 #zsf-manual-merge-choice[data-ready] .zsf-manual-merge-fill {
-  width: 100% !important;
+  transform: scaleX(1);
 }
 @keyframes zsf-manual-horizontal-fill {
-  from { width: 0; }
-  to   { width: 100%; }
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
 }
 #zsf-manual-merge-choice > :is(.zsf-manual-merge-icon, .zsf-manual-merge-title, .zsf-manual-merge-count) {
   position: relative !important;
