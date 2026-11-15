@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 拖曳及多選建立普通群組
-// @version      1.0.1
+// @version      1.0.2
 // @description  Opt-out-safe manual grouping for unpinned Zen tabs; no live DOM reorder.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -14,12 +14,13 @@
   const NS = 'http://www.w3.org/1999/xhtml';
   const FOLDER_ICON = 'chrome://browser/skin/zen-icons/folder.svg';
   // Like Yab's staged folder decision: reveal → hold progress → commit.
-  const HOVER_MS = 120;
-  const HOLD_MS = 420;
+  // Match Yab TabDropChoice: revealDelay 0.18 s, folderHold 0.5 s.
+  const HOVER_MS = 180;
+  const HOLD_MS = 500;
   const listeners = [];
   let destroyed = false, started = false, drag = null, hoverTimer = null;
   let lastDrop = 'none';
-  let menuItem = null, restoreTimer = null;
+  let menuItem = null, restoreTimer = null, settling = null;
   let sessionStore = null;
   try {
     sessionStore = window.SessionStore ||
@@ -166,8 +167,13 @@
     if (restoreTimer != null) clearTimeout(restoreTimer);
     restoreTimer = setTimeout(() => { restoreTimer = null; restore(); }, 120);
   }
-  function createFromTabs(input) {
-    const tabs = validTabs(input);
+  function createFromTabs(input, {dragTarget = null} = {}) {
+    const validated = validTabs(input);
+    // Native Zen uses insertBefore.before(group). For a drag merge, anchor
+    // at the tab UNDER the cursor, not whichever tab currently sorts first
+    // after native/Zia dragover. This mirrors Yab's [other, dragged] order.
+    const tabs = validated && dragTarget && validated.includes(dragTarget) ?
+      [dragTarget, ...validated.filter(tab => tab !== dragTarget)] : validated;
     const browser = window.gBrowser;
     if (!tabs || typeof browser?.addTabGroup !== 'function' ||
         !sessionStore?.setCustomWindowValue) return null;
@@ -177,7 +183,7 @@
       group = browser.addTabGroup(tabs, {
         label: info.title,
         color: 'gray',
-        insertBefore: tabs[0],
+        insertBefore: dragTarget || tabs[0],
         showCreateUI: false
       });
       if (!group?.isConnected || group.isZenFolder ||
@@ -209,8 +215,9 @@
     }
     return null;
   }
-  const SVG = 'http://www.w3.org/2000/svg';
-  let progress = null, holdTimer = null;
+  // Yab's choice replaces the destination row contents; it is not a floating
+  // translucent overlay. The genuine native tab remains in place until drop.
+  let choice = null, holdTimer = null;
   // Zia moves sibling rows via inline translateY during dragover; capture the
   // true row slots once, then never chase those animated DOM hit targets.
   function slotOf(tab) {
@@ -224,8 +231,8 @@
   function targetAt(event) {
     if (!drag) return null;
     const {clientX:x, clientY:y} = event;
-    // A revealed choice owns its target until the hand leaves the original
-    // row's band, just as Yab locks formingPointerY on a held folder.
+    // Yab retains a ready target even when the surrounding layout moves.
+    // Disengage only when the pointer leaves its original central band.
     if (drag.hover) {
       const here = drag.slots.get(drag.hover);
       if (here && x >= here.left && x <= here.right &&
@@ -247,9 +254,8 @@
   }
   function neutralizeAvoidance() {
     if (!drag?.hover) return;
-    // Zia's window-capture dragover has already placed sibling rows. Undo its
-    // visual-only displacement for this merge choice before the frame paints,
-    // while retaining all native DOM order and browser tab objects.
+    // Keep the native DOM order intact; suppress just Zia's visual shift
+    // while this choice is active. The original styles restore on cancel.
     for (const tab of drag.targets) {
       if (!tab?.isConnected || !tab.hasAttribute?.('zia-shift')) continue;
       const style = tab.style;
@@ -257,7 +263,7 @@
       if (!drag.frozen.has(tab))
         drag.frozen.set(tab, {value:style.getPropertyValue('transform'),
           priority:style.getPropertyPriority('transform')});
-      style.setProperty('transform', 'none', 'important');
+      style.setProperty('transform','none','important');
     }
   }
   function unfreeze({committing = false} = {}) {
@@ -268,73 +274,53 @@
       if (committing) {
         if (style.getPropertyValue('transform') === 'none')
           style.removeProperty('transform');
-      } else if (old.value) style.setProperty('transform', old.value, old.priority);
+      } else if (old.value) style.setProperty('transform',old.value,old.priority);
       else style.removeProperty('transform');
     }
     drag.frozen.clear();
   }
-  function iconPosition(tab) {
-    const slot = drag?.slots.get(tab);
-    const native = tab.querySelector?.('.tab-icon-image');
-    const iconRect = native?.getBoundingClientRect?.();
-    const current = tab.getBoundingClientRect?.();
-    if (!slot || !current) return null;
-    // Keep the choice exactly over the original favicon position, not over
-    // the translating copy Zia may be drawing right now.
-    const dx = iconRect ? iconRect.left - current.left : 16;
-    return {x:slot.left + dx + 8, y:slot.top + slot.height/2};
-  }
-  function showProgress(tab) {
+  function makeChoice(tab) {
     if (!drag || drag.hover !== tab || !eligible(tab)) return;
-    const pos = iconPosition(tab);
-    if (!pos) return;
-    if (!progress) {
-      progress = document.createElementNS(NS, 'div');
-      progress.id = 'zsf-manual-merge-progress';
-      const image = document.createElementNS(NS, 'img');
-      image.setAttribute('src', nativeIcon(tab));
-      image.setAttribute('aria-hidden', 'true');
-      const svg = document.createElementNS(SVG, 'svg');
-      svg.setAttribute('viewBox','0 0 32 32');
-      svg.setAttribute('aria-hidden','true');
-      for (const cls of ['zsf-manual-progress-track','zsf-manual-progress-fill']) {
-        const circle = document.createElementNS(SVG,'circle');
-        circle.setAttribute('cx','16');circle.setAttribute('cy','16');
-        circle.setAttribute('r','13');
-        circle.setAttribute('class',cls);
-        svg.appendChild(circle);
-      }
-      progress.append(image,svg);
-      document.documentElement.appendChild(progress);
-    }
-    const image = progress.querySelector?.('img') || progress.children?.[0];
-    if (image?.getAttribute?.('src') !== nativeIcon(tab))
-      image?.setAttribute?.('src', nativeIcon(tab));
-    progress.style.left = Math.round(pos.x-16)+'px';
-    progress.style.top = Math.round(pos.y-16)+'px';
-    progress.style.setProperty?.('--zsf-hold-ms',HOLD_MS+'ms');
-    tab.setAttribute('data-zsf-manual-progress','true');
-    // Trigger keyframes only once per chosen target; the animation and ready
-    // timer start together, not on every dragover.
-    progress.setAttribute('data-running','true');
-    holdTimer = setTimeout(() => {
-      holdTimer = null;
+    const stack = tab.querySelector?.('.tab-stack') || tab;
+    choice = document.createElementNS(NS,'div');
+    choice.className='zsf-manual-merge-choice';
+    choice.id='zsf-manual-merge-choice';
+    choice.setAttribute('aria-hidden','true');
+    const fill=document.createElementNS(NS,'div');
+    fill.className='zsf-manual-merge-fill';
+    const icon=document.createElementNS(NS,'img');
+    icon.className='zsf-manual-merge-icon';
+    icon.setAttribute('src',nativeIcon(tab));
+    const title=document.createElementNS(NS,'span');
+    title.className='zsf-manual-merge-title';
+    title.textContent='新群組';
+    const count=document.createElementNS(NS,'span');
+    count.className='zsf-manual-merge-count';
+    count.textContent='2';
+    choice.append(fill,icon,title,count);
+    choice.style.setProperty?.('--zsf-hold-ms',HOLD_MS+'ms');
+    stack.appendChild(choice);
+    tab.setAttribute('data-zsf-manual-choice','true');
+    // The horizontal bar starts now; don't restart it on each dragover.
+    choice.setAttribute('data-running','true');
+    holdTimer=setTimeout(()=>{
+      holdTimer=null;
       if (destroyed || !drag || drag.hover !== tab || !eligible(tab)) return;
-      drag.ready = tab;
+      drag.ready=tab;
       tab.setAttribute('data-zsf-manual-ready','true');
-      progress?.setAttribute('data-complete','true');
-    }, HOLD_MS);
+      choice?.setAttribute('data-ready','true');
+      icon.setAttribute('src',FOLDER_ICON);
+    },HOLD_MS);
   }
   function clearCandidate({committing = false} = {}) {
     if (hoverTimer !== null) clearTimeout(hoverTimer);
     if (holdTimer !== null) clearTimeout(holdTimer);
     hoverTimer = null; holdTimer = null;
-    for (const tab of [drag?.hover, drag?.ready]) {
-      tab?.removeAttribute?.('data-zsf-manual-progress');
+    for (const tab of [drag?.hover,drag?.ready]) {
+      tab?.removeAttribute?.('data-zsf-manual-choice');
       tab?.removeAttribute?.('data-zsf-manual-ready');
-      tab?.removeAttribute?.('data-zsf-manual-hover');
     }
-    progress?.remove(); progress = null;
+    choice?.remove(); choice=null;
     unfreeze({committing});
     if (drag) { drag.hover = null; drag.ready = null; }
   }
@@ -381,7 +367,7 @@
     hoverTimer = setTimeout(() => {
       hoverTimer = null;
       if (destroyed || !drag || drag.hover !== target || !eligible(target)) return;
-      showProgress(target);
+      makeChoice(target);
     }, HOVER_MS);
   }
   function onDrop(event) {
@@ -417,7 +403,7 @@
         if (animation.id === 'zia-land') animation.cancel();
       }
     }
-    const result = createFromTabs(tabs);
+    const result = createFromTabs(tabs,{dragTarget:target});
     if (result) result.setAttribute('data-zsf-manual-committing','true');
     lastDrop = result ? 'created' : 'creation-failed';
     clearDrag({committing:!!result});
