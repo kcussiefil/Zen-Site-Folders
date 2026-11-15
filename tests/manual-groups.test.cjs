@@ -182,11 +182,11 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
     'stable Yab order is hovered target then dragged tab');
   assert.equal(h.a.group.insertBefore,h.b,
     'native Zen insertBefore must anchor on target, never reordered source');
-  assert.equal(h.browser.tabContainer.tabDragAndDrop._dontAnimateTabMove,true,
-    'native move animation is suppressed only while committing');
+  assert.equal(h.browser.tabContainer.tabDragAndDrop._dontAnimateTabMove,false,
+    'native Zen drag animation remains untouched even DURING commit');
   h.fire('dragend',h.a);
   assert.equal(h.browser.tabContainer.tabDragAndDrop._dontAnimateTabMove,false,
-    'dragend restores the native Zen drag animation flag');
+    'subsequent ordinary drags inherit Zen original animation setting');
   assert(h.a.group===h.b.group && !h.a.pinned && !h.b.pinned,'original tab objects remain unpinned');
   assert.equal(h.a.group.label,'新群組','mixed-site manual group uses neutral name');
   assert(h.a.group.hasAttribute('data-zsf-manual'),'manual group is never an owned site group');
