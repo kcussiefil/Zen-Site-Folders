@@ -121,6 +121,8 @@ jobs:
             trap - EXIT
             echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/Zen.app/Contents/MacOS/zen" >> "$GITHUB_ENV"
           fi
+      - name: Verify preview-selected related background links stay adjacent
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "preview related background links remain adjacent" --output native-results/preview-related-links
       - name: Verify three consecutive held native background drags
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "background-held-native-pointer" --output native-results/held-background
       - name: Verify held native background drags with Zia 2.121.4
