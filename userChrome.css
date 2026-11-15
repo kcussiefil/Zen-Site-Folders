@@ -295,23 +295,34 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* Sync only Site Folders' favicon with Zia's native group-label dimming.
-   Zia already filters the whole all-pending group title to 0.60 (dark) /
-   0.80 (light), while a single pending tab icon uses 0.55 / 0.75.
-   Compensate the child icon by their ratios; do NOT filter the title twice.
-   :has() reevaluates instantly as tabs load/unload or enter/leave a group.
-   When Zia's preference is off, neither filter is active. */
+/* v0.9.7: Zia filters BOTH nested .tab-icon-stack and .tab-icon-image
+   in a pending tab. Their effective alpha compounds: dark 0.55² = 0.3025;
+   light 0.75² = 0.5625. The Site Folders favicon has no native icon stack.
+   Disable the parent group-header filter for owned groups only, apply the
+   equivalent two-layer fade to this favicon, and preserve Zia's group
+   title/chevron fade independently. No layout or motion changes. */
 @media -moz-pref("zia.tabs.dim-asleep") {
   :root:not(#zia-none) #tabbrowser-tabs
-  :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending])))
-  > .tab-group-label-container > .zsf-favicon {
-    filter: opacity(0.9166666667) !important; /* 0.60 × ratio = 0.55 */
-    transition: filter 0.15s ease;
+  :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container {
+    filter: none !important;
+  }
+  :root:not(#zia-none) #tabbrowser-tabs
+  :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container > .zsf-favicon {
+    filter: opacity(0.3025) !important;
+    transition: filter 0.15s ease !important;
+  }
+  :root:not(#zia-none) #tabbrowser-tabs
+  :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container > .tab-group-label {
+    filter: opacity(0.6) !important;
+    transition: filter 0.15s ease !important;
   }
   :root[zia-light]:not(#zia-none) #tabbrowser-tabs
-  :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending])))
-  > .tab-group-label-container > .zsf-favicon {
-    filter: opacity(0.9375) !important; /* 0.80 × ratio = 0.75 */
+  :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container > .zsf-favicon {
+    filter: opacity(0.5625) !important;
+  }
+  :root[zia-light]:not(#zia-none) #tabbrowser-tabs
+  :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container > .tab-group-label {
+    filter: opacity(0.8) !important;
   }
 }
 #tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label {

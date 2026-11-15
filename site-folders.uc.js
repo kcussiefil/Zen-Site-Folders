@@ -359,8 +359,12 @@
     const raw = tabURL(tab);
     if (!raw) return null;
     if (/^about:/i.test(raw)) return 'chrome://global/skin/icons/settings.svg';
-    // page-icon resolves through Firefox's own favicon cache, not a third-party API.
-    return 'page-icon:' + raw;
+    // Reuse the native tab artwork when present so the site-group icon
+    // matches real loaded/unloaded tab favicons. Keep Firefox's cached
+    // page-icon fallback for tabs restored without a live favicon.
+    const native = window.gBrowser?.getIcon?.(tab) ||
+      tab?.querySelector?.('.tab-icon-image')?.getAttribute?.('src');
+    return native || 'page-icon:' + raw;
   }
 
   function decorate(group, site, sampleTab) {
