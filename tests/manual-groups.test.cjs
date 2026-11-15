@@ -132,6 +132,7 @@ function harness({enabled=true}={}) {
     const ev={target,clientX:80,clientY:116,composedPath:()=>[target],
       dataTransfer:{mozGetDataAt:()=>a,dropEffect:'none'},
       preventDefault(){this.prevented=true;},
+      stopPropagation(){this.propagationStopped=true;},
       stopImmediatePropagation(){this.stopped=true;},
       ...extra};
     for(const fn of root.events[type]||[])fn(ev);
