@@ -122,10 +122,48 @@ const finish = arguments[arguments.length - 1];
       'existing automatic Site Folder membership stays untouched');
     const map=JSON.parse(SessionStore.getCustomWindowValue(window,'zsf-manual-groups-v1'));
     assert(map[group.id]?.kind === 'mixed', 'manual ownership persisted by native group ID');
+    // The same Zen/Zia shell must render as the original owned site group.
+    assert(getComputedStyle(group).backgroundColor === getComputedStyle(h.group).backgroundColor,
+      'manual group has same transparent background as Site Folders: ' +
+      JSON.stringify({manual:getComputedStyle(group).backgroundColor,site:getComputedStyle(h.group).backgroundColor}));
+    const manualLabel = group.querySelector('.tab-group-label-container');
+    const siteLabel = h.group.querySelector('.tab-group-label-container');
+    assert(manualLabel && getComputedStyle(manualLabel).backgroundColor ===
+      getComputedStyle(siteLabel).backgroundColor,
+      'manual group label uses Site Folders transparent template');
+    assert(manual.setColor(group, 'blue') && group.color === 'blue' &&
+      group.getAttribute('data-zsf-color-custom') === 'blue',
+      'native group color can be changed with user-visible accent without recreating tabs');
+    const colored = JSON.parse(SessionStore.getCustomWindowValue(window,'zsf-manual-groups-v1'));
+    assert(colored[group.id]?.color === 'blue','native group color is persisted by its stable ID');
+    gBrowser.selectedTab = h.tabs[0]; // An inactive group must collapse all of its rows.
+    click(group); await idle(group);
+    assert(group.collapsed &&
+      group.groupContainer.getBoundingClientRect().height <= 1,
+      'manual group must really collapse, not just rotate its chevron: ' +
+      JSON.stringify({collapsed:group.collapsed,height:group.groupContainer.getBoundingClientRect().height}));
+    // Manual groups also inherit the same read-only Zia-style hover preview.
+    const oldMatches = manualLabel.matches;
+    try {
+      manualLabel.matches = function(selector) {
+        return selector === ':hover' || oldMatches.call(this, selector);
+      };
+      manualLabel.dispatchEvent(new MouseEvent('mouseover', {bubbles:true,composed:true}));
+      await delay(240);
+      const card = document.getElementById('zsf-folder-hover-card');
+      assert(card && !card.hidden && card.querySelectorAll('.zsf-hover-row').length >= 2,
+        'collapsed manual group opens identical Site Folders hover preview');
+    } finally {
+      manualLabel.matches = oldMatches;
+    }
+    click(group); await idle(group);
+    assert(!group.collapsed && group.groupContainer.getBoundingClientRect().height > 20,
+      'manual group expands with real member rows');
     group.removeAttribute('data-zsf-manual');
     manual.restore();
-    assert(group.hasAttribute('data-zsf-manual'),
-      'manual group decoration is restorable after native session restore');
+    assert(group.hasAttribute('data-zsf-manual') &&
+      group.color === 'blue' && group.getAttribute('data-zsf-color-custom') === 'blue',
+      'manual appearance, color and native icon decoration survive session restore');
   });
 
   // Synthetic native DragEvents verify the center-target hover and drop
