@@ -335,6 +335,14 @@
     try { payload = event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0); }
     catch (_) {}
     if (payload && payload !== source) return;
+    // Prefer the small site favicon as the native drag ghost (like Yab).
+    // Gecko or Zia may override the image later; never break native drag on
+    // browsers which do not support XUL images in setDragImage().
+    try {
+      const icon=source.querySelector?.('.tab-icon-image');
+      if (icon && event.dataTransfer?.setDragImage)
+        event.dataTransfer.setDragImage(icon,8,8);
+    } catch (_) { /* Native Zen drag image remains the safe fallback. */ }
     const targets = [...(window.gBrowser?.tabs || [])].filter(tab =>
       tab !== source && eligible(tab) && workspace(tab) === workspace(source));
     const slots = new Map(targets.map(tab => [tab,slotOf(tab)]));
