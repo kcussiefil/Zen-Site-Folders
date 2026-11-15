@@ -6,7 +6,7 @@
 (() => {
   'use strict';
   window.__zsfTopDrop?.destroy?.();
-  const OWN = 'tab-group[data-zsf-site]:not([split-view-group])';
+  const OWN = 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])';
   let source = null, intent = null, cleanup = 0;
   const unclipNodes = new Set();
   const listeners = [];
