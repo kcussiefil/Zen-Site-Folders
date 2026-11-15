@@ -74,7 +74,7 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
   group.tabs = [];
   group.appendChild(label);
   group.setAttribute('data-zsf-site', 'youtube.com');
-  group.matches = sel => sel === 'tab-group[data-zsf-site]:not([split-view-group])';
+  group.matches = sel => sel === 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])';
   const tabs = ['old', 'new'].map(name => ({
     label: name, isConnected: true, pinned: false, group,
     hasAttribute: () => false, getAttribute: () => 'space1'
@@ -110,7 +110,7 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
     readyState: 'complete', documentElement: new XulNode('root'),
     createXULElement: tag => new XulNode(tag),
     getElementById: id => id === 'mainPopupSet' ? popupSet : null,
-    querySelectorAll: selector => selector === 'tab-group[data-zsf-site]:not([split-view-group])' ? [group] : [],
+    querySelectorAll: selector => selector === 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])' ? [group] : [],
   };
   const prompt = {
     confirm() { confirmCount++; return prompts.length ? prompts.shift() : true; },
@@ -174,6 +174,12 @@ async function testMenu() {
   unrelated.isConnected = true;
   unrelated.matches = () => false;
   assert.equal(a.api.validGroup(unrelated), false, 'non-ZSF group excluded');
+  const manual = new XulNode('tab-group');
+  manual.id = 'manual-group-001';
+  manual.setAttribute('data-zsf-manual','true');
+  manual.matches = selector => selector === 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])';
+  assert.equal(a.api.validGroup(manual), true,
+    'manually created ordinary groups inherit the existing rename/icon/ungroup menu');
   a.api.destroy();
 
   // The first click must work even if native XUL emits popuphidden first,

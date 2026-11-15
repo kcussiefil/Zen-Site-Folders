@@ -38,7 +38,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 | 項目 | 連結 |
 | --- | --- |
-| 目前版本 | **v0.9.8**，以 [`theme.json`](theme.json) 為準 |
+| 目前版本 | **v0.9.9**，以 [`theme.json`](theme.json) 為準 |
 | 版本整理 | [`CHANGELOG.md`](CHANGELOG.md) |
 | 完整各版說明 | [GitHub Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases)／[`releases/`](releases/) |
 | macOS 實機驗收 | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |
@@ -47,6 +47,8 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 **單純整理文件不需要升版，也不會自行觸發 Sine 更新。**
 
 選取分頁顏色、原生右鍵選項及調色視窗已交由 [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5 獨立管理。背景分頁拖曳預設內建，不再提供 Sine 開關；必要時可透過 `about:config` 設定 `zen.sitefolders.background_drag.enabled=false` 停用。
+
+**v0.9.9** 新增建立未釘選普通群組：將獨立分頁拖曳到另一個獨立分頁中央，短暫停留顯示預覽後放開；或以 `Command` 多選分頁，再從右鍵選擇「建立普通群組」。同網站使用網站名稱及 favicon；跨網站預設「新群組」與資料夾圖示。群組右鍵可重新命名、更換圖示、解散；不受自動依網站整理影響。若需停用拖曳建立，可在 `about:config` 設 `zen.sitefolders.manual_group_drag.enabled=false`，右鍵建立仍可使用。
 
 **v0.9.8** 修正 Sine 更新偵測：同步更新 `theme.json` 的 `updatedAt`；不修改執行時的 JS／CSS。
 

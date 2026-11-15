@@ -67,11 +67,13 @@ with tempfile.TemporaryDirectory(prefix='zsf-native-test-') as profile:
             archived = args.repo != pathlib.Path(__file__).resolve().parents[2]
             for name in ['site-folders.uc.js', 'site-folders-hover.uc.js', 'site-folders-menu.uc.js',
                          'site-folders-collapse.uc.js', 'site-folders-background-drag.uc.js',
-                         'site-folders-drag.uc.js', 'site-folders-split-guard.uc.js']:
+                         'site-folders-drag.uc.js', 'site-folders-split-guard.uc.js',
+                         'site-folders-manual.uc.js']:
                 script = args.repo / name
                 # The archived comparison versions predate these two modules.
                 if archived and not script.is_file() and name in (
-                    'site-folders-background-drag.uc.js', 'site-folders-split-guard.uc.js'
+                    'site-folders-background-drag.uc.js', 'site-folders-split-guard.uc.js',
+                    'site-folders-manual.uc.js'
                 ):
                     continue
                 scripts.append(script)

@@ -94,6 +94,79 @@ const finish = arguments[arguments.length - 1];
     SessionStore.setCustomWindowValue(window, 'zsf-before-sort-v1', JSON.stringify({ [workspaceId]: value }));
     return { workspaceId, value };
   }
+  // Build a real Firefox ordinary group from two unrelated standalone tabs.
+  // This must never create a pinned Zen folder, steal a website-owned group,
+  // reload either tab, or change their browser objects.
+  await test('manual ordinary group creation preserves native tabs and ownership', async h => {
+    const manual = window.__zsfManualGroupsV099;
+    assert(manual?.createFromTabs && manual?.debug().enabled,
+      'manual grouping module loaded in native Zen');
+    const [a,b] = [h.prefix,h.suffix];
+    assert(!a.group && !b.group && !a.pinned && !b.pinned,
+      'native fixture exposes two plain ungrouped tabs');
+    const originalBrowsers = [a.linkedBrowser,b.linkedBrowser];
+    const originalMembers = [...h.group.tabs];
+    const group = manual.createFromTabs([a,b]);
+    assert(group?.isConnected && group.localName === 'tab-group',
+      'manual grouping creates a native tab-group, not a fake wrapper');
+    assert(!group.pinned && !group.isZenFolder &&
+      a.group === group && b.group === group && !a.pinned && !b.pinned,
+      'ordinary manual group never pins a tab');
+    assert(group.hasAttribute('data-zsf-manual') &&
+      !group.hasAttribute('data-zsf-site') &&
+      group.label === '新群組','mixed sites keep a neutral editable manual label');
+    assert([a,b].every((tab,i)=>tab.isConnected &&
+      tab.linkedBrowser === originalBrowsers[i]),
+      'original native tabs and loaded browser objects survive');
+    assert(same([...h.group.tabs],originalMembers),
+      'existing automatic Site Folder membership stays untouched');
+    const map=JSON.parse(SessionStore.getCustomWindowValue(window,'zsf-manual-groups-v1'));
+    assert(map[group.id]?.kind === 'mixed', 'manual ownership persisted by native group ID');
+    group.removeAttribute('data-zsf-manual');
+    manual.restore();
+    assert(group.hasAttribute('data-zsf-manual'),
+      'manual group decoration is restorable after native session restore');
+  });
+
+  // Synthetic native DragEvents verify the center-target hover and drop
+  // handoff, not the operating system pointer animation.
+  await test('manual ordinary group center drag creates an unpinned native group', async h => {
+    const source=h.prefix,target=h.suffix;
+    const transfer = new DataTransfer();
+    transfer.mozSetDataAt('application/x-moz-tabbrowser-tab', source, 0);
+    const emit = (node, type) => {
+      const r=node.getBoundingClientRect();
+      return node.dispatchEvent(new DragEvent(type,{bubbles:true,composed:true,
+        cancelable:true,dataTransfer:transfer,
+        clientX:r.left+r.width/2,clientY:r.top+r.height/2}));
+    };
+    emit(source,'dragstart');
+    const manual = window.__zsfManualGroupsV099;
+    assert(manual?.debug().dragging, 'native dragstart must arm manual group gesture: ' +
+      JSON.stringify(manual?.debug()));
+    emit(target,'dragover');
+    await delay(240);
+    assert(target.hasAttribute('data-zsf-manual-hover'),
+      'center hover shows merge candidate without moving native tabs: ' +
+      JSON.stringify(manual.debug()));
+    assert(!source.group && !target.group,
+      'visual candidate must not create a group before drop');
+    const beforeDrop=manual.debug();
+    const nativeAccepted=emit(target,'drop');
+    const afterDrop=manual.debug();
+    emit(source,'dragend');
+    assert(nativeAccepted===false, 'accepted manual drop prevents native reorder: ' +
+      JSON.stringify({nativeAccepted,beforeDrop,afterDrop,
+        sourceGroup:source.group?.id||null,targetGroup:target.group?.id||null,
+        sourceParent:source.parentElement?.localName,targetParent:target.parentElement?.localName}));
+    assert(source.group && source.group === target.group &&
+      source.group.hasAttribute('data-zsf-manual'),
+      'native group created at drop only');
+    assert(!source.pinned && !target.pinned, 'drag-created group keeps unpinned tabs');
+    assert(!document.getElementById('zsf-manual-merge-preview'),
+      'no visual preview remains after drop');
+  });
+
   // Compare effective native Zia dimming of BOTH nested tab-icon nodes
   // against the standalone Site Folders group header favicon.
   await test('header asleep filters match native Zia icon composition', async h => {

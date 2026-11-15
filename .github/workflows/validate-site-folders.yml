@@ -33,9 +33,10 @@ jobs:
           node --check site-folders-background-drag.uc.js
           node --check site-folders-top-drop.uc.js
           node --check site-folders-split-guard.uc.js
+          node --check site-folders-manual.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'); if(m.version !== '0.9.8' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || Object.hasOwn(m,'preferences') || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'); if(m.version !== '0.9.9' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || Object.hasOwn(m,'preferences') || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js'] || !m.scripts['site-folders-manual.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Check Sine update timestamp against previous release
@@ -50,6 +51,7 @@ jobs:
           node tests/light-theme-contrast.test.cjs
           node tests/group-child-gap.test.cjs
           node tests/group-menu-order.test.cjs
+          node tests/manual-groups.test.cjs
           node tests/collapse.test.cjs
           node tests/split-view.test.cjs
           node tests/split-admission.test.cjs
@@ -125,6 +127,10 @@ jobs:
             trap - EXIT
             echo "ZEN_BINARY=$GITHUB_WORKSPACE/.runtime/browser/Zen.app/Contents/MacOS/zen" >> "$GITHUB_ENV"
           fi
+      - name: Verify native manual group creation and automatic-group isolation
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "manual ordinary group creation" --output native-results/manual-group
+      - name: Verify manual center-drop gesture creates native unpinned group
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "manual ordinary group center drag" --output native-results/manual-center-drag
       - name: Verify asleep site favicon equals native Zia icon compositing
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "header asleep filters match native Zia icon composition" --output native-results/header-asleep-native
       - name: Verify preview-selected related background links stay adjacent

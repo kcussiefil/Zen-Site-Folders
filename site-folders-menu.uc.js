@@ -11,7 +11,7 @@
   const SNAPSHOT_KEY = 'zsf-before-sort-v1';
   const ARCHIVE_KEY = 'zsf-archived-snapshots-v1';
   const ICONS_KEY = 'zsf-custom-icons-v1';
-  const GROUP_SELECTOR = 'tab-group[data-zsf-site]:not([split-view-group])';
+  const GROUP_SELECTOR = 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])';
   let menu = null;
   let activeGroup = null;
   let initialized = false;
@@ -185,7 +185,8 @@
       currentEmoji?.remove();
       group.removeAttribute('data-zsf-custom-icon');
       favicon.hidden = false;
-      window.__zenSiteFoldersV029?.reapplyAppearance?.();
+      window.__zenSiteFoldersV037?.reapplyAppearance?.();
+      window.__zsfManualGroupsV099?.restore?.();
     } else if (validIcon(icon)) {
       if (!group.hasAttribute('data-zsf-custom-icon'))
         group.setAttribute('data-zsf-custom-icon', 'true');
