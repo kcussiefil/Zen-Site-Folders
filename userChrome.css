@@ -303,7 +303,8 @@
 /* Explicitly selected manual group colors retain the same clear, compact
    header as Site Folders. Native Firefox group color is shown only as a
    subtle leading accent. No tint is added to the panel/background. */
-:root #tabbrowser-tabs tab-group[data-zsf-manual][data-zsf-color-custom]:not([split-view-group])
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-manual][data-zsf-color-custom]:not([split-view-group]),
+:root:not([zen-sidebar-expanded="true"]) #tabbrowser-tabs tab-group[data-zsf-manual][data-zsf-color-custom]:not([split-view-group])
   > .tab-group-label-container {
   border-inline-start: 3px solid var(--tab-group-color, currentColor) !important;
 }
