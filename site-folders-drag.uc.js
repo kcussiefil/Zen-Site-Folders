@@ -7,7 +7,7 @@
 (() => {
   'use strict';
   if (window.__zsfDragV037) return;
-  const GROUP = 'tab-group[data-zsf-site]:not([split-view-group])';
+  const GROUP = 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])';
   const NS = 'http://www.w3.org/1999/xhtml';
   const THRESHOLD = 6;
   const EDGE_ZONE = 52;
