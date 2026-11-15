@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v0.9.8](releases/v0.9.8.md) | Restore Sine update detection by advancing updatedAt and add a release metadata regression check. No runtime changes. |
 | [v0.9.7](releases/v0.9.7.md) | Correct collapsed-preview background-link placement and match the native Zia asleep-tab icon filter. |
 | [v0.9.6](releases/v0.9.6.md) | Match group-header favicons to Zia asleep-tab icon brightness, with live load-state switching and no JS or layout changes. |
 | [v0.9.5](releases/v0.9.5.md) | Preview cards dim unloaded tabs using Zia's setting, with live pending-state updates and no card rerender. |
