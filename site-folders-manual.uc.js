@@ -397,6 +397,10 @@
   function onDragEnd() {
     clearDrag();
     if (!settling) return;
+    // Restore the native drag flag synchronously: subsequent drag gestures
+    // can begin before the next frame. The visual commit marker can remain
+    // until the first settled paint without affecting the drag engine.
+    if (settling.dnd) settling.dnd._dontAnimateTabMove=settling.oldAnimation;
     // Zia and Gecko finish their drag-end cleanup first (they registered
     // earlier on window capture). Resume transitions after the layout and
     // the group's native membership are both settled.
