@@ -4,9 +4,12 @@ const vm = require('node:vm');
 const code = fs.readFileSync('site-folders-manual.uc.js','utf8');
 const css = fs.readFileSync('userChrome.css','utf8');
 new vm.Script(code);
-assert(css.includes('#zsf-manual-merge-progress'), 'icon-only progress ring is present');
+assert(css.includes('#zsf-manual-merge-choice'), 'Yab-style integrated New Group row is present');
+assert(css.includes('zsf-manual-horizontal-fill'), 'horizontal left-to-right progress is present');
+assert(css.includes('visibility: hidden !important'), 'original tab contents are replaced, not duplicated');
+assert(!css.includes('#zsf-manual-merge-progress'), 'circular ring removed');
 assert(!css.includes('#zsf-manual-merge-preview'), 'old translucent row card removed');
-assert(css.includes('zsf-manual-ring-fill'), 'progress ring visually fills before grouping');
+assert(!css.includes('zsf-manual-ring-fill'), 'ring animation removed');
 assert(!css.includes('data-zsf-color-custom'), 'no color-accent styling remains');
 assert(css.includes('[data-zsf-manual]'), 'manual groups have scoped native icon styling');
 assert(css.includes('opacity(0.3025)'), 'dark Zia effective asleep icon filter remains');
@@ -71,6 +74,7 @@ function harness({enabled=true}={}) {
   const root=new Node('window');
   const menu=new Node('menupopup');
   const tabContainer=new Node('tabs');
+  tabContainer.tabDragAndDrop={_dontAnimateTabMove:false};
   const groups=[];
   const store={};
   let addCount=0;
@@ -96,7 +100,8 @@ function harness({enabled=true}={}) {
       addCount++;
       const group=new Node('tab-group');group.id='manual-'+addCount;
       group.label=opts.label;group.color=opts.color;group.isZenFolder=false;
-      group.tabs=[...tabs];for(const tab of tabs) tab.group=group;
+      group.tabs=[...tabs];group.insertBefore=opts.insertBefore;
+      for(const tab of tabs) tab.group=group;
       const label=new Node('hbox');label.className='tab-group-label-container';
       const title=new Node('label');title.className='tab-group-label';
       label.appendChild(title);group.appendChild(label);
@@ -118,7 +123,7 @@ function harness({enabled=true}={}) {
     querySelectorAll:sel=>sel==='tab-group:not([split-view-group])'?groups:[],
     elementFromPoint:(_x,_y)=>doc.pointTarget
   };
-  let dragOn=enabled;
+  let dragOn=enabled,dragPayload=a;
   const services={prefs:{getBoolPref:(_key,fallback)=>dragOn},
     eTLD:{getBaseDomainFromHost:host=>host.split('.').slice(-2).join('.')}};
   vm.runInNewContext(code,{
@@ -130,7 +135,7 @@ function harness({enabled=true}={}) {
   const fire=(type,target,extra={})=>{
     if (type==='dragover') doc.pointTarget=target;
     const ev={target,clientX:80,clientY:116,composedPath:()=>[target],
-      dataTransfer:{mozGetDataAt:()=>a,dropEffect:'none'},
+      dataTransfer:{mozGetDataAt:()=>dragPayload,dropEffect:'none'},
       preventDefault(){this.prevented=true;},
       stopPropagation(){this.propagationStopped=true;},
       stopImmediatePropagation(){this.stopped=true;},
@@ -139,7 +144,8 @@ function harness({enabled=true}={}) {
     return ev;
   };
   return {a,b,c,d,win,doc,menu,groups,browser,api,fire,store,
-    count:()=>addCount,allow:bool=>dragOn=bool};
+    count:()=>addCount,allow:bool=>dragOn=bool,
+    payload:tab=>{dragPayload=tab}};
 }
 const delay=ms=>new Promise(res=>setTimeout(res,ms));
 (async()=>{
@@ -150,29 +156,42 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   await delay(190);
   assert.equal(h.count(),0,'edge hover cannot auto-create a group');
   h.fire('dragover',h.b);
-  await delay(160);
-  assert.equal(h.count(),0,'favicon-only progress must never create a group early');
-  assert(h.doc.documentElement.children.some(n=>n.id==='zsf-manual-merge-progress'),
-    'the only overlay is a favicon plus circular progress, not a full row card');
-  assert(h.b.hasAttribute('data-zsf-manual-progress'), 'the site icon has an active progress ring');
-  assert(!h.b.hasAttribute('data-zsf-manual-ready'), 'release before progress completion does not group');
-  // Yab-style target retention: Zia shifts the actual tab below the pointer,
-  // but the natural position remains the intended choice.
-  h.b.shiftY=48; h.b.setAttribute('zia-shift','true');
+  await delay(210);
+  assert.equal(h.count(),0,'horizontal hold must not create a group early');
+  const choice=h.b.children.find(n=>n.id==='zsf-manual-merge-choice');
+  assert(choice,'choice replaces contents INSIDE target row, not on window root');
+  assert(!h.doc.documentElement.children.some(n=>n.id==='zsf-manual-merge-choice'),
+    'no floating translucent card on document root');
+  assert(h.b.hasAttribute('data-zsf-manual-choice'), 'choice is scoped to native target tab');
+  assert.equal(choice.children.find(n=>n.className==='zsf-manual-merge-title')?.textContent,
+    '新群組','Yab New Folder is translated to 新群組');
+  assert(choice.hasAttribute('data-running'), 'horizontal progress started');
+  assert(!h.b.hasAttribute('data-zsf-manual-ready'),'early drop cannot group');
+  h.b.shiftY=48;h.b.setAttribute('zia-shift','true');
   h.b.style.setProperty('--zia-drag-y','48px');
-  const moved = h.fire('dragover',h.c);
-  assert(moved.prevented,'the original tab target stays locked despite retargeted native dragover');
-  await delay(440);
-  assert(h.b.hasAttribute('data-zsf-manual-ready'),'full ring makes group creation available');
-  assert.equal(h.count(),0,'even complete progress cannot create a group before dropping');
+  const moved=h.fire('dragover',h.c);
+  assert(moved.prevented,'target stays locked despite Zia moving rendered target row');
+  await delay(530);
+  assert(choice.hasAttribute('data-ready') && h.b.hasAttribute('data-zsf-manual-ready'),
+    'after 500ms horizontal progress the target is ready');
+  assert.equal(h.count(),0,'completed animation does not mutate tabs until drop');
   const result=h.fire('drop',h.b);
   assert(result.prevented && result.stopped,'center drop intercepted before native reordering');
   assert.equal(h.count(),1);
+  assert.deepEqual(h.a.group.tabs.map(t=>t.label),['B','A'],
+    'stable Yab order is hovered target then dragged tab');
+  assert.equal(h.a.group.insertBefore,h.b,
+    'native Zen insertBefore must anchor on target, never reordered source');
+  assert.equal(h.browser.tabContainer.tabDragAndDrop._dontAnimateTabMove,true,
+    'native move animation is suppressed only while committing');
+  h.fire('dragend',h.a);
+  assert.equal(h.browser.tabContainer.tabDragAndDrop._dontAnimateTabMove,false,
+    'dragend restores the native Zen drag animation flag');
   assert(h.a.group===h.b.group && !h.a.pinned && !h.b.pinned,'original tab objects remain unpinned');
   assert.equal(h.a.group.label,'新群組','mixed-site manual group uses neutral name');
   assert(h.a.group.hasAttribute('data-zsf-manual'),'manual group is never an owned site group');
   assert(!h.a.group.hasAttribute('data-zsf-site'));
-  assert(!h.b.hasAttribute('data-zsf-manual-progress'),'preview cleanup');
+  assert(!h.b.hasAttribute('data-zsf-manual-choice'),'embedded choice cleanup');
   assert(!h.b.hasAttribute('data-zsf-manual-ready'),'ready marker cleanup');
   assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].kind,'mixed');
   assert.equal(h.a.group.color, 'gray', 'manual groups always use neutral native gray');
@@ -195,6 +214,28 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
     .getAttribute('src'),'chrome://test/A.svg','site groups reuse original favicon');
   r.api.destroy();
 
+  const reverse=harness();
+  reverse.payload(reverse.c); // Source lies AFTER the hovered target.
+  reverse.fire('dragstart',reverse.c);
+  reverse.fire('dragover',reverse.b);
+  await delay(740);
+  reverse.fire('drop',reverse.b);
+  assert.equal(reverse.count(),1);
+  assert.deepEqual(reverse.b.group.tabs.map(t=>t.label),['B','C'],
+    'target-first order also holds when dragging an initially lower tab upward');
+  assert.equal(reverse.b.group.insertBefore,reverse.b);
+  reverse.fire('dragend',reverse.c);
+  reverse.api.destroy();
+
+  const early=harness();
+  early.fire('dragstart',early.a);
+  early.fire('dragover',early.b);
+  await delay(225);
+  const earlyDrop=early.fire('drop',early.b);
+  assert.equal(early.count(),0,'release before the 500ms fill never groups tabs');
+  assert(!earlyDrop.prevented,'native drag may still finish if folder creation is not ready');
+  early.api.destroy();
+
   const m=harness();
   m.win.TabContextMenu.contextTab.multiselected=true;
   for(const fn of m.menu.events.popupshowing||[])fn({target:m.menu});
@@ -207,9 +248,9 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   const off=harness({enabled:false});
   off.fire('dragstart',off.a);
   off.fire('dragover',off.b);
-  await delay(560);
+  await delay(740);
   off.fire('drop',off.b);
   assert.equal(off.count(),0,'disabled drag pref leaves existing native drag unchanged');
   off.api.destroy();
-  console.log('PASS: manual group drag center threshold, preview, native commit, metadata, restore, site icon, context menu and disabled guard');
+  console.log('PASS: Yab horizontal fill, 新群組 row replacement, cancellation, target-first/anchor ordering and native animation restoration');
 })().catch(error=>{console.error(error);process.exitCode=1});
