@@ -151,6 +151,7 @@ async function main() {
   group.tabs = [first, second];
   const tabContainer = new FakeNode('tab-container');
   let created = 0;
+  let insertRelated = true;
   const browser = {
     tabContainer, selectedTab: null,
     getIcon: () => 'chrome://test/icon.svg',
@@ -163,6 +164,11 @@ async function main() {
       const i = group.tabs.indexOf(tab);
       if (i >= 0) group.tabs.splice(i, 1);
       group.tabs.splice(group.tabs.indexOf(before), 0, tab);
+    },
+    moveTabAfter: (tab, after) => {
+      const i = group.tabs.indexOf(tab);
+      if (i >= 0) group.tabs.splice(i, 1);
+      group.tabs.splice(group.tabs.indexOf(after) + 1, 0, tab);
     },
     removeTab(tab, options) {
       assert.equal(options.animate, true);
@@ -194,6 +200,9 @@ async function main() {
   let ziaPrefObserver = null;
   let prefObserverRemoved = false;
   const Services = { prefs: {
+    getBoolPref(key, fallback) {
+      return key === 'browser.tabs.insertRelatedAfterCurrent' ? insertRelated : fallback;
+    },
     addObserver(prefix, obs) {
       assert.equal(prefix, 'zia.');
       ziaPrefObserver = obs;
@@ -256,7 +265,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.9.6');
+  assert.equal(manifest.version, '0.9.7');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;
@@ -314,6 +323,42 @@ async function main() {
   assert(!host.hasAttribute('data-zsf-preview-sidebar-hold'),
     'choosing a preview tab must release compact sidebar');
   assert(!popup.hasAttribute('data-open'), 'close clears animation flag so it restarts next time');
+
+  // Regression: a collapsed Site Folder selected through the preview can
+  // receive a related background link at its tail (Firefox Bug 2003021).
+  // Only this popup route should move that background tab after its source.
+  host.events.mouseover({ target });
+  await new Promise(resolve => setTimeout(resolve, 260));
+  const sourceRow = popup.querySelector('.zsf-hover-list').children[0];
+  popup.events.click({ target: sourceRow, stopPropagation() {} });
+  assert.equal(browser.selectedTab, first, 'preview selects source for background link');
+  const sendBackground = label => {
+    const opened = makeTab(label);
+    group.tabs.push(opened);
+    tabContainer.events.TabOpen({target: opened});
+    return opened;
+  };
+  const related1 = sendBackground('related link 1');
+  await Promise.resolve();
+  assert.equal(group.tabs.indexOf(related1), group.tabs.indexOf(first) + 1,
+    'background link must follow preview-selected source, not group tail');
+  assert.equal(browser.selectedTab, first, 'opening background link must not activate it');
+  const related2 = sendBackground('related link 2');
+  await Promise.resolve();
+  assert.equal(group.tabs.indexOf(related2), group.tabs.indexOf(related1) + 1,
+    'multiple background links preserve creation order after the preview source');
+  insertRelated = false;
+  const nativeTail = sendBackground('explicit native tail');
+  await Promise.resolve();
+  assert.equal(group.tabs.at(-1), nativeTail,
+    'turning off Firefox related insertion must leave native tab position alone');
+  insertRelated = true;
+  for (const opened of [related1, related2, nativeTail]) {
+    group.tabs.splice(group.tabs.indexOf(opened), 1);
+    opened.isConnected = false;
+  }
+  browser.selectedTab = second; // Subsequent preview tests use the original two tabs.
+  window.events.TabSelect(); // Clear the preview-specific insertion context.
   // Updating the selection should not reset a long card to its first row.
   host.events.mouseover({ target });
   await new Promise(resolve => setTimeout(resolve, 260));
