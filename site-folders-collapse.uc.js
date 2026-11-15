@@ -7,7 +7,7 @@
 (() => {
   'use strict';
   if (window.__zsfCollapseV037) return;
-  const SELECTOR = 'tab-group[data-zsf-site]:not([split-view-group])';
+  const SELECTOR = 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])';
   const states = new Map();
   const listeners = [];
   let observer, dead = false;
