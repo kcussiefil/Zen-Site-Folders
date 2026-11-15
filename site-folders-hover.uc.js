@@ -30,7 +30,9 @@
   const handlers = [];
   let asleepObserver = null;
   // Firefox Bug 2003021: a related background tab can land at the bottom
-  // of a collapsed group after selecting its source from our hover preview.
+  // after selecting its source from our collapsed-group hover preview.
+  // The group may automatically expand during selection; rely on the origin
+  // being a preview click rather than its *later* collapsed flag.
   // Track only that explicit selection, never ordinary native tab clicks.
   let previewSource = null;
   function onPreviewRelatedTabOpen(event) {
@@ -43,7 +45,7 @@
       const {source, group} = context;
       if (destroyed || previewSource !== context || !browser ||
           browser.selectedTab !== source || !source?.isConnected ||
-          source.group !== group || !group?.isConnected || !group.collapsed ||
+          source.group !== group || !group?.isConnected ||
           !group.matches?.(GROUP_SELECTOR) ||
           !opened.isConnected || opened.group !== group ||
           opened.selected || opened.pinned || opened.closing || source.pinned ||
