@@ -67,6 +67,7 @@ const finish = arguments[arguments.length - 1];
       // This integration case must create actual unpinned browser tabs.
       // Every ordinary case still retains the strict no-add/remove guard.
       if (name.startsWith('incremental organize puts incoming tabs above existing members') ||
+          name.startsWith('preview related background links remain adjacent') ||
           (name.startsWith('site v072 ') || name.startsWith('site v073 ')))
         await fn(h);
       else await guarded(h, () => fn(h));
@@ -93,6 +94,56 @@ const finish = arguments[arguments.length - 1];
     SessionStore.setCustomWindowValue(window, 'zsf-before-sort-v1', JSON.stringify({ [workspaceId]: value }));
     return { workspaceId, value };
   }
+  // The real Zen group title normally opens its preview on pointer hover.
+  // For stable headless testing, temporarily simulate :hover on the label,
+  // then click an actual preview row to reproduce Firefox Bug 2003021.
+  await test('preview related background links remain adjacent in collapsed site group', async h => {
+    const prevPref = Services.prefs.getBoolPref('browser.tabs.insertRelatedAfterCurrent', true);
+    const principal = Services.scriptSecurityManager.getSystemPrincipal();
+    const label = h.group.querySelector('.tab-group-label-container');
+    assert(label, 'native site group label exists');
+    const oldMatches = label.matches;
+    try {
+      Services.prefs.setBoolPref('browser.tabs.insertRelatedAfterCurrent', true);
+      h.group.collapsed = true;
+      await delay(180);
+      // Hover does not depend on desktop mouse position or popup delay races.
+      label.matches = function(selector) {
+        return selector === ':hover' || oldMatches.call(this, selector);
+      };
+      label.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, composed: true }));
+      await delay(220);
+      const card = document.getElementById('zsf-folder-hover-card');
+      assert(card && !card.hidden, 'site-group preview opens from collapsed label');
+      const source = h.tabs[1];
+      const row = [...card.querySelectorAll('.zsf-hover-row')]
+        .find(node => node.zsfTab === source);
+      assert(row, 'source tab is present in the preview');
+      row.click();
+      assert(gBrowser.selectedTab === source, 'click genuinely selects the source tab');
+      assert(card.hidden, 'preview closes after selecting a tab');
+      const makeRelated = name => gBrowser.addTab('about:blank#zsf-related-' + name, {
+        triggeringPrincipal: principal, openerTab: source, tabGroup: h.group,
+        inBackground: true
+      });
+      const first = makeRelated('one');
+      await delay(90);
+      assert(first.group === h.group && !first.selected,
+        'native background link remains in group and never activates');
+      assert(order(h.group).indexOf(first) === order(h.group).indexOf(source) + 1,
+        'first background link follows preview-selected source, not group tail');
+      const second = makeRelated('two');
+      await delay(90);
+      assert(second.group === h.group && !second.selected,
+        'second native background link retains its original inactive state');
+      assert(order(h.group).indexOf(second) === order(h.group).indexOf(first) + 1,
+        'second background link follows first related tab rather than group tail');
+    } finally {
+      label.matches = oldMatches;
+      Services.prefs.setBoolPref('browser.tabs.insertRelatedAfterCurrent', prevPref);
+    }
+  });
+
   // Real custom element click -> native setter -> native event -> native animations -> computed layout.
   await test('background tab sorting preserves inactive tab and ordinary click', async h => {
     const backgroundDrag = window.__zsfBackgroundDragV090;
