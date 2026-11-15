@@ -38,7 +38,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 | 項目 | 連結 |
 | --- | --- |
-| 目前版本 | **v0.9.7（測試候選版）**，以 [`theme.json`](theme.json) 為準 |
+| 目前版本 | **v0.9.7**，以 [`theme.json`](theme.json) 為準 |
 | 版本整理 | [`CHANGELOG.md`](CHANGELOG.md) |
 | 完整各版說明 | [GitHub Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases)／[`releases/`](releases/) |
 | macOS 實機驗收 | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |
@@ -48,7 +48,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 選取分頁顏色、原生右鍵選項及調色視窗已交由 [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5 獨立管理。背景分頁拖曳預設內建，不再提供 Sine 開關；必要時可透過 `about:config` 設定 `zen.sitefolders.background_drag.enabled=false` 停用。
 
-**v0.9.7（測試候選版）** 修正從收合群組預覽卡片進入分頁後，相關背景連結錯誤插入群組底部；群組 favicon 改採 Zia 的原生未載入圖示亮度，不再以父層透明度比例推算。
+**v0.9.7** 修正從收合群組預覽卡片進入分頁後，相關背景連結錯誤插入群組底部；群組 favicon 改採 Zia 的原生未載入圖示亮度，不再以父層透明度比例推算。
 
 **v0.9.6** 讓網站群組標題的 favicon 亮度跟隨 Zia 未載入分頁圖示：全組未載入才黯淡，任一分頁載入就恢復正常；隨 Zia 設定即時切換，不新增 JS 觀察器或修改排版、動畫。
 
