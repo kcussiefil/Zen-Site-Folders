@@ -295,11 +295,12 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* v0.9.7: Native Zia filters an all-asleep group header as a single
-   composite surface. Avoid that parent filter for Site Folders only and
-   apply the exact unloaded-tab icon filter to our favicon directly.
-   Restore Zia's native title+chevron strengths on the text child; keep
-   all layout, hover geometry, selection and motion behavior untouched. */
+/* v0.9.7: Zia filters BOTH nested .tab-icon-stack and .tab-icon-image
+   in a pending tab. Their effective alpha compounds: dark 0.55² = 0.3025;
+   light 0.75² = 0.5625. The Site Folders favicon has no native icon stack.
+   Disable the parent group-header filter for owned groups only, apply the
+   equivalent two-layer fade to this favicon, and preserve Zia's group
+   title/chevron fade independently. No layout or motion changes. */
 @media -moz-pref("zia.tabs.dim-asleep") {
   :root:not(#zia-none) #tabbrowser-tabs
   :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container {
@@ -307,7 +308,7 @@
   }
   :root:not(#zia-none) #tabbrowser-tabs
   :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container > .zsf-favicon {
-    filter: opacity(0.55) !important;
+    filter: opacity(0.3025) !important;
     transition: filter 0.15s ease !important;
   }
   :root:not(#zia-none) #tabbrowser-tabs
@@ -317,7 +318,7 @@
   }
   :root[zia-light]:not(#zia-none) #tabbrowser-tabs
   :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container > .zsf-favicon {
-    filter: opacity(0.75) !important;
+    filter: opacity(0.5625) !important;
   }
   :root[zia-light]:not(#zia-none) #tabbrowser-tabs
   :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) > .tab-group-label-container > .tab-group-label {
