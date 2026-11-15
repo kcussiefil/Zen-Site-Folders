@@ -9,7 +9,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'theme.json'), 'utf8
 const hover = fs.readFileSync(path.join(root, 'site-folders-hover.uc.js'), 'utf8');
 const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
-assert.equal(manifest.version, '0.9.9', 'release under test must be v0.9.9');
+assert.equal(manifest.version, '1.0.0', 'release under test must be v1.0.0');
 assert(!Object.hasOwn(manifest, 'preferences'), 'background drag has no Sine controls');
 assert(!fs.existsSync(path.join(root, 'preferences.json')), 'remove obsolete exposed control file');
 assert(hover.includes('getComputedStyle(source)'), 'inherit Zia actual native preview paint');

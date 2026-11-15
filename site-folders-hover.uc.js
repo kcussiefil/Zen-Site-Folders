@@ -11,7 +11,7 @@
 
   const TAG = '[ZenSiteFoldersHover]';
   const XHTML_NS = 'http://www.w3.org/1999/xhtml';
-  const GROUP_SELECTOR = 'tab-group[data-zsf-site]:not([split-view-group])';
+  const GROUP_SELECTOR = 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])';
   const HOVER_DELAY_MS = 105;
   const HIDE_DELAY_MS = 120;
   const EXIT_MS = 120;

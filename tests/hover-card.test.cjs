@@ -64,7 +64,7 @@ async function main() {
   // The hover script must not call destructive browser operations.
   assert(!/\b(removeTab|closeTab|pinTab|unpinTab)\s*\(/.test(source));
   assert(!/SNAPSHOT_KEY|writeSnapshots|captureSnapshot/.test(source));
-  const collapsedRules = css.replace(/\/\*[\s\S]*?\*\//g, '').match(/[^{}]*tab-group\[data-zsf-site\]\[collapsed\][^{}]*\{[^{}]*\}/g) || [];
+  const collapsedRules = css.replace(/\/\*[\s\S]*?\*\//g, '').match(/[^{}]*tab-group:is\(\[data-zsf-site\], \[data-zsf-manual\]\)\[collapsed\][^{}]*\{[^{}]*\}/g) || [];
   for (const rule of collapsedRules) {
     const declarations = rule.slice(rule.indexOf('{'));
     assert(!/(?:^|[;{])\s*(?:height|min-height|max-height|display|margin(?:-[\w-]+)?|animation(?:-[\w-]+)?)\s*:/.test(declarations),
@@ -127,7 +127,7 @@ async function main() {
     collapsed: true, isConnected: true, tabs: [],
     getAttribute: key => key === 'collapsed' ? 'true' : null,
     hasAttribute: key => key === 'collapsed',
-    matches: selector => selector === 'tab-group[data-zsf-site]:not([split-view-group])',
+    matches: selector => selector === 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])',
     closest: selector => selector === 'zen-workspace' ? { id: 'space' } : null,
   };
   const label = {
@@ -265,7 +265,7 @@ async function main() {
     css.includes('translate: none !important'),
     'compact-mode sidebar must remain visually open during card hover');
   const manifest = require('../theme.json');
-  assert.equal(manifest.version, '0.9.9');
+  assert.equal(manifest.version, '1.0.0');
   assert(Date.parse(manifest.updatedAt) > Date.parse('2026-11-01T17:25:00.000Z'),
     'Sine update timestamp must increase beyond prior release');
   const rows = popup.querySelector('.zsf-hover-list').children;

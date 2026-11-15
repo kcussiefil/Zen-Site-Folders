@@ -227,9 +227,14 @@
 }
 /* Notice rendering uses Zen's built-in .zen-toast rules from zen-popup.css.
    No custom colors, border, padding, height, font, or animation overrides. */
-/* Native/Advanced Tab Groups colour, scoped to our own site groups only. */
-#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) {
+/* Shared transparent Zen/Zia folder shell for both explicitly owned site groups
+   and manually created ordinary groups; never mark manual groups data-zsf-site.
+   Preserve the native --tab-group-color on manual groups for the color picker. */
+#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site] {
   --tab-group-color: transparent !important;
+}
+
+#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) {
   --tab-group-stroke: currentColor !important;
   --tab-group-background-color: transparent !important;
   --zia-group-swatch: transparent !important;
@@ -243,7 +248,7 @@
 }
 /* Hide the group background layer for our own groups except when Zia marks
    a real drop target: ::before supplies the native-style drop hover wash. */
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group], [zia-drop-slot])::before {
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group], [zia-drop-slot])::before {
   content: none !important;
   display: none !important;
   opacity: 0 !important;
@@ -256,7 +261,7 @@
    Suppress the decorative ring for Site Folders groups in ALL states,
    including drag-over, without touching ::before, [zia-drop-slot] itself,
    native landing positions, or .tab-group-container::after's drop slot. */
-#tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group])::after {
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])::after {
   content: none !important;
   display: none !important;
   opacity: 0 !important;
@@ -264,7 +269,7 @@
   border: 0 !important;
   box-shadow: none !important;
 }
-#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container {
+#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container {
   background: transparent !important;
   background-image: none !important;
   border: 0 !important;
@@ -272,16 +277,16 @@
   box-shadow: none !important;
 }
 /* Suppress tinted group rails, but keep Zia's empty/drop placeholders. */
-#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-container::after {
+#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-container::after {
   background-color: transparent !important;
 }
 /* For these groups only, replace Zia/ATG decoration with the cached site icon.
    Do not touch icons on user-created folders, Spaces or Essentials. */
-#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-folder-icon,
-#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-icon-container {
+#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container > .tab-group-folder-icon,
+#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container > .tab-group-icon-container {
   display: none !important;
 }
-#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .zsf-favicon {
+#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container > .zsf-favicon {
   width: 16px !important;
   min-width: 16px !important;
   max-width: 16px !important;
@@ -295,33 +300,17 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* v0.9.9: only custom unpinned manual groups get these favicon metrics.
-   Do not style Zen pinned folders, Zia's native groups or split views. */
-#tabbrowser-tabs tab-group[data-zsf-manual]:not([split-view-group])
-  > .tab-group-label-container > :is(.tab-group-folder-icon, .tab-group-icon-container) {
-  display: none !important;
+/* Explicitly selected manual group colors retain the same clear, compact
+   header as Site Folders. Native Firefox group color is shown only as a
+   subtle leading accent. No tint is added to the panel/background. */
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-manual][data-zsf-color-custom]:not([split-view-group])
+  > .tab-group-label-container,
+:root:not([zen-sidebar-expanded="true"]) #tabbrowser-tabs tab-group[data-zsf-manual][data-zsf-color-custom]:not([split-view-group])
+  > .tab-group-label-container {
+  border-inline-start: 3px solid var(--tab-group-color, currentColor) !important;
 }
-#tabbrowser-tabs tab-group[data-zsf-manual]:not([split-view-group])
-  > .tab-group-label-container > .zsf-favicon {
-  display: block !important;
-  width: 16px !important;
-  height: 16px !important;
-  min-width: 16px !important;
-  min-height: 16px !important;
-  max-width: 16px !important;
-  max-height: 16px !important;
-  margin: 0 8px 0 10px !important;
-  padding: 0 !important;
-  flex-shrink: 0 !important;
-  align-self: center !important;
-  background: transparent !important;
-  opacity: 1 !important;
-}
-#tabbrowser-tabs tab-group[data-zsf-manual]:not([split-view-group])
-  > .tab-group-label-container > .tab-group-label {
-  margin-inline-start: 0 !important;
-  padding-inline-start: 0 !important;
-}
+/* User can still see the merge target before committing. Keep this solely
+   on standalone tab rows; it never replaces native pointer/drag animations. */
 #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-hover] > .tab-stack > .tab-background {
   background-color: var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 10%, transparent)) !important;
   outline: 1px solid color-mix(in srgb, currentColor 33%, transparent) !important;
@@ -394,7 +383,7 @@
     filter: opacity(0.8) !important;
   }
 }
-#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label {
+#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container > .tab-group-label {
   margin-inline-start: 0 !important;
   padding-inline-start: 0 !important;
 }
@@ -416,17 +405,17 @@
    selection transitions to their native code. */
 /* Ordinary owned groups need the same clipping and hit-test rules that
    Zen/Zia scope to zen-folder. These do not animate or change row heights. */
-#tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group], [has-active]) > .tab-group-container {
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed]:not([split-view-group], [has-active]) > .tab-group-container {
   overflow-y: clip;
 }
-#tabbrowser-tabs tab-group[data-zsf-site][collapsed]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab:not([selected], [visuallyselected], [folder-active="true"], [atg-folder-active], [zia-open-in-closed], [zia-closing-in-closed]) {
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab:not([selected], [visuallyselected], [folder-active="true"], [atg-folder-active], [zia-open-in-closed], [zia-closing-in-closed]) {
   pointer-events: none;
 }
-#tabbrowser-tabs tab-group[data-zsf-site][collapsed][has-active]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab:not([selected], [visuallyselected], [folder-active="true"], [atg-folder-active], [zia-open-in-closed], [zia-closing-in-closed]) {
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed][has-active]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab:not([selected], [visuallyselected], [folder-active="true"], [atg-folder-active], [zia-open-in-closed], [zia-closing-in-closed]) {
   opacity: 0 !important;
   transition: opacity 0.18s ease-in-out;
 }
-#tabbrowser-tabs tab-group[data-zsf-site][collapsed][zia-was-active]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab {
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed][zia-was-active]:not([split-view-group]) > .tab-group-container > .tabbrowser-tab {
   opacity: 0 !important;
   transition: opacity 0.15s ease-in !important;
 }
@@ -434,8 +423,8 @@
    soundplaying/selected group forces a large repainted layer per frame.
    All inactive collapsed members already have pointer-events: none;
    native height/opacity animation owns their visual and hit-test state. */
-#tabbrowser-tabs tab-group[data-zsf-site][collapsed][has-active]:not([split-view-group]) > .tab-group-container:not([zia-folder-holding]),
-#tabbrowser-tabs tab-group[data-zsf-site]:not([collapsed], [split-view-group]) > .tab-group-container:not([zia-folder-holding]) {
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed][has-active]:not([split-view-group]) > .tab-group-container:not([zia-folder-holding]),
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]):not([collapsed], [split-view-group]) > .tab-group-container:not([zia-folder-holding]) {
   overflow: visible !important;
   clip-path: none !important;
 }
@@ -449,8 +438,8 @@
 }
 /* v0.2.8: own site groups look like a compact Zia folder WITHOUT
    Advanced Tab Groups. Do not restyle native Zen folders or user-made groups. */
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs > zen-workspace tab-group[data-zsf-site]:not([split-view-group]),
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) {
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs > zen-workspace tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group]),
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) {
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
@@ -460,7 +449,7 @@
   background: transparent !important;
 }
 
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container {
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container {
   box-sizing: border-box !important;
   display: flex !important;
   flex-direction: row !important;
@@ -477,11 +466,11 @@
 
 /* Match ordinary Zia tab hover: the token changes with the Space theme.
    If Zia is absent, blend currentColor; never force a fixed grey fill. */
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container:hover {
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container:hover {
   background-color: var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 8%, transparent)) !important;
 }
 
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label {
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container > .tab-group-label {
   display: inline-flex !important;
   align-items: center !important;
   min-height: 26px !important;
@@ -494,7 +483,7 @@
   white-space: nowrap !important;
 }
 
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .zsf-favicon {
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container > .zsf-favicon {
   display: block !important;
   margin: 0 8px 0 10px !important;
   align-self: center !important;
@@ -507,7 +496,7 @@
    ink for our site labels only. Never affect the dark mode or native
    folders; keep the transparent ZSF group background unchanged. */
 :root[zia-light]:not(#zia-none):not(#zia-none-2) #tabbrowser-tabs
-:is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group])
+:is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group])
 > .tab-group-label-container > .tab-group-label {
   color: var(--zia-sidebar-ink, rgb(28, 28, 32)) !important;
 }
@@ -518,7 +507,7 @@
    Never change member row height, child margins, transform, visibility,
    transition or native drag/drop geometry. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site]:not([split-view-group])
+tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])
 > .tab-group-container:not([hidden]) {
   margin-top: calc(3px - var(--zia-folder-inner-gap, 5px)) !important;
   padding-bottom: calc(var(--zia-folder-inner-gap, 5px) - 3px) !important;
@@ -666,7 +655,7 @@ tab-group[data-zsf-site]:not([split-view-group])
   cursor: pointer !important;
 }
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site] > .tab-group-label-container > .tab-group-label {
+tab-group:is([data-zsf-site], [data-zsf-manual]) > .tab-group-label-container > .tab-group-label {
   cursor: pointer !important;
 }
 #zsf-folder-hover-card .zsf-hover-row:focus-visible {
@@ -684,7 +673,7 @@ tab-group[data-zsf-site] > .tab-group-label-container > .tab-group-label {
    website name 2px higher than its favicon; move ONLY the name and its
    chevron, never the icon or the row's hit target. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site]:not([split-view-group])
+tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])
 > .tab-group-label-container > .tab-group-label {
   translate: 0 2px !important;
   line-height: normal !important;
@@ -693,17 +682,17 @@ tab-group[data-zsf-site]:not([split-view-group])
 /* The color submenu never paints a folder background. A chosen accent is
    restricted to the little chevron; default color remains neutral. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site] > .tab-group-label-container > .tab-group-label::after {
+tab-group:is([data-zsf-site], [data-zsf-manual]) > .tab-group-label-container > .tab-group-label::after {
   stroke: var(--zsf-custom-accent, currentColor) !important;
 }
 
 /* Custom icons selected through Zen's native icon picker can replace the
    favicon without adding another folder icon or changing other groups. */
-#tabbrowser-tabs tab-group[data-zsf-site] > .tab-group-label-container
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]) > .tab-group-label-container
 > .zsf-favicon[hidden] {
   display: none !important;
 }
-#tabbrowser-tabs tab-group[data-zsf-site] > .tab-group-label-container
+#tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual]) > .tab-group-label-container
 > .zsf-menu-emoji {
   display: inline-flex !important;
   align-items: center !important;
@@ -728,7 +717,7 @@ tab-group[data-zsf-site] > .tab-group-label-container > .tab-group-label::after 
 /* Both our website GROUP and a member TAB keep their original native
    geometry/hit testing but not the duplicate grey dragged source card. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][data-zsf-drag-source]
+tab-group:is([data-zsf-site], [data-zsf-manual])[data-zsf-drag-source]
 > .tab-group-label-container,
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
 .tabbrowser-tab[data-zsf-drag-member] {
@@ -869,12 +858,12 @@ tab-group[data-zsf-site][data-zsf-drag-source]
 /* Collapsed and expanded headers share the transparent idle style.
    A second background override here would suppress the hover feedback. */
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed]:not([split-view-group])
+tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed]:not([split-view-group])
 > .tab-group-label-container {
   outline: none !important;
 }
 :root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group[data-zsf-site][collapsed]:not([split-view-group])
+tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed]:not([split-view-group])
 > .tab-group-label-container > .tab-group-label {
   background-color: transparent !important;
   outline: none !important;
@@ -891,7 +880,7 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
   margin-inline-start: 0;flex: 0 0 auto;opacity: 0;
 }
 #zsf-folder-hover-card .zsf-hover-row:hover > .zsf-hover-action[zia-act="close"] { opacity: .8; }
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-site]
+:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group:is([data-zsf-site], [data-zsf-manual])
 > .tab-group-label-container > .tab-group-label::after {
   background-image: url("chrome://sine/content/zen-site-folders/folder-chevron.svg") !important;
   stroke: currentColor !important;
@@ -919,7 +908,7 @@ tab-group[data-zsf-site][collapsed]:not([split-view-group])
 /* Zia shifts website folders as tab-group elements. Match its tab easing. */
 @media (prefers-reduced-motion: no-preference) {
   #tabbrowser-tabs[movingtab]:not([zia-settling])
-    tab-group[data-zsf-site][zia-shift]:not([zia-dragging], [zia-drop-lock], [zia-landing]) {
+    tab-group:is([data-zsf-site], [data-zsf-manual])[zia-shift]:not([zia-dragging], [zia-drop-lock], [zia-landing]) {
     transition: transform 100ms ease-out !important;
   }
 }

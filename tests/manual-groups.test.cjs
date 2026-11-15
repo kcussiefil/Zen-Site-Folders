@@ -85,7 +85,7 @@ function harness({enabled=true}={}) {
     addTabGroup(tabs,opts) {
       addCount++;
       const group=new Node('tab-group');group.id='manual-'+addCount;
-      group.label=opts.label;group.isZenFolder=false;
+      group.label=opts.label;group.color=opts.color;group.isZenFolder=false;
       group.tabs=[...tabs];for(const tab of tabs) tab.group=group;
       const label=new Node('hbox');label.className='tab-group-label-container';
       const title=new Node('label');title.className='tab-group-label';
@@ -151,12 +151,24 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   assert(!h.a.group.hasAttribute('data-zsf-site'));
   assert(!h.b.hasAttribute('data-zsf-manual-hover'),'preview cleanup');
   assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].kind,'mixed');
+  assert.equal(h.a.group.color, 'gray', 'native group must use Firefox valid gray spelling');
+  assert.equal(h.api.setColor(h.a.group,'blue'), true,
+    'native Firefox group color can change without recreating tabs');
+  assert.equal(h.a.group.color,'blue');
+  assert.equal(h.a.group.getAttribute('data-zsf-color-custom'),'blue');
+  assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].color,'blue');
+  assert.equal(h.api.setColor(h.a.group,'magenta'),false,'invalid palette color is rejected');
+  assert.equal(h.a.group.color,'blue');
   assert.equal(h.a.group.querySelector('.tab-group-label-container').querySelector(':scope > .zsf-favicon')
     .getAttribute('src'),'chrome://browser/skin/zen-icons/folder.svg');
   h.a.group.removeAttribute('data-zsf-manual');
   h.api.restore();
   assert(h.a.group.hasAttribute('data-zsf-manual'),'manual group decorations restore by stable id');
+  assert.equal(h.a.group.color,'blue','native group color survives restore');
+  assert.equal(h.a.group.getAttribute('data-zsf-color-custom'),'blue','accent marker survives restore');
   assert.equal(h.api.createFromTabs([h.a,h.c]),null,'existing group members cannot be regrouped silently');
+  assert.equal(h.api.setColor(h.a.group,'gray'),true,'neutral native gray is supported');
+  assert(!h.a.group.hasAttribute('data-zsf-color-custom'),'neutral color does not paint an accent');
   h.api.destroy();
 
   const r=harness();

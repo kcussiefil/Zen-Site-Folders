@@ -39,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v0.9.9** (see `theme.json`) |
+| Current mod version | **v1.0.0** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -49,6 +49,8 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v1.0.0** unifies manually created groups with the complete Site Folders/Zia layout, collapse motion, hover preview and group-drag behavior. Dragging uses an 80% row-center target with a 95ms preview delay; only tab edges keep native reorder. Right-click a manual group to choose one of nine native Firefox group colors (subtle accent, not a solid background); original automatic site groups remain untouched. Manual group identity and chosen color survive restart.
 
 **v0.9.9** adds native, unpinned manual groups: drag a standalone tab onto the center of another standalone tab and hold briefly, then drop to group; alternatively Command-select several plain tabs and choose **建立普通群組** from the tab context menu. Same-site groups use the site's name and favicon; mixed groups default to 新群組 with a folder icon. Right-click a manual group to rename, change its icon or ungroup. Automatic site organizing leaves these groups intact. Disable drag creation via `zen.sitefolders.manual_group_drag.enabled=false` in `about:config` (context-menu creation remains available).
 

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 拖曳及多選建立普通群組
-// @version      0.9.9
+// @version      1.0.0
 // @description  Opt-out-safe manual grouping for unpinned Zen tabs; no live DOM reorder.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -13,7 +13,8 @@
   const STORE = 'zsf-manual-groups-v1';
   const NS = 'http://www.w3.org/1999/xhtml';
   const FOLDER_ICON = 'chrome://browser/skin/zen-icons/folder.svg';
-  const HOVER_MS = 180;
+  const HOVER_MS = 95;
+  const GROUP_COLORS = new Set(['gray', 'blue', 'purple', 'cyan', 'orange', 'yellow', 'pink', 'green', 'red']);
   const listeners = [];
   let destroyed = false, started = false, drag = null, hoverTimer = null;
   let lastDrop = 'none';
@@ -143,8 +144,39 @@
     if (destroyed) return;
     const saved = registry();
     for (const group of document.querySelectorAll('tab-group:not([split-view-group])')) {
-      if (saved[group.id] && !group.hasAttribute('data-zsf-site'))
-        decorate(group, saved[group.id]);
+      const info = saved[group.id];
+      if (!info || group.hasAttribute('data-zsf-site')) continue;
+      decorate(group, info);
+      if (GROUP_COLORS.has(info.color)) {
+        try { if (group.color !== info.color) group.color = info.color; }
+        catch (error) { console.warn(TAG, 'Could not restore native color', error); }
+      }
+      if (GROUP_COLORS.has(info.color) && info.color !== 'gray')
+        group.setAttribute('data-zsf-color-custom', info.color);
+      else group.removeAttribute('data-zsf-color-custom');
+    }
+  }
+  function setColor(group, color) {
+    if (!group?.isConnected || !group.hasAttribute?.('data-zsf-manual') ||
+        !GROUP_COLORS.has(color) || !group.id) return false;
+    const records = registry();
+    if (!records[group.id]) return false;
+    const previous = group.color;
+    try {
+      group.color = color; // Native Firefox/Zen color; SessionStore persists it.
+      if (group.color !== color) throw new Error('Native color was rejected');
+      if (!saveRegistry({...records, [group.id]: {...records[group.id], color}})) {
+        group.color = previous;
+        return false;
+      }
+      if (color !== 'gray') group.setAttribute('data-zsf-color-custom', color);
+      else group.removeAttribute('data-zsf-color-custom');
+      try { group.dispatchEvent(new CustomEvent('TabGroupUpdate', {bubbles:true})); }
+      catch (_) {}
+      return true;
+    } catch (error) {
+      console.warn(TAG, 'Could not change group color', error);
+      return false;
     }
   }
   function scheduleRestore() {
@@ -161,7 +193,7 @@
     try {
       group = browser.addTabGroup(tabs, {
         label: info.title,
-        color: 'grey',
+        color: 'gray',
         insertBefore: tabs[0],
         showCreateUI: false
       });
@@ -172,7 +204,7 @@
       // Persist manual ownership by native group ID; native attributes are not
       // guaranteed to survive a restart, while the group and its label do.
       const map = registry();
-      map[group.id] = {kind: info.kind, icon: info.icon};
+      map[group.id] = {kind: info.kind, icon: info.icon, color: 'gray'};
       if (!saveRegistry(map))
         console.warn(TAG, 'Group exists but its custom icon may not restore');
       decorate(group, info);
@@ -202,9 +234,10 @@
     if (!rect || rect.height < 15 || rect.width < 32) return null;
     const y = event.clientY;
     const x = event.clientX;
-    // Center 50% is an explicit merge affordance; edges keep normal ordering.
-    if (y < rect.top + rect.height * .25 ||
-        y > rect.bottom - rect.height * .25 ||
+    // Widen the center merge affordance to 80% of row height; the outer
+    // 10% at either edge still belongs to ordinary Zen/Zia reorder drops.
+    if (y < rect.top + rect.height * .10 ||
+        y > rect.bottom - rect.height * .10 ||
         x < rect.left || x > rect.right) return null;
     return tab;
   }
@@ -369,7 +402,7 @@
     menuItem?.remove();
     if (window[KEY] === api) delete window[KEY];
   }
-  const api = {start, destroy, createFromTabs, restore,
+  const api = {start, destroy, createFromTabs, restore, setColor,
     debug: () => ({enabled: enabled(), dragging: !!drag,
       candidate: !!drag?.ready, lastDrop,
       storedGroups: Object.keys(registry()).length})};
