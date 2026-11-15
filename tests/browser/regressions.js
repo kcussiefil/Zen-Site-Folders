@@ -108,7 +108,10 @@ const finish = arguments[arguments.length - 1];
         assert(tab.hasAttribute('pending'), 'all test group tabs must be unloaded');
       }
       core.reapplyAppearance();
-      await delay(120);
+      // Both native Zia filters animate over 150ms; the group favicon has
+      // one equivalent composed filter. Compare settled paint, not differing
+      // intermediate easing frames of two separate filter layers.
+      await delay(400);
       const header = h.group.querySelector('.tab-group-label-container');
       const favicon = header?.querySelector('.zsf-favicon');
       const stack = h.tabs[0].querySelector('.tab-icon-stack');
