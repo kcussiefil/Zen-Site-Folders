@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 const manifest = require('../theme.json');
-assert.equal(manifest.version, '0.9.7');
+assert.equal(manifest.version, '0.9.8');
 const begin = css.indexOf('/* v0.9.7: Zia filters BOTH nested');
 const end = css.indexOf('#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label', begin);
 assert(begin >= 0 && end > begin, 'dedicated site-group favicon paint rules exist');
