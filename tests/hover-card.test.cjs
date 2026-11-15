@@ -64,7 +64,7 @@ async function main() {
   // The hover script must not call destructive browser operations.
   assert(!/\b(removeTab|closeTab|pinTab|unpinTab)\s*\(/.test(source));
   assert(!/SNAPSHOT_KEY|writeSnapshots|captureSnapshot/.test(source));
-  const collapsedRules = css.replace(/\/\*[\s\S]*?\*\//g, '').match(/[^{}]*tab-group\[data-zsf-site\]\[collapsed\][^{}]*\{[^{}]*\}/g) || [];
+  const collapsedRules = css.replace(/\/\*[\s\S]*?\*\//g, '').match(/[^{}]*tab-group:is\(\[data-zsf-site\], \[data-zsf-manual\]\)\[collapsed\][^{}]*\{[^{}]*\}/g) || [];
   for (const rule of collapsedRules) {
     const declarations = rule.slice(rule.indexOf('{'));
     assert(!/(?:^|[;{])\s*(?:height|min-height|max-height|display|margin(?:-[\w-]+)?|animation(?:-[\w-]+)?)\s*:/.test(declarations),
@@ -127,7 +127,7 @@ async function main() {
     collapsed: true, isConnected: true, tabs: [],
     getAttribute: key => key === 'collapsed' ? 'true' : null,
     hasAttribute: key => key === 'collapsed',
-    matches: selector => selector === 'tab-group[data-zsf-site]:not([split-view-group])',
+    matches: selector => selector === 'tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])',
     closest: selector => selector === 'zen-workspace' ? { id: 'space' } : null,
   };
   const label = {
