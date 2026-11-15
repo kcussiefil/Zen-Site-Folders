@@ -392,15 +392,10 @@
       tab.removeAttribute('data-zsf-manual-committing');
     }
     item.group?.removeAttribute?.('data-zsf-manual-committing');
-    if (item.dnd) item.dnd._dontAnimateTabMove=item.oldAnimation;
   }
   function onDragEnd() {
     clearDrag();
     if (!settling) return;
-    // Restore the native drag flag synchronously: subsequent drag gestures
-    // can begin before the next frame. The visual commit marker can remain
-    // until the first settled paint without affecting the drag engine.
-    if (settling.dnd) settling.dnd._dontAnimateTabMove=settling.oldAnimation;
     // Zia and Gecko finish their drag-end cleanup first (they registered
     // earlier on window capture). Resume transitions after the layout and
     // the group's native membership are both settled.
@@ -424,9 +419,8 @@
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    const dnd=window.gBrowser?.tabContainer?.tabDragAndDrop;
-    const oldAnimation=dnd?dnd._dontAnimateTabMove:undefined;
-    if (dnd) dnd._dontAnimateTabMove=true;
+    // Never modify Zen's global tabDragAndDrop animation flag: doing so
+    // can break subsequent ordinary tab reorders and leave stale moves.
     // Avoid Zia's stale reorder transform in the same paint as native
     // addTabGroup(). It is a temporary, scoped commit state, not a global
     // transition setting.
@@ -443,7 +437,7 @@
     clearDrag({committing:!!group});
     if (group) {
       finishLanding(); // Never carry state over from another operation.
-      settling={tabs:original,group,dnd,oldAnimation,backup:null};
+      settling={tabs:original,group,backup:null};
       // Safety fallback for platforms where a DOM-reparented tab never
       // dispatches dragend. This is cleanup, not a timer-based reorder.
       settling.backup=setTimeout(finishLanding,350);
@@ -454,7 +448,6 @@
           tab.style.removeProperty('transform');
         tab.removeAttribute('data-zsf-manual-committing');
       }
-      if (dnd) dnd._dontAnimateTabMove=oldAnimation;
     }
   }
 
