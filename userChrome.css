@@ -299,76 +299,94 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* Drag-to-group choice: show only the TARGET favicon and a fine timer ring.
-   No translucent row/card, labels or layout changes, even during Zia drag. */
-#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-progress] .tab-icon-image {
+/* Yab-style native row replacement. The destination tab itself hosts the
+   choice; there is no second floating card or duplicate full-row ghost.
+   Text and favicon are hidden only during the held target choice, without
+   changing any native tab dimensions or reparenting DOM. */
+#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-choice] > .tab-stack {
+  position: relative !important;
+}
+#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-choice] > .tab-stack > .tab-content {
+  visibility: hidden !important;
+}
+#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-choice] > .tab-stack > .tab-background {
   opacity: 0 !important;
 }
-#zsf-manual-merge-progress {
-  position: fixed !important;
-  z-index: 2147483000 !important;
-  width: 32px !important;
-  height: 32px !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  display: block !important;
-  overflow: visible !important;
-  background: none !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+#tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-merge-choice {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 8 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  box-sizing: border-box !important;
+  padding-inline: 10px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
   pointer-events: none !important;
+  border: 0 !important;
+  border-radius: var(--zia-tab-radius, 9px) !important;
+  background: var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 10%, transparent)) !important;
   color: var(--zia-sidebar-ink, currentColor) !important;
 }
-#zsf-manual-merge-progress img {
+#zsf-manual-merge-choice .zsf-manual-merge-fill {
   position: absolute !important;
-  left: 8px !important;
-  top: 8px !important;
+  inset-block: 0 !important;
+  inset-inline-start: 0 !important;
+  width: 100% !important;
+  transform: scaleX(0);
+  transform-origin: left center !important;
+  z-index: 0 !important;
+  background: color-mix(in srgb, currentColor 10%, transparent) !important;
+  pointer-events: none !important;
+}
+#zsf-manual-merge-choice[data-running] .zsf-manual-merge-fill {
+  animation: zsf-manual-horizontal-fill var(--zsf-hold-ms, 500ms) linear both !important;
+}
+#zsf-manual-merge-choice[data-ready] .zsf-manual-merge-fill {
+  transform: scaleX(1);
+}
+@keyframes zsf-manual-horizontal-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+#zsf-manual-merge-choice > :is(.zsf-manual-merge-icon, .zsf-manual-merge-title, .zsf-manual-merge-count) {
+  position: relative !important;
+  z-index: 1 !important;
+}
+#zsf-manual-merge-choice .zsf-manual-merge-icon {
   width: 16px !important;
   height: 16px !important;
   object-fit: contain !important;
+  flex: none !important;
 }
-#zsf-manual-merge-progress svg {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 32px !important;
-  height: 32px !important;
-  overflow: visible !important;
-  transform: rotate(-90deg) !important;
+#zsf-manual-merge-choice .zsf-manual-merge-title {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  flex: 1 1 auto !important;
 }
-#zsf-manual-merge-progress circle {
-  fill: none !important;
-  stroke: currentColor !important;
-  stroke-width: 2px !important;
-  stroke-linecap: round !important;
+#zsf-manual-merge-choice .zsf-manual-merge-count {
+  color: inherit !important;
+  opacity: .65 !important;
+  font-size: 12px !important;
+  flex: none !important;
 }
-#zsf-manual-merge-progress .zsf-manual-progress-track {
-  opacity: .2 !important;
-}
-#zsf-manual-merge-progress .zsf-manual-progress-fill {
-  stroke-dasharray: 81.681 !important;
-  stroke-dashoffset: 81.681 !important;
-}
-#zsf-manual-merge-progress[data-running] .zsf-manual-progress-fill {
-  animation: zsf-manual-ring-fill var(--zsf-hold-ms, 420ms) linear forwards !important;
-}
-#zsf-manual-merge-progress[data-complete] .zsf-manual-progress-fill {
-  stroke-dashoffset: 0 !important;
-}
-@keyframes zsf-manual-ring-fill {
-  from { stroke-dashoffset: 81.681; }
-  to   { stroke-dashoffset: 0; }
-}
-/* Eliminate the first incorrect Zia landing frame only for the two tabs
-   whose native DOM parents are changing. Ordinary drags are untouched. */
+/* One accepted manual group drop is atomic: the temporary native Zia drag
+   transforms stay invisible until the actual dragend cleanup runs. */
 #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-committing],
-#tabbrowser-tabs tab-group[data-zsf-manual-committing] {
+#tabbrowser-tabs tab-group[data-zsf-manual-committing],
+#tabbrowser-tabs tab-group[data-zsf-manual-committing] .tabbrowser-tab {
   animation: none !important;
   transition: none !important;
+  transform: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  #zsf-manual-merge-progress .zsf-manual-progress-fill {
-    animation-timing-function: steps(8, end) !important;
+  #zsf-manual-merge-choice[data-running] .zsf-manual-merge-fill {
+    animation-timing-function: steps(10,end) !important;
   }
 }
 

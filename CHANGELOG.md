@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v1.0.2](releases/v1.0.2.md) | Use Yab-style integrated 新群組 row with horizontal 500ms progress, and prevent wrong landing order by anchoring native group on hovered tab. |
 | [v1.0.1](releases/v1.0.1.md) | Remove manual group colors; add Yab-style locked favicon-only ring progress and stable native-group landing without Zia reorder flicker. |
 | [v1.0.0](releases/v1.0.0.md) | Make manual groups use full Site Folders/Zia visuals, native collapse and hover cards; add native color palette and easier center-drop targeting. |
 | [v0.9.9](releases/v0.9.9.md) | Create native unpinned manual groups by dropping a tab on another tab or multi-select context menu; preserve automatic site groups. |

@@ -38,7 +38,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 | 項目 | 連結 |
 | --- | --- |
-| 目前版本 | **v1.0.1**，以 [`theme.json`](theme.json) 為準 |
+| 目前版本 | **v1.0.2**，以 [`theme.json`](theme.json) 為準 |
 | 版本整理 | [`CHANGELOG.md`](CHANGELOG.md) |
 | 完整各版說明 | [GitHub Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases)／[`releases/`](releases/) |
 | macOS 實機驗收 | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |
@@ -47,6 +47,8 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 **單純整理文件不需要升版，也不會自行觸發 Sine 更新。**
 
 選取分頁顏色、原生右鍵選項及調色視窗已交由 [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5 獨立管理。背景分頁拖曳預設內建，不再提供 Sine 開關；必要時可透過 `about:config` 設定 `zen.sitefolders.background_drag.enabled=false` 停用。
+
+**v1.0.2** 依照 Yab 開源實作改為原生分頁內的「新群組」預覽：拖至目標分頁後，約 180ms 顯示網站 favicon 與「新群組」，水平進度從左往右填滿 500ms，完成後改成資料夾圖示，放開才建立原生群組。不再出現 v1.0.1 的環形進度或另一層半透明浮動卡片。建群位置固定在目標分頁，成員順序固定為「目標在前、拖入分頁在後」，避免放開時讀取已被 Zia 改動的分頁排序；完全不更動 Zen 原生拖曳動畫的全域設定。Gecko 支援時拖曳影像只顯示 favicon，否則保留 Zen 原生影像。
 
 **v1.0.1** 完整移除手動群組顏色功能與既有顏色紀錄，讓手動群組與自動群組一致。拖曳合併採用參考 Yab 開源程式的「鎖定目標、環形進度、完成後放開建立」流程：120ms 顯示目標網站 favicon，再以 420ms 完成環形進度；拖曳期間即使 Zia 位移其他分頁，目標仍維持固定。移除半透明合併卡片，並在建立原生群組前清理殘留的拖曳位移，避免第一幀錯位。
 
