@@ -118,6 +118,7 @@ function harness({enabled=true}={}) {
   const api=win.__zsfManualGroupsV099;
   assert(api?.createFromTabs && api?.restore);
   const fire=(type,target,extra={})=>{
+    if (type==='dragover') doc.pointTarget=target;
     const ev={target,clientX:80,clientY:116,composedPath:()=>[target],
       dataTransfer:{mozGetDataAt:()=>a,dropEffect:'none'},
       preventDefault(){this.prevented=true;},
