@@ -16,7 +16,7 @@
   const HOVER_MS = 180;
   const listeners = [];
   let destroyed = false, started = false, drag = null, hoverTimer = null;
-  let preview = null, menuItem = null, persistTimer = null, restoreTimer = null;
+  let preview = null, menuItem = null, restoreTimer = null;
   let sessionStore = null;
   try {
     sessionStore = window.SessionStore ||
@@ -241,7 +241,7 @@
   }
   function onDragStart(event) {
     clearDrag();
-    if (!enabled() || event.defaultPrevented) return;
+    if (!enabled()) return;
     const source = tabFromEvent(event);
     if (!eligible(source) || source.multiselected) return;
     // The OS/data transfer must really represent this browser tab.
@@ -257,7 +257,11 @@
         drag.source.group || drag.source.pinned) { clearDrag(); return; }
     const target = targetAt(event);
     if (drag.hover === target) {
-      if (target && drag.ready === target) showPreview(target);
+      drag.pointer = {x:event.clientX,y:event.clientY};
+      if (target && drag.ready === target) {
+        event.preventDefault();
+        showPreview(target);
+      }
       return;
     }
     clearCandidate();
@@ -343,14 +347,13 @@
     destroyed = true;
     clearDrag();
     if (restoreTimer !== null) clearTimeout(restoreTimer);
-    if (persistTimer !== null) clearTimeout(persistTimer);
     for (const [node, name, fn, cap] of listeners)
       try { node.removeEventListener(name, fn, cap); } catch (_) {}
     listeners.length = 0;
     menuItem?.remove();
     if (window[KEY] === api) delete window[KEY];
   }
-  const api = {start, destroy, createFromTabs,
+  const api = {start, destroy, createFromTabs, restore,
     debug: () => ({enabled: enabled(), dragging: !!drag,
       candidate: !!drag?.ready, storedGroups: Object.keys(registry()).length})};
   window[KEY] = api;
