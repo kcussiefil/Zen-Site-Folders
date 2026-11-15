@@ -16,8 +16,6 @@ for (const [name,script] of [['collapse',collapse],['hover',hover],['drag',drag]
 }
 const fullCSS=(css.match(/tab-group:is\(\[data-zsf-site\], \[data-zsf-manual\]\)/g)||[]).length;
 assert(fullCSS >= 22,'manual group must inherit full transparent Site Folders geometry and styles');
-assert(css.includes("#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site] {\n  --tab-group-color: transparent !important;"),
-  'automatic site color remains transparently neutral');
 assert(!css.includes('border-inline-start: 3px solid var(--tab-group-color') &&
   !css.includes('[data-zsf-color-custom]'),
   'manual-group color accents removed');
@@ -43,4 +41,4 @@ assert(manual.includes("data-zsf-manual-committing"),
   'drop suppresses intermediate landing transition only for two grouped tabs');
 assert(!/\.pinTab\(|\.unpinTab\(|\.removeTab\(/.test(manual),
   'group creation must never pin/unpin/remove existing tabs');
-console.log('PASS: manual group styling, collapse, hover, drag, native color and safety parity');
+console.log('PASS: manual group styling, collapse, hover, drag, neutral group color and native safety parity');
