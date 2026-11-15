@@ -215,6 +215,10 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   r.api.destroy();
 
   const reverse=harness();
+  // Give the OTHER standalone tab a distinct natural slot. The default
+  // minimal fake draws every tab at y=100; unlike real Zen that makes all
+  // possible targets overlap and would incorrectly select the first one.
+  reverse.a.shiftY=64;
   reverse.payload(reverse.c); // Source lies AFTER the hovered target.
   reverse.fire('dragstart',reverse.c);
   reverse.fire('dragover',reverse.b);
