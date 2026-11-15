@@ -94,6 +94,48 @@ const finish = arguments[arguments.length - 1];
     SessionStore.setCustomWindowValue(window, 'zsf-before-sort-v1', JSON.stringify({ [workspaceId]: value }));
     return { workspaceId, value };
   }
+  // Compare effective native Zia dimming of BOTH nested tab-icon nodes
+  // against the standalone Site Folders group header favicon.
+  await test('header asleep filters match native Zia icon composition', async h => {
+    const pref = 'zia.tabs.dim-asleep';
+    const previous = Services.prefs.getBoolPref(pref, false);
+    try {
+      Services.prefs.setBoolPref(pref, true);
+      gBrowser.selectedTab = h.prefix;
+      h.group.collapsed = true;
+      for (const tab of h.tabs) {
+        gBrowser.discardBrowser(tab);
+        assert(tab.hasAttribute('pending'), 'all test group tabs must be unloaded');
+      }
+      core.reapplyAppearance();
+      await delay(120);
+      const header = h.group.querySelector('.tab-group-label-container');
+      const favicon = header?.querySelector('.zsf-favicon');
+      const stack = h.tabs[0].querySelector('.tab-icon-stack');
+      const icon = h.tabs[0].querySelector('.tab-icon-image');
+      assert(favicon && stack && icon, 'native icon stack and custom site icon must exist');
+      const filterAlpha = node => {
+        const filter = getComputedStyle(node).filter;
+        const match = /^opacity\(([\d.]+)\)$/.exec(filter);
+        return match ? Number(match[1]) : (filter === 'none' ? 1 : NaN);
+      };
+      const native = filterAlpha(stack) * filterAlpha(icon);
+      const site = filterAlpha(favicon);
+      assert(Number.isFinite(native) && Number.isFinite(site) &&
+        Math.abs(native-site) < 1e-6,
+        'Zia nested tab favicon and site favicon opacity must match: ' +
+        JSON.stringify({native, site,
+          stack:getComputedStyle(stack).filter,
+          tabIcon:getComputedStyle(icon).filter,
+          siteIcon:getComputedStyle(favicon).filter,
+          group:getComputedStyle(header).filter}));
+      assert(getComputedStyle(header).filter === 'none',
+        'Site Folders must bypass Zia parent composite when all tabs are asleep');
+    } finally {
+      Services.prefs.setBoolPref(pref, previous);
+    }
+  });
+
   // The real Zen group title normally opens its preview on pointer hover.
   // For stable headless testing, temporarily simulate :hover on the label,
   // then click an actual preview row to reproduce Firefox Bug 2003021.
