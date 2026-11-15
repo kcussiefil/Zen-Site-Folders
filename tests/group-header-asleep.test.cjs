@@ -1,42 +1,39 @@
-/* v0.9.6: static regression for purely CSS-driven Zia header icon dimming.
-   The dynamic :has() selector is intentionally the same as Zia's native folder
-   asleep predicate, so no separate event listeners or state cache can drift. */
+/* v0.9.7: apply the same per-icon filter as native Zia asleep tabs.
+   No parent-composite opacity ratio or geometry modification is allowed. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-
 const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8');
 const manifest = require('../theme.json');
-assert.equal(manifest.version, '0.9.6');
-const begin = css.indexOf('/* Sync only Site Folders\' favicon');
+assert.equal(manifest.version, '0.9.7');
+const begin = css.indexOf('/* v0.9.7: Native Zia filters');
 const end = css.indexOf('#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label', begin);
-assert(begin >= 0 && end > begin, 'dedicated favicon-only compatibility block exists');
+assert(begin >= 0 && end > begin, 'dedicated site-group favicon paint rules exist');
 const block = css.slice(begin, end);
-assert(block.includes('@media -moz-pref("zia.tabs.dim-asleep")'), 'Zia live preference gates the rule');
-assert(block.includes(':root:not(#zia-none)'), 'Zia disable gate is respected');
-assert(block.includes(':root[zia-light]:not(#zia-none)'), 'light Zen space is handled');
-assert.equal((block.match(/:has\(\.tabbrowser-tab\[pending\]\):not\(:has\(\.tabbrowser-tab:not\(\[pending\]\)\)\)/g)||[]).length,2,
-  'both themes match Zia all-pending group predicate');
-assert.equal((block.match(/> \.tab-group-label-container > \.zsf-favicon/g)||[]).length,2,
-  'only custom site-group icons are targeted');
-assert(!/\.tab-group-label\s*\{|\.tab-group-container\s*\{|\b(?:height|margin|display|transform|animation)\s*:/.test(block),
-  'never control group geometry, label, or animation');
-const values = [...block.matchAll(/filter:\s*opacity\((0\.\d+)\)\s*!important/g)].map(x=>Number(x[1]));
-assert.equal(values.length, 2, 'one opacity ratio per theme');
-const [dark, light] = values;
-assert(Math.abs(0.60 * dark - 0.55) < 1e-8, 'all-asleep dark favicon matches pending single-tab icon');
-assert(Math.abs(0.80 * light - 0.75) < 1e-8, 'all-asleep light favicon matches pending single-tab icon');
-function effective(pending, ziaEnabled, lightMode) {
-  const allPending = pending.length > 0 && pending.every(Boolean);
-  if (!ziaEnabled || !allPending) return 1;
-  return (lightMode ? 0.80 : 0.60) * (lightMode ? light : dark);
+assert(block.includes('@media -moz-pref("zia.tabs.dim-asleep")'), 'follow live Zia preference');
+assert(block.includes(':root:not(#zia-none)'), 'respect Zia disabled state');
+assert(block.includes(':root[zia-light]:not(#zia-none)'), 'respect Zia light space');
+assert.equal((block.match(/:has\(\.tabbrowser-tab\[pending\]\):not\(:has\(\.tabbrowser-tab:not\(\[pending\]\)\)\)/g)||[]).length,5,
+  'the same all-pending predicate must guard each native-style filter');
+assert(block.includes('> .tab-group-label-container {\n    filter: none !important;'),
+  'avoid double-dimming of the whole group header');
+const values = [...block.matchAll(/filter: opacity\((0\.\d+)\) !important/g)].map(m=>Number(m[1]));
+assert.deepEqual(values,[0.55,0.6,0.75,0.8],
+  'native Zia dark/light tab icon and group title strengths');
+assert.equal((block.match(/> \.tab-group-label-container > \.zsf-favicon \{/g)||[]).length,2,
+  'only site-group favicon receives icon fade');
+assert(!block.includes('0.9166666667') && !block.includes('0.9375'),
+  'v0.9.6 ratio compensation must not return');
+assert(!/\b(?:height|display|margin|padding|transform|animation|scroll)\s*:/.test(block),
+  'no group geometry, background scroll or animation changes');
+function brightness(pending, ziaOn, light) {
+  return ziaOn && pending.length > 0 && pending.every(Boolean) ?
+    (light ? 0.75 : 0.55) : 1;
 }
-for (const lightMode of [false, true]) {
-  const expected = lightMode ? 0.75 : 0.55;
-  assert(Math.abs(effective([true,true,true], true, lightMode)-expected)<1e-8);
-  assert.equal(effective([true,false,true], true, lightMode),1, 'one loaded tab returns normal brightness');
-  assert.equal(effective([false],true,lightMode),1, 'loaded single-member group stays bright');
-  assert.equal(effective([true,true],false,lightMode),1, 'Zia toggle off cancels dimming');
-  assert.equal(effective([],true,lightMode),1, 'empty group is not treated as asleep');
+for (const light of [false,true]) {
+  assert.equal(brightness([true,true],true,light),light ? 0.75 : 0.55);
+  assert.equal(brightness([true,false,true],true,light),1);
+  assert.equal(brightness([true,true],false,light),1);
+  assert.equal(brightness([],true,light),1);
 }
-console.log('PASS: all-asleep header favicon ratios, preference gate, immediate :has() state, no geometry changes');
+console.log('PASS: direct Zia native favicon dimming for site groups in light/dark modes');
