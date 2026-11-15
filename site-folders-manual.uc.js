@@ -244,17 +244,25 @@
     if (!enabled()) return;
     const source = tabFromEvent(event);
     if (!eligible(source) || source.multiselected) return;
-    // The OS/data transfer must really represent this browser tab.
+    // Window capture precedes Gecko's native dragstart population. Arm
+    // the source now, but verify the real tab data transfer before painting.
     let payload = null;
-    try {
-      payload = event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab', 0);
-    } catch (_) {}
-    if (payload !== source) return;
-    drag = {source, workspace: workspace(source), hover: null, ready: null};
+    try { payload = event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab', 0); }
+    catch (_) {}
+    if (payload && payload !== source) return;
+    drag = {source, workspace: workspace(source),
+      verified: payload === source, hover: null, ready: null};
   }
   function onDragOver(event) {
     if (!drag || !drag.source?.isConnected || !enabled() ||
         drag.source.group || drag.source.pinned) { clearDrag(); return; }
+    if (!drag.verified) {
+      let payload = null;
+      try { payload = event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab', 0); }
+      catch (_) {}
+      if (payload !== drag.source) { clearDrag(); return; }
+      drag.verified = true;
+    }
     const target = targetAt(event);
     if (drag.hover === target) {
       drag.pointer = {x:event.clientX,y:event.clientY};
@@ -270,12 +278,8 @@
     hoverTimer = setTimeout(() => {
       hoverTimer = null;
       if (destroyed || !drag || drag.hover !== target) return;
-      // Reject stale hover timers when the native pointer moved away.
-      const p = drag.pointer;
-      if (p && document.elementFromPoint) {
-        const hovered = document.elementFromPoint(p.x, p.y);
-        if (!hovered || !(hovered === target || target.contains?.(hovered))) return;
-      }
+      // Dragover on the next target or dragend cancels this timer.
+      // elementFromPoint is unreliable during native OS drag previews.
       showPreview(target);
     }, HOVER_MS);
     drag.pointer = {x:event.clientX,y:event.clientY};
@@ -324,8 +328,9 @@
   function start() {
     if (destroyed || started || !window.gBrowser?.tabContainer) return false;
     started = true;
-    // Read the native DataTransfer in bubble phase after Gecko has populated it.
-    bind(window, 'dragstart', onDragStart, false);
+    // Arm in window capture before Zen/Zia can consume native dragstart.
+    // Verify the actual tab DataTransfer before showing a merge candidate.
+    bind(window, 'dragstart', onDragStart, true);
     // Drop interception is capture-phase, before the native reorder target.
     bind(window, 'dragover', onDragOver, true);
     bind(window, 'drop', onDrop, true);
