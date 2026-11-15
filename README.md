@@ -39,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v1.0.1** (see `theme.json`) |
+| Current mod version | **v1.0.2** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -49,6 +49,8 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v1.0.2** matches Yab's published two-stage tab-drop choice: after 180ms, the target tab row temporarily becomes **新群組**, with its site favicon and a 500ms left-to-right progress fill; after the fill, its icon becomes a folder and releasing creates the native group. Unlike the v1.0.1 ring, this is drawn **inside the existing tab row**, not as a floating translucent card. Native creation anchors to the hovered target and preserves **target first, dragged tab second**, even if Zia reorders the drag preview. The native drag animation state is restored on dragend; no late reordering of the created group. In supported Gecko drag sessions, the native drag image is the favicon; the native image remains as a fallback.
 
 **v1.0.1** removes the entire manual-group color feature (including already saved colors) so manually created groups match normal Site Folders. Dragging onto a tab uses a target-locked, favicon-only circular progress indicator: reveal after 120 ms, fill for 420 ms, then release to create a native ordinary group. The target remains stable even when Zia shifts surrounding tabs. The old translucent preview card is gone; the final group is created with stale Zia landing transforms cleared before the first frame. This is based on the two-stage target/hold logic in Yab's open-source `ColumnDrag.swift` / `TabDropChoice.swift`, adapted for Gecko.
 
