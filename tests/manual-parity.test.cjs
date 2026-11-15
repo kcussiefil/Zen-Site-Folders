@@ -49,8 +49,8 @@ assert(manual.includes('insertBefore: dragTarget || tabs[0]'),
   'native insertion must anchor on the hovered target, never a reordered source');
 assert(manual.includes('[dragTarget, ...validated.filter(tab => tab !== dragTarget)]'),
   'native group membership must be target-first independent of transient drag sorting');
-assert(manual.includes('item.dnd._dontAnimateTabMove=item.oldAnimation'),
-  'restore Zen native drag-animation flag on dragend, not permanently disable it');
+assert(!/_dontAnimateTabMove\s*=/.test(manual),
+  'manual grouping must NEVER mutate Zen global drag animation flag');
 assert(manual.includes("data-zsf-manual-committing"),
   'drop suppresses intermediate landing transition only for two grouped tabs');
 assert(!/\.pinTab\(|\.unpinTab\(|\.removeTab\(/.test(manual),
