@@ -326,6 +326,7 @@
   }
   function clearDrag(options) { clearCandidate(options); drag = null; }
   function onDragStart(event) {
+    finishLanding();
     clearDrag();
     if (!enabled()) return;
     const source = tabFromEvent(event);
@@ -370,55 +371,79 @@
       makeChoice(target);
     }, HOVER_MS);
   }
-  function onDrop(event) {
-    lastDrop = 'received';
-    if (!drag?.ready || !enabled()) {
-      lastDrop = 'not-ready'; clearDrag(); return;
+  function finishLanding() {
+    const item=settling;
+    if (!item) return;
+    settling=null;
+    if (item.backup !== null) clearTimeout(item.backup);
+    for (const tab of item.tabs) {
+      // This is our temporary forced transform, never clear a later native
+      // or Zia value that was applied during an unrelated new drag.
+      if (tab.style?.getPropertyValue?.('transform') === 'none')
+        tab.style.removeProperty('transform');
+      tab.removeAttribute('data-zsf-manual-committing');
     }
-    let payload = null;
-    try { payload = event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0); }
+    item.group?.removeAttribute?.('data-zsf-manual-committing');
+    if (item.dnd) item.dnd._dontAnimateTabMove=item.oldAnimation;
+  }
+  function onDragEnd() {
+    clearDrag();
+    if (!settling) return;
+    // Zia and Gecko finish their drag-end cleanup first (they registered
+    // earlier on window capture). Resume transitions after the layout and
+    // the group's native membership are both settled.
+    const frame=window.requestAnimationFrame?.bind(window);
+    if (frame) frame(()=>frame(finishLanding));
+    else finishLanding();
+  }
+  function onDrop(event) {
+    lastDrop='received';
+    if (!drag?.ready || !enabled()) {
+      lastDrop='not-ready';clearDrag();return;
+    }
+    let payload=null;
+    try {payload=event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0);}
     catch (_) {}
-    if (payload !== drag.source) { lastDrop = 'wrong-payload'; clearDrag(); return; }
-    const target = drag.ready;
-    const tabs = validTabs([drag.source,target]);
-    if (!tabs || typeof window.gBrowser?.addTabGroup !== 'function') {
-      lastDrop = 'invalid-tabs'; clearDrag(); return;
+    if (payload !== drag.source) {lastDrop='wrong-payload';clearDrag();return;}
+    const target=drag.ready,source=drag.source;
+    const original=validTabs([source,target]);
+    if (!original || typeof window.gBrowser?.addTabGroup !== 'function') {
+      lastDrop='invalid-tabs';clearDrag();return;
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    const dnd = window.gBrowser?.tabContainer?.tabDragAndDrop;
-    if (dnd) dnd._dontAnimateTabMove = true;
-    // Normalize the two moving tab rows BEFORE changing their native parent.
-    // Zia has already handled the initial window-capture drop. Any surviving
-    // per-tab translation is a stale reorder offset, not part of the final group.
-    const normalized = [];
-    for (const tab of tabs) {
+    const dnd=window.gBrowser?.tabContainer?.tabDragAndDrop;
+    const oldAnimation=dnd?dnd._dontAnimateTabMove:undefined;
+    if (dnd) dnd._dontAnimateTabMove=true;
+    // Avoid Zia's stale reorder transform in the same paint as native
+    // addTabGroup(). It is a temporary, scoped commit state, not a global
+    // transition setting.
+    for (const tab of original) {
       tab.setAttribute('data-zsf-manual-committing','true');
-      const style = tab.style;
-      if (style?.setProperty) {
-        style.setProperty('transform','none','important');
-        normalized.push(tab);
-      }
-      for (const animation of tab.getAnimations?.() || []) {
-        if (animation.id === 'zia-land') animation.cancel();
-      }
+      tab.style?.setProperty?.('transform','none','important');
     }
-    const result = createFromTabs(tabs,{dragTarget:target});
-    if (result) result.setAttribute('data-zsf-manual-committing','true');
-    lastDrop = result ? 'created' : 'creation-failed';
-    clearDrag({committing:!!result});
-    const unmark = () => {
-      for (const tab of normalized) {
-        if (tab.style?.getPropertyValue?.('transform') === 'none')
+    // addTabGroup inserts the container before "insertBefore" in Zen's
+    // Tabbrowser patch. Target-first order is deterministic regardless of
+    // transient gBrowser.tabs sorting during a drag. No second reorder pass.
+    const group=createFromTabs([target,source],{dragTarget:target});
+    if (group) group.setAttribute('data-zsf-manual-committing','true');
+    lastDrop=group?'created':'creation-failed';
+    clearDrag({committing:!!group});
+    if (group) {
+      finishLanding(); // Never carry state over from another operation.
+      settling={tabs:original,group,dnd,oldAnimation,backup:null};
+      // Safety fallback for platforms where a DOM-reparented tab never
+      // dispatches dragend. This is cleanup, not a timer-based reorder.
+      settling.backup=setTimeout(finishLanding,350);
+      if (event.dataTransfer) event.dataTransfer.dropEffect='move';
+    } else {
+      for(const tab of original) {
+        if(tab.style?.getPropertyValue?.('transform')==='none')
           tab.style.removeProperty('transform');
+        tab.removeAttribute('data-zsf-manual-committing');
       }
-      for (const tab of tabs) tab.removeAttribute('data-zsf-manual-committing');
-      result?.removeAttribute?.('data-zsf-manual-committing');
-    };
-    const frame = window.requestAnimationFrame?.bind(window);
-    if (frame) frame(() => frame(unmark)); // First frame has correct final DOM.
-    else setTimeout(unmark,0);
-    if (result && event.dataTransfer) event.dataTransfer.dropEffect='move';
+      if (dnd) dnd._dontAnimateTabMove=oldAnimation;
+    }
   }
 
   function selectedForMenu() {
@@ -454,7 +479,7 @@
     // Drop interception is capture-phase, before the native reorder target.
     bind(window, 'dragover', onDragOver, true);
     bind(window, 'drop', onDrop, true);
-    bind(window, 'dragend', clearDrag, true);
+    bind(window, 'dragend', onDragEnd, true);
     bind(window, 'deactivate', clearDrag, true);
     bind(window, 'keydown', e => { if (e.key === 'Escape') clearDrag(); }, true);
     bind(window, 'ZenWorkspacesUIUpdate', () => { clearDrag(); scheduleRestore(); });
@@ -471,6 +496,7 @@
     if (destroyed) return;
     destroyed = true;
     clearDrag();
+    finishLanding();
     if (restoreTimer !== null) clearTimeout(restoreTimer);
     for (const [node, name, fn, cap] of listeners)
       try { node.removeEventListener(name, fn, cap); } catch (_) {}
