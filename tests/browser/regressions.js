@@ -141,10 +141,14 @@ const finish = arguments[arguments.length - 1];
         clientX:r.left+r.width/2,clientY:r.top+r.height/2}));
     };
     emit(source,'dragstart');
+    const manual = window.__zsfManualGroupsV099;
+    assert(manual?.debug().dragging, 'native dragstart must arm manual group gesture: ' +
+      JSON.stringify(manual?.debug()));
     emit(target,'dragover');
     await delay(240);
     assert(target.hasAttribute('data-zsf-manual-hover'),
-      'center hover shows merge candidate without moving native tabs');
+      'center hover shows merge candidate without moving native tabs: ' +
+      JSON.stringify(manual.debug()));
     assert(!source.group && !target.group,
       'visual candidate must not create a group before drop');
     const nativeAccepted=emit(target,'drop');
