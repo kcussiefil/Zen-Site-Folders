@@ -39,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v1.0.0** (see `theme.json`) |
+| Current mod version | **v1.0.1** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -49,6 +49,8 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v1.0.1** removes the entire manual-group color feature (including already saved colors) so manually created groups match normal Site Folders. Dragging onto a tab uses a target-locked, favicon-only circular progress indicator: reveal after 120 ms, fill for 420 ms, then release to create a native ordinary group. The target remains stable even when Zia shifts surrounding tabs. The old translucent preview card is gone; the final group is created with stale Zia landing transforms cleared before the first frame. This is based on the two-stage target/hold logic in Yab's open-source `ColumnDrag.swift` / `TabDropChoice.swift`, adapted for Gecko.
 
 **v1.0.0** unifies manually created groups with the complete Site Folders/Zia layout, collapse motion, hover preview and group-drag behavior. Dragging uses an 80% row-center target with a 95ms preview delay; only tab edges keep native reorder. Right-click a manual group to choose one of nine native Firefox group colors (subtle accent, not a solid background); original automatic site groups remain untouched. Manual group identity and chosen color survive restart.
 

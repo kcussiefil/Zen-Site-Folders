@@ -131,28 +131,11 @@ const finish = arguments[arguments.length - 1];
     assert(manualLabel && getComputedStyle(manualLabel).backgroundColor ===
       getComputedStyle(siteLabel).backgroundColor,
       'manual group label uses Site Folders transparent template');
-    assert(manual.setColor(group, 'blue') && group.color === 'blue' &&
-      group.getAttribute('data-zsf-color-custom') === 'blue',
-      'native group color can be changed with user-visible accent without recreating tabs');
-    const colored = JSON.parse(SessionStore.getCustomWindowValue(window,'zsf-manual-groups-v1'));
-    assert(colored[group.id]?.color === 'blue','native group color is persisted by its stable ID');
-    const accentStyle = getComputedStyle(manualLabel);
-    const blueAccent = accentStyle.borderInlineStartColor;
-    assert(parseFloat(accentStyle.borderInlineStartWidth) >= 2,
-      'selected manual group color visibly paints a subtle edge, not only metadata: ' +
-      JSON.stringify({groupColor:group.color,colorAttr:group.getAttribute('data-zsf-color-custom'),
-        width:accentStyle.borderInlineStartWidth,leftWidth:accentStyle.borderLeftWidth,
-        border:accentStyle.borderInlineStart,color:accentStyle.borderInlineStartColor,
-        groupNativeColor:getComputedStyle(group).getPropertyValue('--tab-group-color'),
-        selectorMatch:group.matches('tab-group[data-zsf-manual][data-zsf-color-custom]'),
-        rootExpanded:document.documentElement.getAttribute('zen-sidebar-expanded'),
-        styleSheet:getComputedStyle(manualLabel).cssText}));
-    assert(manual.setColor(group,'red'),'second native group color is accepted');
-    const redAccent = getComputedStyle(manualLabel).borderInlineStartColor;
-    assert(blueAccent !== redAccent,
-      'changing native group color changes the displayed accent: ' +
-      JSON.stringify({blueAccent,redAccent,property:getComputedStyle(group).getPropertyValue('--tab-group-color')}));
-    assert(manual.setColor(group,'blue'),'restore chosen color after color display test');
+    assert(group.color === 'gray' && !group.hasAttribute('data-zsf-color-custom'),
+      'manual groups use the same colorless transparent treatment as automatic groups');
+    const nativeColor = getComputedStyle(group).getPropertyValue('--tab-group-color').trim();
+    const siteColor = getComputedStyle(h.group).getPropertyValue('--tab-group-color').trim();
+    assert(nativeColor === siteColor, 'manual and automatic groups have identical group color variables');
     gBrowser.selectedTab = h.tabs[0]; // An inactive group must collapse all of its rows.
     click(group); await idle(group);
     assert(group.collapsed &&
@@ -179,8 +162,8 @@ const finish = arguments[arguments.length - 1];
     group.removeAttribute('data-zsf-manual');
     manual.restore();
     assert(group.hasAttribute('data-zsf-manual') &&
-      group.color === 'blue' && group.getAttribute('data-zsf-color-custom') === 'blue',
-      'manual appearance, color and native icon decoration survive session restore');
+      group.color === 'gray' && !group.hasAttribute('data-zsf-color-custom'),
+      'manual appearance and native icon survive with no color feature after restore');
   });
 
   // Synthetic native DragEvents verify the center-target hover and drop
@@ -200,10 +183,17 @@ const finish = arguments[arguments.length - 1];
     assert(manual?.debug().dragging, 'native dragstart must arm manual group gesture: ' +
       JSON.stringify(manual?.debug()));
     emit(target,'dragover');
-    await delay(240);
-    assert(target.hasAttribute('data-zsf-manual-hover'),
-      'center hover shows merge candidate without moving native tabs: ' +
-      JSON.stringify(manual.debug()));
+    await delay(200);
+    assert(target.hasAttribute('data-zsf-manual-progress'),
+      'favicon progress is revealed over native target: ' + JSON.stringify(manual.debug()));
+    assert(document.getElementById('zsf-manual-merge-progress') &&
+      !document.getElementById('zsf-manual-merge-preview'),
+      'no translucent row card, only target favicon and ring');
+    assert(!target.hasAttribute('data-zsf-manual-ready'),
+      'early release cannot commit before the ring has finished');
+    await delay(450);
+    assert(target.hasAttribute('data-zsf-manual-ready'),
+      'complete progress authorizes an actual group drop');
     assert(!source.group && !target.group,
       'visual candidate must not create a group before drop');
     const beforeDrop=manual.debug();

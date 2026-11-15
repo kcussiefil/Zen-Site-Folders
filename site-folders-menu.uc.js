@@ -393,37 +393,6 @@
     menu = xul('menupopup');
     menu.id = 'zsf-site-group-menu';
     menu.appendChild(xul('menuitem', '重新命名', rename));
-    // Native tab-group colors are available to manual groups only. Automatic
-    // Site Folders keep their deliberately uncolored website presentation.
-    const palette = sub(menu, '變更顏色');
-    const colorParent = palette.parentElement;
-    const colors = [
-      ['gray', '灰色'], ['blue', '藍色'], ['purple', '紫色'],
-      ['cyan', '青色'], ['orange', '橘色'], ['yellow', '黃色'],
-      ['pink', '粉紅色'], ['green', '綠色'], ['red', '紅色']
-    ];
-    const choices = colors.map(([color, title]) => {
-      const item = xul('menuitem', title, group => {
-        if (!window.__zsfManualGroupsV099?.setColor?.(group, color))
-          alertUser('無法保存群組顏色，請確認 Zen 原生群組支援。');
-      });
-      item.setAttribute('type', 'radio');
-      item.setAttribute('name', 'zsf-manual-group-color');
-      item.setAttribute('data-zsf-native-color', color);
-      palette.appendChild(item);
-      return [color, item];
-    });
-    bind(menu, 'popupshowing', event => {
-      if (event.target !== menu) return;
-      const group = activeGroup || menu.zsfTargetGroup;
-      colorParent.hidden = !group?.hasAttribute?.('data-zsf-manual');
-    });
-    bind(palette, 'popupshowing', event => {
-      if (event.target !== palette) return;
-      const group = activeGroup || menu.zsfTargetGroup;
-      for (const [color, item] of choices)
-        item.setAttribute('checked', String(group?.color === color));
-    });
     menu.appendChild(xul('menuitem', '變更圖示', chooseIcon));
     menu.appendChild(xul('menuitem', '移除圖示', removeIcon));
     menu.appendChild(xul('menuseparator'));

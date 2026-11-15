@@ -227,10 +227,9 @@
 }
 /* Notice rendering uses Zen's built-in .zen-toast rules from zen-popup.css.
    No custom colors, border, padding, height, font, or animation overrides. */
-/* Shared transparent Zen/Zia folder shell for both explicitly owned site groups
-   and manually created ordinary groups; never mark manual groups data-zsf-site.
-   Preserve the native --tab-group-color on manual groups for the color picker. */
-#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site] {
+/* Site-created and manual groups must render identically, without color.
+   The native group.color remains gray only as an implementation detail. */
+#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]) {
   --tab-group-color: transparent !important;
 }
 
@@ -300,57 +299,77 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* Explicitly selected manual group colors retain the same clear, compact
-   header as Site Folders. Native Firefox group color is shown only as a
-   subtle leading accent. No tint is added to the panel/background. */
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs tab-group[data-zsf-manual][data-zsf-color-custom]:not([split-view-group])
-  > .tab-group-label-container,
-:root:not([zen-sidebar-expanded="true"]) #tabbrowser-tabs tab-group[data-zsf-manual][data-zsf-color-custom]:not([split-view-group])
-  > .tab-group-label-container {
-  border-inline-start: 3px solid var(--tab-group-color, currentColor) !important;
+/* Drag-to-group choice: show only the TARGET favicon and a fine timer ring.
+   No translucent row/card, labels or layout changes, even during Zia drag. */
+#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-progress] .tab-icon-image {
+  opacity: 0 !important;
 }
-/* User can still see the merge target before committing. Keep this solely
-   on standalone tab rows; it never replaces native pointer/drag animations. */
-#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-hover] > .tab-stack > .tab-background {
-  background-color: var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 10%, transparent)) !important;
-  outline: 1px solid color-mix(in srgb, currentColor 33%, transparent) !important;
-  outline-offset: -2px !important;
-}
-#zsf-manual-merge-preview {
+#zsf-manual-merge-progress {
   position: fixed !important;
   z-index: 2147483000 !important;
-  height: var(--zia-tab-height, 32px) !important;
-  padding: 0 11px !important;
-  box-sizing: border-box !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 9px !important;
-  overflow: hidden !important;
-  white-space: nowrap !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: block !important;
+  overflow: visible !important;
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   pointer-events: none !important;
-  border: 1px solid color-mix(in srgb, currentColor 24%, transparent) !important;
-  border-radius: var(--zia-tab-radius, 11px) !important;
-  background: var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 14%, transparent)) !important;
   color: var(--zia-sidebar-ink, currentColor) !important;
-  font-size: 13px !important;
-  font-weight: 550 !important;
-  animation: zsf-manual-merge-in 100ms ease-out both !important;
 }
-#zsf-manual-merge-preview img {
+#zsf-manual-merge-progress img {
+  position: absolute !important;
+  left: 8px !important;
+  top: 8px !important;
   width: 16px !important;
   height: 16px !important;
-  flex: 0 0 16px !important;
+  object-fit: contain !important;
 }
-#zsf-manual-merge-preview .zsf-manual-merge-title {
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+#zsf-manual-merge-progress svg {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 32px !important;
+  height: 32px !important;
+  overflow: visible !important;
+  transform: rotate(-90deg) !important;
 }
-@keyframes zsf-manual-merge-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+#zsf-manual-merge-progress circle {
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2px !important;
+  stroke-linecap: round !important;
+}
+#zsf-manual-merge-progress .zsf-manual-progress-track {
+  opacity: .2 !important;
+}
+#zsf-manual-merge-progress .zsf-manual-progress-fill {
+  stroke-dasharray: 81.681 !important;
+  stroke-dashoffset: 81.681 !important;
+}
+#zsf-manual-merge-progress[data-running] .zsf-manual-progress-fill {
+  animation: zsf-manual-ring-fill var(--zsf-hold-ms, 420ms) linear forwards !important;
+}
+#zsf-manual-merge-progress[data-complete] .zsf-manual-progress-fill {
+  stroke-dashoffset: 0 !important;
+}
+@keyframes zsf-manual-ring-fill {
+  from { stroke-dashoffset: 81.681; }
+  to   { stroke-dashoffset: 0; }
+}
+/* Eliminate the first incorrect Zia landing frame only for the two tabs
+   whose native DOM parents are changing. Ordinary drags are untouched. */
+#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-committing],
+#tabbrowser-tabs tab-group[data-zsf-manual-committing] {
+  animation: none !important;
+  transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  #zsf-manual-merge-preview { animation: none !important; }
+  #zsf-manual-merge-progress .zsf-manual-progress-fill {
+    animation-timing-function: steps(8, end) !important;
+  }
 }
 
 /* v0.9.7: Zia filters BOTH nested .tab-icon-stack and .tab-icon-image
@@ -677,13 +696,6 @@ tab-group:is([data-zsf-site], [data-zsf-manual]):not([split-view-group])
 > .tab-group-label-container > .tab-group-label {
   translate: 0 2px !important;
   line-height: normal !important;
-}
-
-/* The color submenu never paints a folder background. A chosen accent is
-   restricted to the little chevron; default color remains neutral. */
-:root[zen-sidebar-expanded="true"] #tabbrowser-tabs
-tab-group:is([data-zsf-site], [data-zsf-manual]) > .tab-group-label-container > .tab-group-label::after {
-  stroke: var(--zsf-custom-accent, currentColor) !important;
 }
 
 /* Custom icons selected through Zen's native icon picker can replace the

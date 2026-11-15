@@ -4,7 +4,10 @@ const vm = require('node:vm');
 const code = fs.readFileSync('site-folders-manual.uc.js','utf8');
 const css = fs.readFileSync('userChrome.css','utf8');
 new vm.Script(code);
-assert(css.includes('#zsf-manual-merge-preview'), 'drag preview is a pointer-transparent overlay');
+assert(css.includes('#zsf-manual-merge-progress'), 'icon-only progress ring is present');
+assert(!css.includes('#zsf-manual-merge-preview'), 'old translucent row card removed');
+assert(css.includes('zsf-manual-ring-fill'), 'progress ring visually fills before grouping');
+assert(!css.includes('data-zsf-color-custom'), 'no color-accent styling remains');
 assert(css.includes('[data-zsf-manual]'), 'manual groups have scoped native icon styling');
 assert(css.includes('opacity(0.3025)'), 'dark Zia effective asleep icon filter remains');
 assert(css.includes('opacity(0.5625)'), 'light Zia effective asleep icon filter remains');
@@ -16,7 +19,14 @@ class Node {
   constructor(localName = 'div') {
     this.localName = localName; this.isConnected = true;
     this.children = []; this.attrs = {}; this.events = {};
-    this.style = {}; this.hidden = false; this.parentElement = null;
+    const values = {};
+    this.style = {
+      setProperty:(k,v,p='')=>{values[k]={value:String(v),priority:p}},
+      getPropertyValue:k=>values[k]?.value||'',
+      getPropertyPriority:k=>values[k]?.priority||'',
+      removeProperty:k=>{delete values[k]}
+    };
+    this.hidden = false; this.parentElement = null;
     this.className = ''; this.classList = {
       items: new Set(), add: name => this.classList.items.add(name),
       contains: name => this.classList.items.has(name)
@@ -45,7 +55,7 @@ class Node {
     if(sel === ':scope > .zsf-favicon') return this.children.find(x=>x.classList.items.has('zsf-favicon'))||null;
     return null;
   }
-  getBoundingClientRect() { return {top:100,bottom:132,left:12,right:260,height:32,width:248}; }
+  getBoundingClientRect() { const top=100+(this.shiftY||0);return {top,bottom:top+32,left:12,right:260,height:32,width:248}; }
   closest(sel) {
     if(sel === 'zen-workspace') return this.workspace || null;
     if(sel === '.tabbrowser-tab') return this.localName==='tab'?this:null;
@@ -122,6 +132,7 @@ function harness({enabled=true}={}) {
     const ev={target,clientX:80,clientY:116,composedPath:()=>[target],
       dataTransfer:{mozGetDataAt:()=>a,dropEffect:'none'},
       preventDefault(){this.prevented=true;},
+      stopPropagation(){this.propagationStopped=true;},
       stopImmediatePropagation(){this.stopped=true;},
       ...extra};
     for(const fn of root.events[type]||[])fn(ev);
@@ -139,9 +150,21 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   await delay(190);
   assert.equal(h.count(),0,'edge hover cannot auto-create a group');
   h.fire('dragover',h.b);
-  await delay(210);
-  assert.equal(h.count(),0,'hover preview never changes tabs');
-  assert(h.b.hasAttribute('data-zsf-manual-hover'),'target gets a temporary merge preview');
+  await delay(160);
+  assert.equal(h.count(),0,'favicon-only progress must never create a group early');
+  assert(h.doc.documentElement.children.some(n=>n.id==='zsf-manual-merge-progress'),
+    'the only overlay is a favicon plus circular progress, not a full row card');
+  assert(h.b.hasAttribute('data-zsf-manual-progress'), 'the site icon has an active progress ring');
+  assert(!h.b.hasAttribute('data-zsf-manual-ready'), 'release before progress completion does not group');
+  // Yab-style target retention: Zia shifts the actual tab below the pointer,
+  // but the natural position remains the intended choice.
+  h.b.shiftY=48; h.b.setAttribute('zia-shift','true');
+  h.b.style.setProperty('--zia-drag-y','48px');
+  const moved = h.fire('dragover',h.c);
+  assert(moved.prevented,'the original tab target stays locked despite retargeted native dragover');
+  await delay(440);
+  assert(h.b.hasAttribute('data-zsf-manual-ready'),'full ring makes group creation available');
+  assert.equal(h.count(),0,'even complete progress cannot create a group before dropping');
   const result=h.fire('drop',h.b);
   assert(result.prevented && result.stopped,'center drop intercepted before native reordering');
   assert.equal(h.count(),1);
@@ -149,26 +172,20 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   assert.equal(h.a.group.label,'新群組','mixed-site manual group uses neutral name');
   assert(h.a.group.hasAttribute('data-zsf-manual'),'manual group is never an owned site group');
   assert(!h.a.group.hasAttribute('data-zsf-site'));
-  assert(!h.b.hasAttribute('data-zsf-manual-hover'),'preview cleanup');
+  assert(!h.b.hasAttribute('data-zsf-manual-progress'),'preview cleanup');
+  assert(!h.b.hasAttribute('data-zsf-manual-ready'),'ready marker cleanup');
   assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].kind,'mixed');
-  assert.equal(h.a.group.color, 'gray', 'native group must use Firefox valid gray spelling');
-  assert.equal(h.api.setColor(h.a.group,'blue'), true,
-    'native Firefox group color can change without recreating tabs');
-  assert.equal(h.a.group.color,'blue');
-  assert.equal(h.a.group.getAttribute('data-zsf-color-custom'),'blue');
-  assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].color,'blue');
-  assert.equal(h.api.setColor(h.a.group,'magenta'),false,'invalid palette color is rejected');
-  assert.equal(h.a.group.color,'blue');
+  assert.equal(h.a.group.color, 'gray', 'manual groups always use neutral native gray');
+  assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].color,undefined,
+    'new manual group persistence never records a color');
   assert.equal(h.a.group.querySelector('.tab-group-label-container').querySelector(':scope > .zsf-favicon')
     .getAttribute('src'),'chrome://browser/skin/zen-icons/folder.svg');
   h.a.group.removeAttribute('data-zsf-manual');
   h.api.restore();
   assert(h.a.group.hasAttribute('data-zsf-manual'),'manual group decorations restore by stable id');
-  assert.equal(h.a.group.color,'blue','native group color survives restore');
-  assert.equal(h.a.group.getAttribute('data-zsf-color-custom'),'blue','accent marker survives restore');
+  assert.equal(h.a.group.color,'gray','existing groups restore to the same neutral style');
   assert.equal(h.api.createFromTabs([h.a,h.c]),null,'existing group members cannot be regrouped silently');
-  assert.equal(h.api.setColor(h.a.group,'gray'),true,'neutral native gray is supported');
-  assert(!h.a.group.hasAttribute('data-zsf-color-custom'),'neutral color does not paint an accent');
+  assert(!('setColor' in h.api), 'manual color controls are completely removed');
   h.api.destroy();
 
   const r=harness();
@@ -190,7 +207,7 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   const off=harness({enabled:false});
   off.fire('dragstart',off.a);
   off.fire('dragover',off.b);
-  await delay(210);
+  await delay(560);
   off.fire('drop',off.b);
   assert.equal(off.count(),0,'disabled drag pref leaves existing native drag unchanged');
   off.api.destroy();
