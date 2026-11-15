@@ -39,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v0.9.6** (see `theme.json`) |
+| Current mod version | **v0.9.7 (test candidate)** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -50,6 +50,6 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
 
-**v0.9.6** matches Site Folders' group-header favicon brightness to Zia's unloaded-tab icons. A group dims only when all of its tabs are unloaded; any loaded tab restores the normal brightness. This follows Zia's live setting with no script, new observers, or layout changes.
+**v0.9.7 (test candidate)** corrects related background tab placement after selecting a collapsed Site Folder from its hover card, and uses Zia's exact asleep-icon opacity instead of a parent-filter ratio.\n\n**v0.9.6** matches Site Folders' group-header favicon brightness to Zia's unloaded-tab icons. A group dims only when all of its tabs are unloaded; any loaded tab restores the normal brightness. This follows Zia's live setting with no script, new observers, or layout changes.
 
 **v0.9.4** adds event-driven recovery when the independent background-drag guard disappears after visiting Zen Settings or Sine reloads. It only checks on tab selection, browser focus, or a genuine tab pointer press; the drag engine itself remains exactly v0.9.2. Runtime diagnostics: `window.__zsfBackgroundDragRecoveryV094?.debug()` in the Browser Console.
