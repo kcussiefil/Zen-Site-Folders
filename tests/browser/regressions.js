@@ -131,7 +131,13 @@ const finish = arguments[arguments.length - 1];
       assert(first.group === h.group && !first.selected,
         'native background link remains in group and never activates');
       assert(order(h.group).indexOf(first) === order(h.group).indexOf(source) + 1,
-        'first background link follows preview-selected source, not group tail');
+        'first background link follows preview-selected source, not group tail: ' +
+        JSON.stringify({order:names(order(h.group)),
+          source:source.zsfTestName, sourceIndex:order(h.group).indexOf(source),
+          openedIndex:order(h.group).indexOf(first),
+          sameGroup:first.group===h.group, collapsed:h.group.collapsed,
+          selected:gBrowser.selectedTab===source, pref:Services.prefs.getBoolPref('browser.tabs.insertRelatedAfterCurrent',true),
+          owner:first.owner?.id||null}));
       const second = makeRelated('two');
       await delay(90);
       assert(second.group === h.group && !second.selected,
