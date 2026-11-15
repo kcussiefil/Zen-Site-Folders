@@ -91,12 +91,6 @@ function makeHarness({ archiveCorrupt = false, prompts = [], savedSnapshot = tru
       removeTabGroup() { removeCount++; },
     },
     gZenEmojiPicker: { open(anchor, options) { window.iconPicker = options; } },
-    __zsfManualGroupsV099: {setColor(target,color) {
-      if (!target?.hasAttribute('data-zsf-manual')) return false;
-      target.color=color;
-      target.setAttribute('data-zsf-color-custom',color);
-      return true;
-    }},
     __zenSiteFoldersV037: {
       ungroupInDisplayOrder(group, ordered) {
         let count = 0;
@@ -176,22 +170,8 @@ async function testMenu() {
     'chrome://global/skin/icons/settings.svg');
   a.command(menu, '移除圖示');
   assert(!a.group.hasAttribute('data-zsf-custom-icon'), 'icon override cleared');
-  const palette = a.find(menu,'變更顏色');
-  assert(palette,'manual native palette exists');
-  for (const fn of menu.events.popupshowing || []) fn({target:menu});
-  assert(palette.hidden,'automatic site group retains no custom color control');
-  a.group.setAttribute('data-zsf-manual','true');
-  for (const fn of menu.events.popupshowing || []) fn({target:menu});
-  assert(!palette.hidden,'manual groups expose color submenu');
-  const blue = a.find(menu,'藍色');
-  assert(blue && blue.getAttribute('data-zsf-native-color')==='blue','native Firefox blue is offered');
-  await a.command(menu,'藍色');
-  assert.equal(a.group.color,'blue','sub-menu uses native group color and preserves tab objects');
-  assert.equal(a.group.getAttribute('data-zsf-color-custom'),'blue');
-  const unrelated = new XulNode('tab-group');
-  unrelated.isConnected = true;
-  unrelated.matches = () => false;
-  assert.equal(a.api.validGroup(unrelated), false, 'non-ZSF group excluded');
+  assert(!a.find(menu,'變更顏色'),'no color action in any group context menu');
+  assert(!a.find(menu,'藍色'),'no inherited native color sub-menu');
   const manual = new XulNode('tab-group');
   manual.id = 'manual-group-001';
   manual.setAttribute('data-zsf-manual','true');
