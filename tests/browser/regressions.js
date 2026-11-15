@@ -151,9 +151,14 @@ const finish = arguments[arguments.length - 1];
       JSON.stringify(manual.debug()));
     assert(!source.group && !target.group,
       'visual candidate must not create a group before drop');
+    const beforeDrop=manual.debug();
     const nativeAccepted=emit(target,'drop');
+    const afterDrop=manual.debug();
     emit(source,'dragend');
-    assert(nativeAccepted===false, 'accepted manual drop prevents native reorder');
+    assert(nativeAccepted===false, 'accepted manual drop prevents native reorder: ' +
+      JSON.stringify({nativeAccepted,beforeDrop,afterDrop,
+        sourceGroup:source.group?.id||null,targetGroup:target.group?.id||null,
+        sourceParent:source.parentElement?.localName,targetParent:target.parentElement?.localName}));
     assert(source.group && source.group === target.group &&
       source.group.hasAttribute('data-zsf-manual'),
       'native group created at drop only');
