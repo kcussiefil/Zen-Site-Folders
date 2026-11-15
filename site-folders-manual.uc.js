@@ -288,8 +288,16 @@
   function onDrop(event) {
     lastDrop = 'received';
     if (!drag?.ready || !enabled()) { lastDrop = 'no-ready'; clearDrag(); return; }
-    const target = targetAt(event);
-    if (target !== drag.ready) { lastDrop = 'wrong-target'; clearDrag(); return; }
+    const nativeHit = targetAt(event);
+    // Zen/Zia may transform the target row during their earlier capture
+    // listeners on drop. Fall back only to a same-tab, same-coordinate release
+    // that matches the last accepted center dragover (no fresh DOM hit test).
+    const directHit = tabFromEvent(event) === drag.ready;
+    const p = drag.pointer;
+    const nearLastOver = !!p && Math.hypot(event.clientX - p.x, event.clientY - p.y) <= 16;
+    const target = nativeHit === drag.ready ||
+      (directHit && nearLastOver) ? drag.ready : null;
+    if (!target) { lastDrop = 'wrong-target'; clearDrag(); return; }
     const tabs = validTabs([drag.source, target]);
     if (!tabs || typeof window.gBrowser?.addTabGroup !== 'function') {
       lastDrop = 'invalid-tabs';
