@@ -29,6 +29,52 @@
   let hoverHost = null;
   const handlers = [];
   let asleepObserver = null;
+  // Firefox Bug 2003021: a related background tab can land at the bottom
+  // of a collapsed group after selecting its source from our hover preview.
+  // Track only that explicit selection, never ordinary native tab clicks.
+  let previewSource = null;
+  function onPreviewRelatedTabOpen(event) {
+    const context = previewSource;
+    const opened = event?.target;
+    if (!context || !opened) return;
+    // Complete insertion first; TabOpen can precede final group membership.
+    Promise.resolve().then(() => {
+      const browser = window.gBrowser;
+      const {source, group} = context;
+      if (destroyed || previewSource !== context || !browser ||
+          browser.selectedTab !== source || !source?.isConnected ||
+          source.group !== group || !group?.isConnected || !group.collapsed ||
+          !group.matches?.(GROUP_SELECTOR) ||
+          !opened.isConnected || opened.group !== group ||
+          opened.selected || opened.pinned || opened.closing || source.pinned ||
+          opened.hasAttribute?.('zen-essential') ||
+          opened.hasAttribute?.('cloned') ||
+          (opened.owner && opened.owner !== source) ||
+          typeof browser.moveTabAfter !== 'function') return;
+      try {
+        if (!Services.prefs.getBoolPref('browser.tabs.insertRelatedAfterCurrent', true)) return;
+      } catch (_) { return; }
+      const tabs = Array.from(group.tabs || group.querySelectorAll('tab'))
+        .filter(tab => tab?.isConnected && tab.group === group && !tab.closing);
+      const anchor = tabs.includes(context.lastRelated) ? context.lastRelated : source;
+      const from = tabs.indexOf(opened), to = tabs.indexOf(anchor);
+      if (from < 0 || to < 0) return;
+      if (from !== to + 1) {
+        // Reposition only the two known invalid placements: group tail,
+        // or an earlier source when successive background links are opened.
+        const atTail = from === tabs.length - 1;
+        const afterSource = anchor !== source && from === tabs.indexOf(source) + 1;
+        if (!atTail && !afterSource) return;
+        try { browser.moveTabAfter(opened, anchor); }
+        catch (error) {
+          console.warn(TAG, 'Native related-tab placement retained:', error);
+          return;
+        }
+      }
+      context.lastRelated = opened;
+    });
+  }
+
 
   function bind(target, type, handler, options) {
     if (!target?.addEventListener) return;
@@ -539,6 +585,7 @@
       return;
     }
     if (row.dataset.action === 'new') {
+      previewSource = null; // An explicit New Tab is never a related link.
       // A deliberate click only. Do not pin a newly created tab.
       try {
         const browser = window.gBrowser;
@@ -567,6 +614,7 @@
     const tab = row.zsfTab;
     if (tab?.isConnected && tab.group === group) {
       window.gBrowser.selectedTab = tab;
+      previewSource = {source: tab, group, lastRelated: tab};
     }
     closeNow();
   }
@@ -617,7 +665,10 @@
     }, { passive: true, capture: true });
     bind(toolbox, 'mousedown', closeNow, true);
     bind(tabContainer, 'TabGroupExpand', closeNow);
+    bind(tabContainer, 'TabOpen', onPreviewRelatedTabOpen);
     bind(window, 'TabSelect', () => {
+      if (previewSource && window.gBrowser?.selectedTab !== previewSource.source)
+        previewSource = null;
       if (activeGroup?.isConnected && activeLabel?.isConnected && card && !card.hidden) {
         if (card.hasAttribute('data-acting')) scheduleStableRefresh();
         else if (render(activeGroup)) position(activeLabel);
@@ -653,6 +704,7 @@
   function destroy() {
     if (destroyed) return;
     destroyed = true;
+    previewSource = null;
     clearInterval(ageTimer);ageTimer = null;
     closeNow();
     for (const [target, type, handler, options] of handlers) {
