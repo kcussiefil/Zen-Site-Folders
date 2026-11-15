@@ -136,6 +136,16 @@ const finish = arguments[arguments.length - 1];
       'native group color can be changed with user-visible accent without recreating tabs');
     const colored = JSON.parse(SessionStore.getCustomWindowValue(window,'zsf-manual-groups-v1'));
     assert(colored[group.id]?.color === 'blue','native group color is persisted by its stable ID');
+    const accentStyle = getComputedStyle(manualLabel);
+    const blueAccent = accentStyle.borderInlineStartColor;
+    assert(parseFloat(accentStyle.borderInlineStartWidth) >= 2,
+      'selected manual group color visibly paints a subtle edge, not only metadata');
+    assert(manual.setColor(group,'red'),'second native group color is accepted');
+    const redAccent = getComputedStyle(manualLabel).borderInlineStartColor;
+    assert(blueAccent !== redAccent,
+      'changing native group color changes the displayed accent: ' +
+      JSON.stringify({blueAccent,redAccent,property:getComputedStyle(group).getPropertyValue('--tab-group-color')}));
+    assert(manual.setColor(group,'blue'),'restore chosen color after color display test');
     gBrowser.selectedTab = h.tabs[0]; // An inactive group must collapse all of its rows.
     click(group); await idle(group);
     assert(group.collapsed &&
