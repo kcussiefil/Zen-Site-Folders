@@ -7,7 +7,7 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'userChrome.css'), 'utf8'
 const manifest = require('../theme.json');
 assert.equal(manifest.version, '1.0.0');
 const begin = css.indexOf('/* v0.9.7: Zia filters BOTH nested');
-const end = css.indexOf('#tabbrowser-tabs :is(tab-group, zen-folder)[data-zsf-site]:not([split-view-group]) > .tab-group-label-container > .tab-group-label', begin);
+const end = css.indexOf('#tabbrowser-tabs :is(tab-group, zen-folder):is([data-zsf-site], [data-zsf-manual]):not([split-view-group]) > .tab-group-label-container > .tab-group-label', begin);
 assert(begin >= 0 && end > begin, 'dedicated site-group favicon paint rules exist');
 const block = css.slice(begin, end);
 assert(block.includes('@media -moz-pref("zia.tabs.dim-asleep")'), 'follow live Zia preference');
