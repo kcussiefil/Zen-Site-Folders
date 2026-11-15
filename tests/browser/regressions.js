@@ -139,7 +139,14 @@ const finish = arguments[arguments.length - 1];
     const accentStyle = getComputedStyle(manualLabel);
     const blueAccent = accentStyle.borderInlineStartColor;
     assert(parseFloat(accentStyle.borderInlineStartWidth) >= 2,
-      'selected manual group color visibly paints a subtle edge, not only metadata');
+      'selected manual group color visibly paints a subtle edge, not only metadata: ' +
+      JSON.stringify({groupColor:group.color,colorAttr:group.getAttribute('data-zsf-color-custom'),
+        width:accentStyle.borderInlineStartWidth,leftWidth:accentStyle.borderLeftWidth,
+        border:accentStyle.borderInlineStart,color:accentStyle.borderInlineStartColor,
+        groupNativeColor:getComputedStyle(group).getPropertyValue('--tab-group-color'),
+        selectorMatch:group.matches('tab-group[data-zsf-manual][data-zsf-color-custom]'),
+        rootExpanded:document.documentElement.getAttribute('zen-sidebar-expanded'),
+        styleSheet:getComputedStyle(manualLabel).cssText}));
     assert(manual.setColor(group,'red'),'second native group color is accepted');
     const redAccent = getComputedStyle(manualLabel).borderInlineStartColor;
     assert(blueAccent !== redAccent,
