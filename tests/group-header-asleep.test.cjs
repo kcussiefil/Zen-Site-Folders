@@ -31,7 +31,8 @@ function brightness(pending, ziaOn, light) {
     (light ? 0.75 * 0.75 : 0.55 * 0.55) : 1;
 }
 for (const light of [false,true]) {
-  assert.equal(brightness([true,true],true,light),light ? 0.5625 : 0.3025);
+  assert(Math.abs(brightness([true,true],true,light) -
+    (light ? 0.5625 : 0.3025)) < 1e-10, 'stack and image filters compound');
   assert.equal(brightness([true,false,true],true,light),1);
   assert.equal(brightness([true,true],false,light),1);
   assert.equal(brightness([],true,light),1);
