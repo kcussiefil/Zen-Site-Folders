@@ -183,23 +183,42 @@ const finish = arguments[arguments.length - 1];
     assert(manual?.debug().dragging, 'native dragstart must arm manual group gesture: ' +
       JSON.stringify(manual?.debug()));
     emit(target,'dragover');
-    await delay(200);
-    assert(target.hasAttribute('data-zsf-manual-progress'),
-      'favicon progress is revealed over native target: ' + JSON.stringify(manual.debug()));
-    assert(document.getElementById('zsf-manual-merge-progress') &&
+    await delay(240);
+    const choice=target.querySelector('#zsf-manual-merge-choice');
+    assert(choice && choice.parentElement===target.querySelector('.tab-stack'),
+      'New Group preview is integrated IN the target row, not a floating overlay');
+    assert(!document.getElementById('zsf-manual-merge-progress') &&
       !document.getElementById('zsf-manual-merge-preview'),
-      'no translucent row card, only target favicon and ring');
+      'obsolete ring and translucent card do not appear');
+    assert(target.hasAttribute('data-zsf-manual-choice') &&
+      choice.querySelector('.zsf-manual-merge-title')?.textContent==='新群組',
+      'native Yab-style choice shows the Chinese label');
+    const progress=choice.querySelector('.zsf-manual-merge-fill');
+    assert(progress && getComputedStyle(progress).animationName.includes('zsf-manual-horizontal-fill'),
+      '500ms horizontal fill animation is actually running');
+    const beforeFill=getComputedStyle(progress).transform;
+    await delay(170);
+    const duringFill=getComputedStyle(progress).transform;
+    assert(beforeFill!==duringFill,
+      'the horizontal bar visibly fills; CSS !important must not block keyframes: '+
+      JSON.stringify({beforeFill,duringFill}));
     assert(!target.hasAttribute('data-zsf-manual-ready'),
-      'early release cannot commit before the ring has finished');
-    await delay(450);
-    assert(target.hasAttribute('data-zsf-manual-ready'),
-      'complete progress authorizes an actual group drop');
+      'release before completing 500ms cannot group');
+    await delay(430);
+    assert(target.hasAttribute('data-zsf-manual-ready') &&
+      choice.hasAttribute('data-ready'),
+      'complete horizontal fill authorizes native group creation');
     assert(!source.group && !target.group,
       'visual candidate must not create a group before drop');
+    const dnd=gBrowser.tabContainer.tabDragAndDrop;
+    const beforeAnimation=dnd?._dontAnimateTabMove;
     const beforeDrop=manual.debug();
     const nativeAccepted=emit(target,'drop');
     const afterDrop=manual.debug();
     emit(source,'dragend');
+    await delay(80);
+    assert(dnd?._dontAnimateTabMove===beforeAnimation,
+      'dragend restores native drag animation setting rather than permanently disabling it');
     assert(nativeAccepted===false, 'accepted manual drop prevents native reorder: ' +
       JSON.stringify({nativeAccepted,beforeDrop,afterDrop,
         sourceGroup:source.group?.id||null,targetGroup:target.group?.id||null,
@@ -207,6 +226,13 @@ const finish = arguments[arguments.length - 1];
     assert(source.group && source.group === target.group &&
       source.group.hasAttribute('data-zsf-manual'),
       'native group created at drop only');
+    assert([...source.group.tabs][0]===target && [...source.group.tabs][1]===source,
+      'Yab-style merge keeps hovered target FIRST and dragged tab SECOND');
+    assert(!source.hasAttribute('data-zsf-manual-committing') &&
+      !target.hasAttribute('data-zsf-manual-committing'),
+      'commit flags clear after dragend without a delayed reordering pass');
+    assert(!target.querySelector('#zsf-manual-merge-choice'),
+      'native target row content is restored after commit');
     assert(!source.pinned && !target.pinned, 'drag-created group keeps unpinned tabs');
     assert(!document.getElementById('zsf-manual-merge-preview'),
       'no visual preview remains after drop');
