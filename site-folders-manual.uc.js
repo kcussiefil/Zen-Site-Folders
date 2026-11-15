@@ -402,14 +402,30 @@
     event.stopImmediatePropagation();
     const dnd = window.gBrowser?.tabContainer?.tabDragAndDrop;
     if (dnd) dnd._dontAnimateTabMove = true;
-    // Prevent the first incorrect intermediate landing frame while native
-    // group insertion settles. Never force the whole sidebar to reflow.
-    for (const tab of tabs) tab.setAttribute('data-zsf-manual-committing','true');
+    // Normalize the two moving tab rows BEFORE changing their native parent.
+    // Zia has already handled the initial window-capture drop. Any surviving
+    // per-tab translation is a stale reorder offset, not part of the final group.
+    const normalized = [];
+    for (const tab of tabs) {
+      tab.setAttribute('data-zsf-manual-committing','true');
+      const style = tab.style;
+      if (style?.setProperty) {
+        style.setProperty('transform','none','important');
+        normalized.push(tab);
+      }
+      for (const animation of tab.getAnimations?.() || []) {
+        if (animation.id === 'zia-land') animation.cancel();
+      }
+    }
     const result = createFromTabs(tabs);
     if (result) result.setAttribute('data-zsf-manual-committing','true');
     lastDrop = result ? 'created' : 'creation-failed';
     clearDrag({committing:!!result});
     const unmark = () => {
+      for (const tab of normalized) {
+        if (tab.style?.getPropertyValue?.('transform') === 'none')
+          tab.style.removeProperty('transform');
+      }
       for (const tab of tabs) tab.removeAttribute('data-zsf-manual-committing');
       result?.removeAttribute?.('data-zsf-manual-committing');
     };
