@@ -16,6 +16,7 @@
   const HOVER_MS = 180;
   const listeners = [];
   let destroyed = false, started = false, drag = null, hoverTimer = null;
+  let lastDrop = 'none';
   let preview = null, menuItem = null, restoreTimer = null;
   let sessionStore = null;
   try {
@@ -285,11 +286,13 @@
     drag.pointer = {x:event.clientX,y:event.clientY};
   }
   function onDrop(event) {
-    if (!drag?.ready || !enabled()) { clearDrag(); return; }
+    lastDrop = 'received';
+    if (!drag?.ready || !enabled()) { lastDrop = 'no-ready'; clearDrag(); return; }
     const target = targetAt(event);
-    if (target !== drag.ready) { clearDrag(); return; }
+    if (target !== drag.ready) { lastDrop = 'wrong-target'; clearDrag(); return; }
     const tabs = validTabs([drag.source, target]);
     if (!tabs || typeof window.gBrowser?.addTabGroup !== 'function') {
+      lastDrop = 'invalid-tabs';
       clearDrag();
       return;
     }
@@ -297,6 +300,7 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     const result = createFromTabs(tabs);
+    lastDrop = result ? 'created' : 'creation-failed';
     clearDrag();
     if (result) event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
   }
@@ -360,7 +364,8 @@
   }
   const api = {start, destroy, createFromTabs, restore,
     debug: () => ({enabled: enabled(), dragging: !!drag,
-      candidate: !!drag?.ready, storedGroups: Object.keys(registry()).length})};
+      candidate: !!drag?.ready, lastDrop,
+      storedGroups: Object.keys(registry()).length})};
   window[KEY] = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, {once:true});
