@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v1.0.4](releases/v1.0.4.md) | Decouple New Group label and favicon pair from Zia-transformed native tab rows using two fixed, scroll-aware root overlays. |
 | [v1.0.3](releases/v1.0.3.md) | Use centre-only hold with 150ms stability and Sine-adjustable 0.3–2.5s progress; preview source-first A/B on two original rows, sort only after crossing centre. |
 | [v1.0.2](releases/v1.0.2.md) | Use Yab-style integrated 新群組 row with horizontal 500ms progress, and prevent wrong landing order by anchoring native group on hovered tab. |
 | [v1.0.1](releases/v1.0.1.md) | Remove manual group colors; add Yab-style locked favicon-only ring progress and stable native-group landing without Zia reorder flicker. |
