@@ -39,7 +39,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 | 項目 | 連結 |
 | --- | --- |
-| 目前版本 | **v1.0.8**，以 [`theme.json`](theme.json) 為準 |
+| 目前版本 | **v1.0.9**，以 [`theme.json`](theme.json) 為準 |
 | 版本整理 | [`CHANGELOG.md`](CHANGELOG.md) |
 | 完整各版說明 | [GitHub Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases)／[`releases/`](releases/) |
 | macOS 實機驗收 | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |
@@ -48,6 +48,8 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 **單純整理文件不需要升版，也不會自行觸發 Sine 更新。**
 
 選取分頁顏色、原生右鍵選項及調色視窗已交由 [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5 獨立管理。背景分頁拖曳預設內建，不再提供 Sine 開關；必要時可透過 `about:config` 設定 `zen.sitefolders.background_drag.enabled=false` 停用。
+
+**v1.0.9** 將右鍵「建立群組」固定插入 Zen 原生「變更圖示」之前，與 HDR Guard v0.4.6 的「變更選取分頁顏色」使用相同錨點，讓 Zen Calmer Context Menu 可以在**同一分隔區塊內**依設定排序。保留原生分隔線、群組功能與 Zen／Zia 拖曳行為，不提供跨區塊排序。建議兩個 MOD 同時更新、重啟 Zen，開啟右鍵選單一次後再回 Calmer 設定調整。
 
 **v1.0.8** 正式移除拖曳建立群組，僅保留「多選分頁 → 右鍵 → 建立群組」。選單原文「建立普通群組」已簡化為「建立群組」。一併刪除拖曳群組事件監聽、進度條與雙圖示預覽、等待時間設定，以及 Sine 齒輪設定入口（`preferences.json`）。既有手動群組仍保有名稱、圖示、預覽、收合與還原紀錄；背景分頁拖曳排序及網站自動整理不受影響。
 
