@@ -137,6 +137,8 @@ jobs:
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.121.4 --case "manual ordinary group center drag" --output native-results/manual-center-drag-zia-21214
       - name: Verify manual center-drop gesture with Zia 2.122.4
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.122.4 --case "manual ordinary group center drag" --output native-results/manual-center-drag-zia-21224
+      - name: Verify short and unfinished manual group drops preserve native sorting
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.122.4 --case "manual ordinary tab native reorder survives unfinished group hold" --output native-results/manual-native-sort-first
       - name: Verify recovery from sorting into grouping without a second drag
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.122.4 --case "manual group restores preview after sorting" --output native-results/manual-rearm-zia-21224
       - name: Verify asleep site favicon equals native Zia icon compositing
