@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v1.0.7](releases/v1.0.7.md) | Native sort-first drag/drop, 250ms stationary centre dwell within 3px, and always-present two-favicon preview after reordering. |
 | [v1.0.6](releases/v1.0.6.md) | Re-arm manual grouping after 150ms stationary centre hover even after native sorting; preserve progress through pointer jitter, give favicon pair an 8px gap and hide native close X only during preview. |
 | [v1.0.5](releases/v1.0.5.md) | Latch native sorting after the far 70%/30% centre boundary; separate favicon pair by 2px, remove duplicate drag icon and turn only default manual folders white. |
 | [v1.0.4](releases/v1.0.4.md) | Decouple New Group label and favicon pair from Zia-transformed native tab rows using two fixed, scroll-aware root overlays. |
