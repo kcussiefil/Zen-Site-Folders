@@ -207,6 +207,11 @@ const finish = arguments[arguments.length - 1];
     assert([source,target].some(tab=>tab.hasAttribute('data-zsf-manual-choice')) &&
       choice.querySelector('.zsf-manual-merge-title')?.textContent==='新群組',
       'an original row is masked while its root portal shows 新群組');
+    assert(document.documentElement.hasAttribute('data-zsf-manual-preview-active'),
+      'New Group candidate activates native close-X suppression in this window');
+    const close=document.querySelector('#tabbrowser-tabs .tab-close-button');
+    if (close) assert(getComputedStyle(close).visibility!=='visible',
+      'the original close X is not drawn above New Group while preview is visible');
     const sourceOpacity=getComputedStyle(source).opacity;
     assert(source.hasAttribute('data-zsf-manual-source') &&
       (sourceOpacity==='0' || getComputedStyle(source.querySelector('.tab-stack')).visibility==='hidden'),
@@ -220,8 +225,9 @@ const finish = arguments[arguments.length - 1];
     if (pair) {
       const images=pair.querySelectorAll('.zsf-manual-pair-icon');
       assert(images.length===2 &&
-        getComputedStyle(images[1]).marginInlineStart==='-2px',
-        'both web favicons remain distinct, with only 2px overlap');
+        getComputedStyle(pair).columnGap==='8px' &&
+        getComputedStyle(images[1]).marginInlineStart==='0px',
+        'two favicon icons have an explicit 8px gap with no negative overlap');
     }
     const progress=choice.querySelector('.zsf-manual-merge-fill');
     assert(progress && getComputedStyle(progress).animationName.includes('zsf-manual-horizontal-fill'),
@@ -268,8 +274,9 @@ const finish = arguments[arguments.length - 1];
         'the default native manual folder icon stays white after commit');
     }
     assert(!document.getElementById('zsf-manual-merge-choice') &&
-      !document.getElementById('zsf-manual-pair'),
-      'both original preview rows are restored after commit');
+      !document.getElementById('zsf-manual-pair') &&
+      !document.documentElement.hasAttribute('data-zsf-manual-preview-active'),
+      'both preview portals and native X suppression are removed after commit');
     assert(!source.pinned && !target.pinned, 'drag-created group keeps unpinned tabs');
     assert(!document.getElementById('zsf-manual-merge-preview'),
       'no visual preview remains after drop');
