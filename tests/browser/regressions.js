@@ -207,6 +207,18 @@ const finish = arguments[arguments.length - 1];
     assert([source,target].some(tab=>tab.hasAttribute('data-zsf-manual-choice')) &&
       choice.querySelector('.zsf-manual-merge-title')?.textContent==='新群組',
       'an original row is masked while its root portal shows 新群組');
+    assert(source.hasAttribute('data-zsf-manual-source') &&
+      getComputedStyle(source).opacity==='0',
+      'moving source vanishes during group preview without hiding fixed root portals');
+    const defaultFolder=choice.querySelector('.zsf-manual-merge-icon');
+    assert(defaultFolder && getComputedStyle(defaultFolder).filter.includes('invert(1)'),
+      'New Group uses a white default folder icon, not a black fallback');
+    if (pair) {
+      const images=pair.querySelectorAll('.zsf-manual-pair-icon');
+      assert(images.length===2 &&
+        getComputedStyle(images[1]).marginInlineStart==='-2px',
+        'both web favicons remain distinct, with only 2px overlap');
+    }
     const progress=choice.querySelector('.zsf-manual-merge-fill');
     assert(progress && getComputedStyle(progress).animationName.includes('zsf-manual-horizontal-fill'),
       'configurable horizontal fill animation is actually running');
@@ -243,8 +255,14 @@ const finish = arguments[arguments.length - 1];
     assert([...source.group.tabs][0]===source && [...source.group.tabs][1]===target,
       'dragged tab FIRST, hovered target SECOND, independent of direction');
     assert(!source.hasAttribute('data-zsf-manual-committing') &&
-      !target.hasAttribute('data-zsf-manual-committing'),
-      'commit flags clear after dragend without a delayed reordering pass');
+      !target.hasAttribute('data-zsf-manual-committing') &&
+      !source.hasAttribute('data-zsf-manual-source'),
+      'commit and source-ghost flags clear after dragend without a delayed reorder');
+    const folderIcon=source.group.querySelector('.tab-group-label-container > .zsf-favicon');
+    if (folderIcon?.getAttribute('src')==='chrome://browser/skin/zen-icons/folder.svg') {
+      assert(getComputedStyle(folderIcon).filter.includes('invert(1)'),
+        'the default native manual folder icon stays white after commit');
+    }
     assert(!document.getElementById('zsf-manual-merge-choice') &&
       !document.getElementById('zsf-manual-pair'),
       'both original preview rows are restored after commit');
