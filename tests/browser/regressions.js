@@ -195,12 +195,13 @@ const finish = arguments[arguments.length - 1];
       parseFloat(choice.style.width)>40 && parseFloat(choice.style.height)>15,
       'root overlay is anchored to a real captured row rectangle');
     const pair=document.getElementById('zsf-manual-pair');
-    if (pair) {
-      assert(pair.parentElement===document.documentElement &&
-        getComputedStyle(pair).position==='fixed' &&
-        parseFloat(pair.style.top)>previewTop,
-        'icon pair is independently anchored BELOW the New Group title');
-    }
+    assert(pair && pair.parentElement===document.documentElement &&
+      !pair.hidden && getComputedStyle(pair).display!=='none' &&
+      getComputedStyle(pair).position==='fixed' &&
+      parseFloat(pair.style.top)>previewTop,
+      'both favicon icons MUST appear in a visible fixed lower preview row');
+    assert(pair.querySelectorAll('.zsf-manual-pair-icon').length===2,
+      'source and target favicon nodes must never disappear after Zia reorder');
     assert(!document.getElementById('zsf-manual-merge-progress') &&
       !document.getElementById('zsf-manual-merge-preview'),
       'obsolete ring and translucent card do not appear');
@@ -222,7 +223,7 @@ const finish = arguments[arguments.length - 1];
     const defaultFolder=choice.querySelector('.zsf-manual-merge-icon');
     assert(defaultFolder && getComputedStyle(defaultFolder).filter.includes('invert(1)'),
       'New Group uses a white default folder icon, not a black fallback');
-    if (pair) {
+    {
       const images=pair.querySelectorAll('.zsf-manual-pair-icon');
       assert(images.length===2 &&
         getComputedStyle(pair).columnGap==='8px' &&
