@@ -299,7 +299,39 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* Manual grouping v1.0.4: the original tab rows stay native, but their
+/* Only the native drag source is hidden during group preview, not during
+   ordinary sorting or the initial 150ms candidate stability phase. */
+:root #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source] {
+  opacity: 0 !important;
+}
+/* Zen/Zia can animate the source tab's opacity or its inner stack
+   independently. Conceal its moving contents as well, without mutating
+   drag ownership or the tab's real DOM position. */
+:root #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source] > .tab-stack {
+  visibility: hidden !important;
+}
+/* A default (non-custom) manual folder uses Zen's monochrome folder.svg.
+   White only this icon; all site and user-selected favicons keep their paint. */
+#zsf-manual-merge-choice .zsf-manual-merge-icon {
+  filter: brightness(0) invert(1) !important;
+}
+#tabbrowser-tabs tab-group[data-zsf-manual]:not([data-zsf-custom-icon]) >
+  .tab-group-label-container > .zsf-favicon[src="chrome://browser/skin/zen-icons/folder.svg"] {
+  filter: brightness(0) invert(1) !important;
+}
+@media -moz-pref("zia.tabs.dim-asleep") {
+  :root:not(#zia-none) #tabbrowser-tabs
+  tab-group[data-zsf-manual]:not([data-zsf-custom-icon], [split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) >
+  .tab-group-label-container > .zsf-favicon[src="chrome://browser/skin/zen-icons/folder.svg"] {
+    filter: brightness(0) invert(1) opacity(0.3025) !important;
+  }
+  :root[zia-light]:not(#zia-none) #tabbrowser-tabs
+  tab-group[data-zsf-manual]:not([data-zsf-custom-icon], [split-view-group]):has(.tabbrowser-tab[pending]):not(:has(.tabbrowser-tab:not([pending]))) >
+  .tab-group-label-container > .zsf-favicon[src="chrome://browser/skin/zen-icons/folder.svg"] {
+    filter: brightness(0) invert(1) opacity(0.5625) !important;
+  }
+}
+/* Manual grouping v1.0.5: the original tab rows stay native, but their
    visual replacements are FIXED root children, like the independent hover
    card. Zia can translate a source tab without dragging either preview. */
 #tabbrowser-tabs[data-zsf-manual-guard] .tabbrowser-tab[zia-shift]:not([zia-dragging]),
@@ -400,7 +432,7 @@
   flex: 0 0 21px !important;
 }
 #zsf-manual-pair > .zsf-manual-pair-icon + .zsf-manual-pair-icon {
-  margin-inline-start: -7px !important;
+  margin-inline-start: -2px !important;
 }
 /* One accepted native group drop remains atomic. */
 #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-committing],

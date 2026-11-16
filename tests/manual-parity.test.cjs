@@ -37,8 +37,10 @@ assert(css.includes('data-zsf-manual-pair') &&
 assert(!css.includes('zsf-manual-ring-fill') &&
   !css.includes('zsf-manual-merge-progress'),'old circular ring removed');
 assert(manual.includes('drag.slots.get(tab)') && manual.includes('drag.slots.get(drag.hover)') &&
-  manual.includes('HYSTERESIS_PX'),
-  'fixed target slots use 5px central-band hysteresis');
+  manual.includes('const HYSTERESIS_PX = 2') &&
+  manual.includes('function crossedFarSortEdge(event)') &&
+  manual.includes('drag.sorting=true') && manual.includes('if (drag.sorting) return'),
+  '2px far-side hysteresis permanently hands drag back to native sorting');
 assert(manual.includes("color: 'gray'"), 'use native Firefox gray, not invalid grey');
 assert(!manual.includes("color: 'grey'"));
 assert(!manual.includes('function setColor(') && !manual.includes('GROUP_COLORS'), 'no color feature');
@@ -70,6 +72,18 @@ assert(!/_dontAnimateTabMove\s*=/.test(manual),
   'manual grouping must NEVER mutate Zen global drag animation flag');
 assert(manual.includes("data-zsf-manual-committing"),
   'drop suppresses intermediate landing transition only for two grouped tabs');
+assert(!/event\.dataTransfer\.setDragImage\s*\(/.test(manual),
+  'never overwrite native/Zia-managed drag picture');
+assert(manual.includes("source.setAttribute('data-zsf-manual-source','true')") &&
+  manual.includes("drag?.source?.removeAttribute?.('data-zsf-manual-source')") &&
+  css.includes('.tabbrowser-tab[data-zsf-manual-source]'),
+  'hide moving native source only while manual group preview is visible');
+assert(css.includes('margin-inline-start: -2px !important'),
+  'two site favicons overlap by 2px instead of 7px');
+assert(css.includes('brightness(0) invert(1)') &&
+  css.includes('.zsf-favicon[src="chrome://browser/skin/zen-icons/folder.svg"]') &&
+  css.includes('zsf-manual-merge-icon'),
+  'only default folder images turn white, not unrelated favicon images');
 assert(!/\.pinTab\(|\.unpinTab\(|\.removeTab\(/.test(manual),
   'group creation must never pin/unpin/remove existing tabs');
 console.log('PASS: manual group styling, collapse, hover, drag, neutral group color and native safety parity');

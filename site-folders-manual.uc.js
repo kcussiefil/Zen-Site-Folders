@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 拖曳及多選建立普通群組
-// @version      1.0.4
+// @version      1.0.5
 // @description  Opt-out-safe manual grouping for unpinned Zen tabs; no live DOM reorder.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -20,7 +20,7 @@
   const DEFAULT_HOLD_SECONDS = 1.2;
   const HOLD_PREF = 'zen.sitefolders.manual_group_drag.hold_seconds';
   const CENTER_START = .30, CENTER_END = .70;
-  const HYSTERESIS_PX = 5;
+  const HYSTERESIS_PX = 2;
   function holdMs() {
     let raw = String(DEFAULT_HOLD_SECONDS);
     try { raw = Services.prefs.getStringPref(HOLD_PREF,raw); } catch (_) {}
@@ -329,6 +329,19 @@
     }
     return closest;
   }
+  function crossedFarSortEdge(event) {
+    // Once the pointer crosses the far 70%/30% boundary of the guarded
+    // target, hand this ENTIRE drag back to native Zen/Zia sorting. Do not
+    // accidentally start another group hold on the very next tab.
+    const here=drag?.guard && drag.slots.get(drag.guard);
+    if (!here || !Number.isFinite(event.clientY) ||
+        !Number.isFinite(event.clientX) ||
+        event.clientX < here.left || event.clientX > here.right) return false;
+    const y=event.clientY+scrollOffset();
+    return (drag.sourceSlot?.top ?? here.top) <= here.top ?
+      y > here.top + here.height*CENTER_END + HYSTERESIS_PX :
+      y < here.top + here.height*CENTER_START - HYSTERESIS_PX;
+  }
   function neutralizeAvoidance() {
     // CSS lock beats inline Zia shift even if Zia's earlier capture listener
     // ran first. We never overwrite Zia's inline transform or native DOM order.
@@ -367,6 +380,9 @@
     document.documentElement.appendChild(choice);
     carryTabPaint(choice,upper);
     upper.setAttribute('data-zsf-manual-choice','true');
+    // Hide Zia's *moving source row* only while the two root-level group
+    // previews are visible. It must reappear immediately on ordinary sort.
+    source.setAttribute('data-zsf-manual-source','true');
     drag.visualTabs=[upper];
     drag.previewSlots={upper:upper===source?s:t,lower:lower===source?s:t};
     if (lower) {
@@ -419,6 +435,7 @@
     for (const tab of [drag?.hover,drag?.ready]) {
       tab?.removeAttribute?.('data-zsf-manual-ready');
     }
+    drag?.source?.removeAttribute?.('data-zsf-manual-source');
     for (const tab of drag?.visualTabs||[]) {
       tab?.removeAttribute?.('data-zsf-manual-choice');
       tab?.removeAttribute?.('data-zsf-manual-pair');
@@ -443,18 +460,17 @@
     try {payload=event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0);}
     catch (_) {}
     if (payload && payload!==source) return;
-    try {
-      const icon=source.querySelector?.('.tab-icon-image');
-      if (icon && event.dataTransfer?.setDragImage)
-        event.dataTransfer.setDragImage(icon,8,8);
-    } catch (_) {}
+    // Zia already manages the native drag picture (blank while it renders
+    // its own moving row). A second favicon-only setDragImage left an X-like
+    // site icon stuck next to the cursor throughout the group preview.
+    // Never override Zen/Zia's DataTransfer drag image here.
     const targets=[...(window.gBrowser?.tabs||[])].filter(tab=>
       tab!==source && eligible(tab) && workspace(tab)===workspace(source));
     const slots=new Map(targets.map(tab=>[tab,slotOf(tab)]));
     drag={source,sourceSlot:slotOf(source),workspace:workspace(source),
       targets,slots,scrolls:scrollPorts(source),verified:payload===source,
-      hover:null,ready:null,guard:null,visualTabs:[],previewSlots:null,
-      pairFrame:0,pairTimer:null};
+      hover:null,ready:null,guard:null,sorting:false,
+      visualTabs:[],previewSlots:null,pairFrame:0,pairTimer:null};
   }
   function onDragOver(event) {
     if (!drag || !drag.source?.isConnected || !enabled() ||
@@ -466,14 +482,27 @@
       if (payload!==drag.source) {clearDrag();return;}
       drag.verified=true;
     }
+    // Sorting owns the remainder of this native drag once the user passes
+    // the group target's far middle boundary. Do not intercept later rows.
+    if (drag.sorting) return;
+    if (crossedFarSortEdge(event)) {
+      clearCandidate();
+      drag.sorting=true;
+      return;
+    }
     // Keep root-level previews aligned with their original *layout* slots
     // on sidebar scroll, never with Zia's translated source/target elements.
     positionPortals();
     const hit=targetAt(event);
     const target=hit?.tab||null;
-    if (!target || hit.phase==='sort') {
+    if (hit?.phase==='sort') {
       if (drag.guard || drag.hover) clearCandidate();
-      return; // Crossing the far edge releases Zen/Zia's normal reorder.
+      drag.sorting=true;
+      return; // A direct far-edge entry also permanently yields to sorting.
+    }
+    if (!target) {
+      if (drag.guard || drag.hover) clearCandidate();
+      return;
     }
     if (drag.hover && (drag.hover!==target || hit.phase!=='center'))
       clearCandidate();
@@ -631,7 +660,8 @@
   const api = {start, destroy, createFromTabs, restore,
     debug: () => ({enabled: enabled(), dragging: !!drag,
       candidate: !!drag?.ready, portal:!!choice?.isConnected,
-      phase:drag?.hover?'center':drag?.guard?'guard':'none',
+      sorting:!!drag?.sorting,
+      phase:drag?.sorting?'sorting':drag?.hover?'center':drag?.guard?'guard':'none',
       holdMs:holdMs(), stableMs:HOVER_MS, lastDrop,
       storedGroups: Object.keys(registry()).length})};
   window[KEY] = api;
