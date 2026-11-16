@@ -407,9 +407,14 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   moving.fire('dragover',moving.b);
   await delay(60);
   moving.fire('dragover',moving.c);
+  await delay(60);
+  moving.fire('dragover',moving.d);
+  await delay(60);
+  moving.fire('dragover',moving.d,{clientY:1100});
   await delay(175);
-  assert(moving.api.debug().sorting && !moving.api.debug().portal,
-    'moving through a new row cancels stationary rearm; native sorting stays responsive');
+  assert(moving.api.debug().sorting && !moving.api.debug().portal &&
+    !moving.api.debug().rearming,
+    'passing through C and D without a stationary 150ms hover leaves native sorting responsive');
   moving.fire('dragend',moving.a);moving.api.destroy();
 
   const jitter=harness();
