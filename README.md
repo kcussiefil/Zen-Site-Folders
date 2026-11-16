@@ -40,7 +40,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v1.0.8** (see `theme.json`) |
+| Current mod version | **v1.0.9** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -50,6 +50,8 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v1.0.9** aligns the right-click 建立群組 command with HDR Guard's 變更選取分頁顏色 in the same native separator-bounded segment, immediately before Zen's Change Icon command. This enables Zen Calmer Context Menu to apply saved order within that group without altering its own code. Update both MODs (Site Folders v1.0.9 and HDR Guard v0.4.6), restart Zen and open the native context menu once before using Calmer settings. No extra drag event listeners or group feature changes are introduced.
 
 **v1.0.8** removes drag-to-create manual groups entirely. Multiselected unpinned tabs can still be grouped with the **建立群組** context-menu action, renamed from **建立普通群組**. The mod no longer binds tab drag or drop events and no longer installs group-hold overlays, progress animations, hold-time preferences, or a Sine gear entry. Existing manual groups retain their labels, icons, collapse/hover behaviour and persisted restoration. Background dragging, native Zen/Zia sorting, and automatic site grouping remain unchanged.
 
