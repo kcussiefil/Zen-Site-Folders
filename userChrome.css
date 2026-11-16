@@ -331,14 +331,9 @@
     filter: brightness(0) invert(1) opacity(0.5625) !important;
   }
 }
-/* Manual grouping v1.0.6: the original tab rows stay native, but their
-   visual replacements are FIXED root children, like the independent hover
-   card. Zia can translate a source tab without dragging either preview. */
-#tabbrowser-tabs[data-zsf-manual-guard] .tabbrowser-tab[zia-shift]:not([zia-dragging]),
-#tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) {
-  transform: none !important;
-  translate: none !important;
-}
+/* Manual grouping v1.0.7: sorting always remains Zen/Zia-native.
+   Fixed root previews never freeze transforms of actual native tab rows;
+   only their text and background are visually masked during the hold. */
 #tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack > .tab-content {
   visibility: hidden !important;
 }
