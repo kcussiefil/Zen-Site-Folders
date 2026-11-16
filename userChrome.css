@@ -299,17 +299,13 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* Manual grouping is a two-row VISUAL preview, never a DOM reorder.
-   The source+target keep their original layout slots while the central band
-   is held. CSS outranks Zia's eager inline neighbour translations only while
-   a guard/choice is active; crossing the far band restores native avoidance. */
+/* Manual grouping v1.0.4: the original tab rows stay native, but their
+   visual replacements are FIXED root children, like the independent hover
+   card. Zia can translate a source tab without dragging either preview. */
 #tabbrowser-tabs[data-zsf-manual-guard] .tabbrowser-tab[zia-shift]:not([zia-dragging]),
 #tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) {
   transform: none !important;
   translate: none !important;
-}
-#tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack {
-  position: relative !important;
 }
 #tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack > .tab-content {
   visibility: hidden !important;
@@ -317,23 +313,26 @@
 #tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack > .tab-background {
   opacity: 0 !important;
 }
-#tabbrowser-tabs .tabbrowser-tab > .tab-stack > :is(#zsf-manual-merge-choice, #zsf-manual-pair) {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 8 !important;
+/* Both boxes are positioned using the two captured pre-Zia row rectangles.
+   There is no tab-stack or transformed tab ancestor in this paint hierarchy. */
+:root > :is(#zsf-manual-merge-choice, #zsf-manual-pair) {
+  position: fixed !important;
+  inset: auto !important;
+  z-index: 2147483645 !important;
   display: flex !important;
   align-items: center !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
   pointer-events: none !important;
   border: 0 !important;
-  border-radius: var(--zia-tab-radius, 9px) !important;
-  background: var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 10%, transparent)) !important;
-  color: var(--zia-sidebar-ink, currentColor) !important;
+  border-radius: var(--zsf-manual-preview-radius, var(--zia-tab-radius, 9px)) !important;
+  background: var(--zsf-manual-preview-bg, var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 10%, transparent))) !important;
+  color: var(--zsf-manual-preview-ink, var(--zia-sidebar-ink, currentColor)) !important;
 }
-#tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-merge-choice {
+:root > :is(#zsf-manual-merge-choice, #zsf-manual-pair)[hidden] {
+  display: none !important;
+}
+:root > #zsf-manual-merge-choice {
   gap: 8px !important;
   padding-inline: 10px !important;
   white-space: nowrap !important;
@@ -382,15 +381,15 @@
   font-size: 12px !important;
   flex: none !important;
 }
-/* Both icons occupy only the lower original row. When the user drags B up
-   into A, the pair glides from A into B (170ms); downward needs no glide. */
-#tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-pair {
+/* B moves upward into A: favicons appear at A and then move to B's
+   original lower row in 170ms. Downward drag starts already at lower row. */
+:root > #zsf-manual-pair {
   justify-content: center !important;
   flex-direction: row !important;
   transform: translateY(var(--zsf-pair-start-y, 0px)) !important;
   transition: transform 170ms ease-out !important;
 }
-#tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-pair[data-settled] {
+:root > #zsf-manual-pair[data-settled] {
   transform: translateY(0px) !important;
 }
 #zsf-manual-pair > .zsf-manual-pair-icon {
@@ -402,7 +401,7 @@
 #zsf-manual-pair > .zsf-manual-pair-icon + .zsf-manual-pair-icon {
   margin-inline-start: -7px !important;
 }
-/* Disable any residual native landing animation for the atomic group drop. */
+/* One accepted native group drop remains atomic. */
 #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-committing],
 #tabbrowser-tabs tab-group[data-zsf-manual-committing],
 #tabbrowser-tabs tab-group[data-zsf-manual-committing] .tabbrowser-tab {
@@ -411,7 +410,7 @@
   transform: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  #tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-pair {
+  :root > #zsf-manual-pair {
     transition: none !important;
   }
 }
