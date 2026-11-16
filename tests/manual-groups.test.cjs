@@ -184,7 +184,7 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   const moved=h.fire('dragover',h.c,{clientY:originalY});
   assert(moved.prevented && h.api.debug().phase==='center',
     'fixed original B slot remains locked despite Zia visual shift');
-  await delay(1110);
+  await delay(1230);
   assert(choice.hasAttribute('data-ready') && h.b.hasAttribute('data-zsf-manual-ready'),
     'after 1.2 seconds of fill A→B is ready');
   assert.equal(h.count(),0,'preview does not mutate tab identities or native DOM');
@@ -231,7 +231,7 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   assert(label && icons,'upward C→B keeps label on B and favicons on original C row');
   assert.equal(icons.style.getPropertyValue('--zsf-pair-start-y'),'-36px',
     'upward merged icons start in upper row and animate downward');
-  await delay(1120);
+  await delay(1230);
   reverse.fire('drop',reverse.b);
   assert.equal(reverse.count(),1);
   assert.deepEqual(reverse.b.group.tabs.map(t=>t.label),['C','B'],
