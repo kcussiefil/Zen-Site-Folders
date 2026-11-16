@@ -389,6 +389,15 @@
     const live=liveTargetAt(event);
     const hit=live?.phase==='center' ? live : targetAt(event);
     const target=hit?.phase==='center' ? hit.tab : null;
+    const eventTab=tabFromEvent(event);
+    drag.rearmDiagnostic={eventY:event.clientY,eventX:event.clientX,
+      eventTab:eventTab?.localName||null,
+      listed:drag.targets.includes(eventTab),
+      directEligible:eligible(eventTab),
+      livePhase:live?.phase||null,
+      capturedPhase:hit?.phase||null,
+      tabTop:eventTab?.getBoundingClientRect?.().top??null,
+      tabBottom:eventTab?.getBoundingClientRect?.().bottom??null};
     if (!target || !eligible(target) || !Number.isFinite(event.clientX) ||
         !Number.isFinite(event.clientY)) {clearRearm();return;}
     const p=drag.rearm;
@@ -761,7 +770,7 @@
   const api = {start, destroy, createFromTabs, restore,
     debug: () => ({enabled: enabled(), dragging: !!drag,
       candidate: !!drag?.ready, portal:!!choice?.isConnected,
-      sorting:!!drag?.sorting, rearming:!!drag?.rearm,
+      sorting:!!drag?.sorting, rearming:!!drag?.rearm, rearmDiagnostic:drag?.rearmDiagnostic||null,
       phase:drag?.sorting?'sorting':drag?.hover?'center':drag?.guard?'guard':'none',
       holdMs:holdMs(), stableMs:HOVER_MS, lastDrop,
       storedGroups: Object.keys(registry()).length})};
