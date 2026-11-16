@@ -282,6 +282,47 @@ const finish = arguments[arguments.length - 1];
       'no visual preview remains after drop');
   });
 
+  // v1.0.6 actual Zen/Zia DOM regression: a far-edge dragover must not
+  // permanently disable manual grouping in the SAME native drag gesture.
+  await test('manual group restores preview after sorting in the same drag', async h => {
+    const source=h.prefix,target=h.suffix;
+    const transfer=new DataTransfer();
+    transfer.mozSetDataAt('application/x-moz-tabbrowser-tab',source,0);
+    const emit=(node,type,ratio=.5)=>{
+      const rect=node.getBoundingClientRect();
+      return node.dispatchEvent(new DragEvent(type,{
+        bubbles:true,composed:true,cancelable:true,dataTransfer:transfer,
+        clientX:rect.left+rect.width/2,
+        clientY:rect.top+rect.height*ratio}));
+    };
+    emit(source,'dragstart');
+    const manual=window.__zsfManualGroupsV099;
+    assert(manual?.debug().dragging,'native manual drag is armed');
+    emit(target,'dragover',.90);
+    assert(manual.debug().sorting,'far-edge dragover yields to native Zia sorting');
+    const allowed=emit(target,'dragover',.5);
+    assert(allowed && manual.debug().rearming && !manual.debug().portal,
+      'native dragover is NOT blocked while waiting 150ms for a steady centre');
+    await delay(180);
+    const preview=document.getElementById('zsf-manual-merge-choice');
+    assert(preview && manual.debug().portal && !manual.debug().sorting &&
+      document.documentElement.hasAttribute('data-zsf-manual-preview-active'),
+      '150ms stationary re-hover restores root preview and hides native close X');
+    await delay(1250);
+    assert(target.hasAttribute('data-zsf-manual-ready'),
+      'restored preview completes the unchanged user-configurable hold');
+    assert(!emit(target,'drop'),
+      'a ready manual drop is accepted and prevents native reordering');
+    emit(source,'dragend');
+    await delay(80);
+    assert(source.group && source.group===target.group &&
+      [...source.group.tabs][0]===source,
+      'same drag successfully forms source-first group after ordinary sorting');
+    assert(!document.documentElement.hasAttribute('data-zsf-manual-preview-active') &&
+      !document.getElementById('zsf-manual-merge-choice'),
+      'native close buttons and preview portals are restored after drop');
+  });
+
   // Compare effective native Zia dimming of BOTH nested tab-icon nodes
   // against the standalone Site Folders group header favicon.
   await test('header asleep filters match native Zia icon composition', async h => {
