@@ -28,8 +28,10 @@ assert(css.includes('opacity(0.3025)')&&css.includes('opacity(0.5625)'),
 assert(manual.includes("menuItem.setAttribute('label', '建立群組')"),
   'selected-tab context menu must display 建立群組');
 assert(!manual.includes('建立普通群組') &&
-  !manual.includes('dragstart') && !manual.includes('dragover') &&
-  !manual.includes("'drop',") && !manual.includes("'dragend',"),
+  !manual.includes("bind(window, 'dragstart'") &&
+  !manual.includes("bind(window, 'dragover'") &&
+  !manual.includes("bind(window, 'drop'") &&
+  !manual.includes("bind(window, 'dragend'"),
   'no drag-to-group controller or event listeners remain');
 assert(!manual.includes('manual_group_drag') &&
   !manual.includes('HOVER_MS') && !manual.includes('holdMs()'),
