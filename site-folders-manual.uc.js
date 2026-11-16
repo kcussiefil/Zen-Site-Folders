@@ -361,7 +361,17 @@
     // While moving, NEVER intercept native dragover: tab sorting has full
     // priority. Re-arm only when the pointer stays within 4px of one
     // target's central band for the complete 150ms stability interval.
-    const hit=targetAt(event);
+    // Native Zia may have reordered rows since the pre-drag snapshot.
+    // Prefer a real event target when its current natural slot contains
+    // the pointer; otherwise fall back to the captured positional hit.
+    const fromEvent=tabFromEvent(event);
+    const live=fromEvent!==drag.source && drag.targets.includes(fromEvent) ?
+      slotOf(fromEvent) : null;
+    const liveRatio=live ? (event.clientY-live.top)/live.height : -1;
+    const liveCenter=live && event.clientX>=live.left &&
+      event.clientX<=live.right && liveRatio>=CENTER_START &&
+      liveRatio<=CENTER_END;
+    const hit=liveCenter ? {tab:fromEvent,phase:'center'} : targetAt(event);
     const target=hit?.phase==='center' ? hit.tab : null;
     if (!target || !eligible(target) || !Number.isFinite(event.clientX) ||
         !Number.isFinite(event.clientY)) {clearRearm();return;}
