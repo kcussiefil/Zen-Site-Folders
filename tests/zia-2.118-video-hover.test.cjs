@@ -9,9 +9,11 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'theme.json'), 'utf8
 const hover = fs.readFileSync(path.join(root, 'site-folders-hover.uc.js'), 'utf8');
 const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
-assert.equal(manifest.version, '1.0.2', 'release under test must be v1.0.2');
-assert(!Object.hasOwn(manifest, 'preferences'), 'background drag has no Sine controls');
-assert(!fs.existsSync(path.join(root, 'preferences.json')), 'remove obsolete exposed control file');
+assert.equal(manifest.version, '1.0.3', 'release under test must be v1.0.3');
+const prefs=JSON.parse(fs.readFileSync(path.join(root,'preferences.json'),'utf8'));
+assert.equal(manifest.preferences,'preferences.json');
+assert(prefs.length===1 && prefs[0].property==='zen.sitefolders.manual_group_drag.hold_seconds',
+  'manual hold is configurable without exposing background-drag or video blur controls');
 assert(hover.includes('getComputedStyle(source)'), 'inherit Zia actual native preview paint');
 assert(hover.includes("Services.prefs.addObserver('zia.'"), 'react to Zia pref changes');
 assert(hover.includes('data-zsf-preview-sidebar-hold'), 'sidebar stays open over independent card');

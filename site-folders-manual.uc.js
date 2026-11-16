@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 拖曳及多選建立普通群組
-// @version      1.0.2
+// @version      1.0.3
 // @description  Opt-out-safe manual grouping for unpinned Zen tabs; no live DOM reorder.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -13,10 +13,21 @@
   const STORE = 'zsf-manual-groups-v1';
   const NS = 'http://www.w3.org/1999/xhtml';
   const FOLDER_ICON = 'chrome://browser/skin/zen-icons/folder.svg';
-  // Like Yab's staged folder decision: reveal → hold progress → commit.
-  // Match Yab TabDropChoice: revealDelay 0.18 s, folderHold 0.5 s.
-  const HOVER_MS = 180;
-  const HOLD_MS = 500;
+  // Candidate stays motionless during the short stability check, then the
+  // user-configurable horizontal fill runs. Ordinary sorting starts only
+  // after the pointer crosses the destination's central band.
+  const HOVER_MS = 150;
+  const DEFAULT_HOLD_SECONDS = 1.2;
+  const HOLD_PREF = 'zen.sitefolders.manual_group_drag.hold_seconds';
+  const CENTER_START = .30, CENTER_END = .70;
+  const HYSTERESIS_PX = 5;
+  function holdMs() {
+    let raw = String(DEFAULT_HOLD_SECONDS);
+    try { raw = Services.prefs.getStringPref(HOLD_PREF,raw); } catch (_) {}
+    const n = Number(String(raw).trim());
+    return (Number.isFinite(n)
+      ? Math.round(Math.max(.3,Math.min(2.5,n))*10) : 12)*100;
+  }
   const listeners = [];
   let destroyed = false, started = false, drag = null, hoverTimer = null;
   let lastDrop = 'none';
@@ -167,13 +178,14 @@
     if (restoreTimer != null) clearTimeout(restoreTimer);
     restoreTimer = setTimeout(() => { restoreTimer = null; restore(); }, 120);
   }
-  function createFromTabs(input, {dragTarget = null} = {}) {
+  function createFromTabs(input, {dragSource = null, anchor = null} = {}) {
     const validated = validTabs(input);
-    // Native Zen uses insertBefore.before(group). For a drag merge, anchor
-    // at the tab UNDER the cursor, not whichever tab currently sorts first
-    // after native/Zia dragover. This mirrors Yab's [other, dragged] order.
-    const tabs = validated && dragTarget && validated.includes(dragTarget) ?
-      [dragTarget, ...validated.filter(tab => tab !== dragTarget)] : validated;
+    // The dragged tab must be first for either drop direction. The native
+    // group itself stays at the original upper row; no visual re-sort pass.
+    const tabs = validated && dragSource && validated.includes(dragSource) ?
+      [dragSource, ...validated.filter(tab => tab !== dragSource)] : validated;
+    const before = validated && anchor && validated.includes(anchor) ?
+      anchor : validated?.[0];
     const browser = window.gBrowser;
     if (!tabs || typeof browser?.addTabGroup !== 'function' ||
         !sessionStore?.setCustomWindowValue) return null;
@@ -183,25 +195,23 @@
       group = browser.addTabGroup(tabs, {
         label: info.title,
         color: 'gray',
-        insertBefore: dragTarget || tabs[0],
+        insertBefore: before,
         showCreateUI: false
       });
       if (!group?.isConnected || group.isZenFolder ||
           tabs.some(tab => tab.group !== group || tab.pinned))
         throw new Error('Native group creation was incomplete');
+      if (dragSource && [...(group.tabs || [])].some((tab, i) => tab !== tabs[i]))
+        console.warn(TAG, 'Native Zen returned unexpected manual group order');
       if (!group.id) throw new Error('Native group has no stable ID');
-      // Persist manual ownership by native group ID; native attributes are not
-      // guaranteed to survive a restart, while the group and its label do.
       const map = registry();
       map[group.id] = {kind: info.kind, icon: info.icon};
       if (!saveRegistry(map))
         console.warn(TAG, 'Group exists but its custom icon may not restore');
       decorate(group, info);
-      // Native label creation can finish on the next animation frame.
       scheduleRestore();
       return group;
     } catch (error) {
-      // Never close or ungroup a partially created tab on error.
       console.warn(TAG, 'Manual group creation incomplete; original tabs retained', error);
       return null;
     }
@@ -215,11 +225,9 @@
     }
     return null;
   }
-  // Yab's choice replaces the destination row contents; it is not a floating
-  // translucent overlay. The genuine native tab remains in place until drop.
-  let choice = null, holdTimer = null;
-  // Zia moves sibling rows via inline translateY during dragover; capture the
-  // true row slots once, then never chase those animated DOM hit targets.
+  // The source and target retain their native DOM slots throughout hover.
+  // Snapshots are read BEFORE Zia starts translating neighbour rows.
+  let choice = null, pair = null, holdTimer = null;
   function slotOf(tab) {
     const rect = tab?.getBoundingClientRect?.();
     if (!rect || rect.height < 15 || rect.width < 32) return null;
@@ -230,59 +238,56 @@
   }
   function targetAt(event) {
     if (!drag) return null;
-    const {clientX:x, clientY:y} = event;
-    // Yab retains a ready target even when the surrounding layout moves.
-    // Disengage only when the pointer leaves its original central band.
+    const {clientX:x,clientY:y} = event;
+    const phaseOf = (tab, here) => {
+      if (!here || x < here.left || x > here.right ||
+          y < here.top || y > here.bottom) return null;
+      const ratio = (y-here.top)/here.height;
+      const tolerance = Math.min(.12,HYSTERESIS_PX/here.height);
+      const centerStart = CENTER_START-(drag.hover===tab?tolerance:0);
+      const centerEnd = CENTER_END+(drag.hover===tab?tolerance:0);
+      if (ratio >= centerStart && ratio <= centerEnd) return 'center';
+      // On approach, guard the upstream edge against Zia's eager avoidance.
+      // On the far edge (after crossing the centre), let native sorting run.
+      const down = drag.sourceSlot?.top <= here.top;
+      return down ? (ratio < centerStart ? 'guard' : 'sort') :
+        (ratio > centerEnd ? 'guard' : 'sort');
+    };
     if (drag.hover) {
       const here = drag.slots.get(drag.hover);
-      if (here && x >= here.left && x <= here.right &&
-          y >= here.top + here.height * .05 &&
-          y <= here.bottom - here.height * .05 &&
-          eligible(drag.hover)) return drag.hover;
+      const phase=phaseOf(drag.hover,here);
+      if (phase) return {tab:drag.hover,phase};
     }
-    let candidate = null, best = Infinity;
+    let closest=null,best=Infinity;
     for (const tab of drag.targets) {
-      if (!eligible(tab) || workspace(tab) !== drag.workspace) continue;
-      const here = drag.slots.get(tab);
-      if (!here || x < here.left || x > here.right ||
-          y < here.top + here.height * .12 ||
-          y > here.bottom - here.height * .12) continue;
-      const delta = Math.abs(y - here.top - here.height / 2);
-      if (delta < best) { candidate = tab; best = delta; }
+      if (!eligible(tab) || workspace(tab)!==drag.workspace) continue;
+      const here=drag.slots.get(tab);
+      const phase=phaseOf(tab,here);
+      if (!phase) continue;
+      const distance=Math.abs(y-here.top-here.height/2);
+      if (distance<best) {closest={tab,phase};best=distance;}
     }
-    return candidate;
+    return closest;
   }
   function neutralizeAvoidance() {
-    if (!drag?.hover) return;
-    // Keep the native DOM order intact; suppress just Zia's visual shift
-    // while this choice is active. The original styles restore on cancel.
-    for (const tab of drag.targets) {
-      if (!tab?.isConnected || !tab.hasAttribute?.('zia-shift')) continue;
-      const style = tab.style;
-      if (!style?.setProperty) continue;
-      if (!drag.frozen.has(tab))
-        drag.frozen.set(tab, {value:style.getPropertyValue('transform'),
-          priority:style.getPropertyPriority('transform')});
-      style.setProperty('transform','none','important');
-    }
+    // CSS lock beats inline Zia shift even if Zia's earlier capture listener
+    // ran first. We never overwrite Zia's inline transform or native DOM order.
+    if (drag?.guard)
+      window.gBrowser?.tabContainer?.setAttribute('data-zsf-manual-guard','true');
   }
-  function unfreeze({committing = false} = {}) {
-    if (!drag?.frozen) return;
-    for (const [tab, old] of drag.frozen) {
-      const style = tab?.style;
-      if (!style) continue;
-      if (committing) {
-        if (style.getPropertyValue('transform') === 'none')
-          style.removeProperty('transform');
-      } else if (old.value) style.setProperty('transform',old.value,old.priority);
-      else style.removeProperty('transform');
-    }
-    drag.frozen.clear();
+  function unfreeze() {
+    window.gBrowser?.tabContainer?.removeAttribute('data-zsf-manual-guard');
   }
   function makeChoice(tab) {
     if (!drag || drag.hover !== tab || !eligible(tab)) return;
-    const stack = tab.querySelector?.('.tab-stack') || tab;
-    choice = document.createElementNS(NS,'div');
+    const source=drag.source;
+    const s=drag.sourceSlot,t=drag.slots.get(tab);
+    const adjacent=!!s && !!t &&
+      Math.abs(s.top-t.top)<=Math.max(s.height,t.height)*1.9;
+    const upper=adjacent && s.top<t.top ? source : tab;
+    const lower=adjacent ? (upper===source?tab:source) : null;
+    const stack=upper.querySelector?.('.tab-stack') || upper;
+    choice=document.createElementNS(NS,'div');
     choice.className='zsf-manual-merge-choice';
     choice.id='zsf-manual-merge-choice';
     choice.setAttribute('aria-hidden','true');
@@ -290,7 +295,7 @@
     fill.className='zsf-manual-merge-fill';
     const icon=document.createElementNS(NS,'img');
     icon.className='zsf-manual-merge-icon';
-    icon.setAttribute('src',nativeIcon(tab));
+    icon.setAttribute('src',FOLDER_ICON);
     const title=document.createElementNS(NS,'span');
     title.className='zsf-manual-merge-title';
     title.textContent='新群組';
@@ -298,86 +303,124 @@
     count.className='zsf-manual-merge-count';
     count.textContent='2';
     choice.append(fill,icon,title,count);
-    choice.style.setProperty?.('--zsf-hold-ms',HOLD_MS+'ms');
+    const ms=holdMs();
+    choice.style.setProperty?.('--zsf-hold-ms',ms+'ms');
     stack.appendChild(choice);
-    tab.setAttribute('data-zsf-manual-choice','true');
-    // The horizontal bar starts now; don't restart it on each dragover.
+    upper.setAttribute('data-zsf-manual-choice','true');
+    drag.visualTabs=[upper];
+    if (lower) {
+      const bottomStack=lower.querySelector?.('.tab-stack') || lower;
+      pair=document.createElementNS(NS,'div');
+      pair.id='zsf-manual-pair';
+      pair.className='zsf-manual-pair';
+      pair.setAttribute('aria-hidden','true');
+      for (const member of [source,tab]) {
+        const image=document.createElementNS(NS,'img');
+        image.className='zsf-manual-pair-icon';
+        image.setAttribute('src',nativeIcon(member));
+        pair.appendChild(image);
+      }
+      const offset=(upper===tab && source===lower) ? (t.top-s.top) : 0;
+      pair.style.setProperty?.('--zsf-pair-start-y',offset+'px');
+      bottomStack.appendChild(pair);
+      lower.setAttribute('data-zsf-manual-pair','true');
+      drag.visualTabs.push(lower);
+      // B upward into A: overlapped favicons start on A, glide into B's
+      // original slot. A downward into B: the pair is already in B's slot.
+      if (!offset) pair.setAttribute('data-settled','true');
+      else {
+        const activePair=pair;
+        const frame=()=> {
+          if (drag?.hover===tab && activePair.isConnected)
+            activePair.setAttribute('data-settled','true');
+        };
+        const raf=window.requestAnimationFrame?.bind(window);
+        if (raf) drag.pairFrame=raf(()=>{drag.pairFrame=raf(frame);});
+        else drag.pairTimer=setTimeout(frame,20);
+      }
+    }
     choice.setAttribute('data-running','true');
     holdTimer=setTimeout(()=>{
       holdTimer=null;
-      if (destroyed || !drag || drag.hover !== tab || !eligible(tab)) return;
+      if (destroyed || !drag || drag.hover!==tab || !eligible(tab)) return;
       drag.ready=tab;
       tab.setAttribute('data-zsf-manual-ready','true');
       choice?.setAttribute('data-ready','true');
-      icon.setAttribute('src',FOLDER_ICON);
-    },HOLD_MS);
+    },ms);
   }
-  function clearCandidate({committing = false} = {}) {
-    if (hoverTimer !== null) clearTimeout(hoverTimer);
-    if (holdTimer !== null) clearTimeout(holdTimer);
-    hoverTimer = null; holdTimer = null;
+  function clearCandidate({committing=false}={}) {
+    if (hoverTimer!==null) clearTimeout(hoverTimer);
+    if (holdTimer!==null) clearTimeout(holdTimer);
+    if (drag?.pairFrame) window.cancelAnimationFrame?.(drag.pairFrame);
+    if (drag?.pairTimer) clearTimeout(drag.pairTimer);
+    hoverTimer=null;holdTimer=null;
     for (const tab of [drag?.hover,drag?.ready]) {
-      tab?.removeAttribute?.('data-zsf-manual-choice');
       tab?.removeAttribute?.('data-zsf-manual-ready');
     }
-    choice?.remove(); choice=null;
+    for (const tab of drag?.visualTabs||[]) {
+      tab?.removeAttribute?.('data-zsf-manual-choice');
+      tab?.removeAttribute?.('data-zsf-manual-pair');
+    }
+    choice?.remove();pair?.remove();
+    choice=null;pair=null;
     unfreeze({committing});
-    if (drag) { drag.hover = null; drag.ready = null; }
+    if (drag) {
+      drag.hover=null;drag.ready=null;drag.guard=null;
+      drag.visualTabs=[];drag.pairFrame=0;drag.pairTimer=null;
+    }
   }
-  function clearDrag(options) { clearCandidate(options); drag = null; }
+  function clearDrag(options) {clearCandidate(options);drag=null;}
   function onDragStart(event) {
     finishLanding();
     clearDrag();
     if (!enabled()) return;
-    const source = tabFromEvent(event);
+    const source=tabFromEvent(event);
     if (!eligible(source) || source.multiselected) return;
-    let payload = null;
-    try { payload = event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0); }
+    let payload=null;
+    try {payload=event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0);}
     catch (_) {}
-    if (payload && payload !== source) return;
-    // Prefer the small site favicon as the native drag ghost (like Yab).
-    // Gecko or Zia may override the image later; never break native drag on
-    // browsers which do not support XUL images in setDragImage().
+    if (payload && payload!==source) return;
     try {
       const icon=source.querySelector?.('.tab-icon-image');
       if (icon && event.dataTransfer?.setDragImage)
         event.dataTransfer.setDragImage(icon,8,8);
-    } catch (_) { /* Native Zen drag image remains the safe fallback. */ }
-    const targets = [...(window.gBrowser?.tabs || [])].filter(tab =>
-      tab !== source && eligible(tab) && workspace(tab) === workspace(source));
-    const slots = new Map(targets.map(tab => [tab,slotOf(tab)]));
-    drag = {source,workspace:workspace(source),targets,slots,
-      verified:payload===source,hover:null,ready:null,frozen:new Map()};
+    } catch (_) {}
+    const targets=[...(window.gBrowser?.tabs||[])].filter(tab=>
+      tab!==source && eligible(tab) && workspace(tab)===workspace(source));
+    const slots=new Map(targets.map(tab=>[tab,slotOf(tab)]));
+    drag={source,sourceSlot:slotOf(source),workspace:workspace(source),
+      targets,slots,verified:payload===source,hover:null,ready:null,
+      guard:null,visualTabs:[],pairFrame:0,pairTimer:null};
   }
   function onDragOver(event) {
     if (!drag || !drag.source?.isConnected || !enabled() ||
-        drag.source.group || drag.source.pinned) { clearDrag(); return; }
+        drag.source.group || drag.source.pinned) {clearDrag();return;}
     if (!drag.verified) {
-      let payload = null;
-      try { payload = event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0); }
+      let payload=null;
+      try {payload=event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0);}
       catch (_) {}
-      if (payload !== drag.source) { clearDrag(); return; }
-      drag.verified = true;
+      if (payload!==drag.source) {clearDrag();return;}
+      drag.verified=true;
     }
-    const target = targetAt(event);
-    if (target && drag.hover === target) {
-      event.preventDefault();
-      // Keep native Zia target-row avoidance from fighting the locked choice.
-      event.stopPropagation();
-      neutralizeAvoidance();
-      return;
+    const hit=targetAt(event);
+    const target=hit?.tab||null;
+    if (!target || hit.phase==='sort') {
+      if (drag.guard || drag.hover) clearCandidate();
+      return; // Crossing the far edge releases Zen/Zia's normal reorder.
     }
-    if (target !== drag.hover) clearCandidate();
-    if (!target) return; // Edges remain normal Zen/Zia reorder zones.
-    drag.hover = target;
+    if (drag.hover && (drag.hover!==target || hit.phase!=='center'))
+      clearCandidate();
+    drag.guard=target;
+    neutralizeAvoidance();
     event.preventDefault();
     event.stopPropagation();
-    neutralizeAvoidance();
-    hoverTimer = setTimeout(() => {
-      hoverTimer = null;
-      if (destroyed || !drag || drag.hover !== target || !eligible(target)) return;
+    if (hit.phase==='guard' || drag.hover===target) return;
+    drag.hover=target;
+    hoverTimer=setTimeout(()=>{
+      hoverTimer=null;
+      if (destroyed || !drag || drag.hover!==target || !eligible(target)) return;
       makeChoice(target);
-    }, HOVER_MS);
+    },HOVER_MS);
   }
   function finishLanding() {
     const item=settling;
@@ -406,7 +449,13 @@
   function onDrop(event) {
     lastDrop='received';
     if (!drag?.ready || !enabled()) {
-      lastDrop='not-ready';clearDrag();return;
+      lastDrop='not-ready';
+      // A release inside the still-pending central zone is cancellation,
+      // never an accidental native reorder after a prevented dragover.
+      if (enabled() && drag?.hover && drag.guard) {
+        event.preventDefault();event.stopImmediatePropagation();
+      }
+      clearDrag();return;
     }
     let payload=null;
     try {payload=event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0);}
@@ -428,10 +477,12 @@
       tab.setAttribute('data-zsf-manual-committing','true');
       tab.style?.setProperty?.('transform','none','important');
     }
-    // addTabGroup inserts the container before "insertBefore" in Zen's
-    // Tabbrowser patch. Target-first order is deterministic regardless of
-    // transient gBrowser.tabs sorting during a drag. No second reorder pass.
-    const group=createFromTabs([target,source],{dragTarget:target});
+    // Place the new group at the original upper slot; member order is
+    // always dragged source FIRST, hovered destination SECOND.
+    const sourceTop=drag.sourceSlot?.top ?? Infinity;
+    const targetTop=drag.slots.get(target)?.top ?? Infinity;
+    const anchor=sourceTop<=targetTop ? source : target;
+    const group=createFromTabs([source,target],{dragSource:source,anchor});
     if (group) group.setAttribute('data-zsf-manual-committing','true');
     lastDrop=group?'created':'creation-failed';
     clearDrag({committing:!!group});
@@ -511,7 +562,8 @@
   }
   const api = {start, destroy, createFromTabs, restore,
     debug: () => ({enabled: enabled(), dragging: !!drag,
-      candidate: !!drag?.ready, lastDrop,
+      candidate: !!drag?.ready, phase:drag?.hover?'center':drag?.guard?'guard':'none',
+      holdMs:holdMs(), stableMs:HOVER_MS, lastDrop,
       storedGroups: Object.keys(registry()).length})};
   window[KEY] = api;
   if (document.readyState === 'complete') start();

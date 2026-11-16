@@ -39,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v1.0.2** (see `theme.json`) |
+| Current mod version | **v1.0.3** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -49,6 +49,8 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v1.0.3** changes manual tab-to-tab grouping to a centre-band gesture: Zen/Zia does not avoid neighbouring tabs while approaching the target's first edge; crossing the far edge (past the 30–70% central band) restores native reordering. A 150ms stable overlap precedes a **1.2-second default hold**, with the duration editable as a decimal number in the mod's Sine gear settings (0.3–2.5 seconds, 0.1-second steps). Adjacent A→B and B→A merges display **新群組** in the original upper row and the two overlapping site favicons in the lower row; the upward gesture animates that pair downward without changing native tab order. Completed groups always place the **dragged tab first**, then the hovered tab, while the group title stays at the original upper slot. Hardware acceptance remains necessary.
 
 **v1.0.2** matches Yab's published two-stage tab-drop choice: after 180ms, the target tab row temporarily becomes **新群組**, with its site favicon and a 500ms left-to-right progress fill; after the fill, its icon becomes a folder and releasing creates the native group. Unlike the v1.0.1 ring, this is drawn **inside the existing tab row**, not as a floating translucent card. Native creation anchors to the hovered target and preserves **target first, dragged tab second**, even if Zia reorders the drag preview. The native global drag animation state is never modified; no late reordering of the created group. In supported Gecko drag sessions, the native drag image is the favicon; the native image remains as a fallback.
 

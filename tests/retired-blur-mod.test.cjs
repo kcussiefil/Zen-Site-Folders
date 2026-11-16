@@ -8,8 +8,10 @@ const css=fs.readFileSync(path.join(dir,'chrome.css'),'utf8');
 assert.match(main.version,/^\d+\.\d+\.\d+$/,'main release must use semver');
 assert(main.version.localeCompare('0.7.4',undefined,{numeric:true})>=0,
   'retired blur experiment must remain disabled in all releases since v0.7.4');
-assert(!Object.hasOwn(main,'preferences'),'no visible Sine preferences remain');
-assert(!fs.existsSync(path.join(base,'preferences.json')),'removed background-drag checkbox must not remain');
+const visible=JSON.parse(fs.readFileSync(path.join(base,'preferences.json'),'utf8'));
+assert.equal(main.preferences,'preferences.json');
+assert(visible.length===1 && visible[0].property==='zen.sitefolders.manual_group_drag.hold_seconds',
+  'only manual group hold is exposed; retired blur and background-drag checkboxes remain absent');
 assert.equal(legacy.version,'0.2.1');
 assert.equal(legacy.id,'0a960432-0bb0-44a9-8f73-dc9b50d31e08','legacy Sine ID must remain updateable');
 assert(!Object.hasOwn(legacy,'preferences'),'test Sine manifest must not expose gear');

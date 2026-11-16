@@ -299,20 +299,25 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* Yab-style native row replacement. The destination tab itself hosts the
-   choice; there is no second floating card or duplicate full-row ghost.
-   Text and favicon are hidden only during the held target choice, without
-   changing any native tab dimensions or reparenting DOM. */
-#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-choice] > .tab-stack {
+/* Manual grouping is a two-row VISUAL preview, never a DOM reorder.
+   The source+target keep their original layout slots while the central band
+   is held. CSS outranks Zia's eager inline neighbour translations only while
+   a guard/choice is active; crossing the far band restores native avoidance. */
+#tabbrowser-tabs[data-zsf-manual-guard] .tabbrowser-tab[zia-shift]:not([zia-dragging]),
+#tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) {
+  transform: none !important;
+  translate: none !important;
+}
+#tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack {
   position: relative !important;
 }
-#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-choice] > .tab-stack > .tab-content {
+#tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack > .tab-content {
   visibility: hidden !important;
 }
-#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-choice] > .tab-stack > .tab-background {
+#tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack > .tab-background {
   opacity: 0 !important;
 }
-#tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-merge-choice {
+#tabbrowser-tabs .tabbrowser-tab > .tab-stack > :is(#zsf-manual-merge-choice, #zsf-manual-pair) {
   position: absolute !important;
   inset: 0 !important;
   width: 100% !important;
@@ -320,16 +325,18 @@
   z-index: 8 !important;
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
   box-sizing: border-box !important;
-  padding-inline: 10px !important;
   overflow: hidden !important;
-  white-space: nowrap !important;
   pointer-events: none !important;
   border: 0 !important;
   border-radius: var(--zia-tab-radius, 9px) !important;
   background: var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 10%, transparent)) !important;
   color: var(--zia-sidebar-ink, currentColor) !important;
+}
+#tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-merge-choice {
+  gap: 8px !important;
+  padding-inline: 10px !important;
+  white-space: nowrap !important;
 }
 #zsf-manual-merge-choice .zsf-manual-merge-fill {
   position: absolute !important;
@@ -343,7 +350,7 @@
   pointer-events: none !important;
 }
 #zsf-manual-merge-choice[data-running] .zsf-manual-merge-fill {
-  animation: zsf-manual-horizontal-fill var(--zsf-hold-ms, 500ms) linear both !important;
+  animation: zsf-manual-horizontal-fill var(--zsf-hold-ms, 1200ms) linear both !important;
 }
 #zsf-manual-merge-choice[data-ready] .zsf-manual-merge-fill {
   transform: scaleX(1);
@@ -375,8 +382,27 @@
   font-size: 12px !important;
   flex: none !important;
 }
-/* One accepted manual group drop is atomic: the temporary native Zia drag
-   transforms stay invisible until the actual dragend cleanup runs. */
+/* Both icons occupy only the lower original row. When the user drags B up
+   into A, the pair glides from A into B (170ms); downward needs no glide. */
+#tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-pair {
+  justify-content: center !important;
+  flex-direction: row !important;
+  transform: translateY(var(--zsf-pair-start-y, 0px)) !important;
+  transition: transform 170ms ease-out !important;
+}
+#tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-pair[data-settled] {
+  transform: translateY(0px) !important;
+}
+#zsf-manual-pair > .zsf-manual-pair-icon {
+  width: 21px !important;
+  height: 21px !important;
+  object-fit: contain !important;
+  flex: 0 0 21px !important;
+}
+#zsf-manual-pair > .zsf-manual-pair-icon + .zsf-manual-pair-icon {
+  margin-inline-start: -7px !important;
+}
+/* Disable any residual native landing animation for the atomic group drop. */
 #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-committing],
 #tabbrowser-tabs tab-group[data-zsf-manual-committing],
 #tabbrowser-tabs tab-group[data-zsf-manual-committing] .tabbrowser-tab {
@@ -385,8 +411,8 @@
   transform: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  #zsf-manual-merge-choice[data-running] .zsf-manual-merge-fill {
-    animation-timing-function: steps(10,end) !important;
+  #tabbrowser-tabs .tabbrowser-tab > .tab-stack > #zsf-manual-pair {
+    transition: none !important;
   }
 }
 
