@@ -335,6 +335,28 @@
     }
     return closest;
   }
+  function liveTargetAt(event) {
+    // Zia may have visually moved a tab by the time its native dragover is
+    // dispatched. Its ACTUAL event target and painted row rect are the
+    // correct geometry for deciding whether a passing cursor should sort.
+    // The frozen slots are still used after a group candidate has started.
+    const tab=tabFromEvent(event);
+    if (!drag?.targets.includes(tab) || !eligible(tab) ||
+        !Number.isFinite(event.clientY) || !Number.isFinite(event.clientX)) return null;
+    const rect=tab.getBoundingClientRect?.();
+    if (!rect || rect.height<15 || rect.width<32 ||
+        event.clientX<rect.left || event.clientX>rect.right ||
+        event.clientY<rect.top || event.clientY>rect.bottom) return null;
+    const ratio=(event.clientY-rect.top)/rect.height;
+    if (ratio>=CENTER_START && ratio<=CENTER_END) return {tab,phase:'center'};
+    const tabs=[...(window.gBrowser?.tabs||[])];
+    const from=tabs.indexOf(drag.source),to=tabs.indexOf(tab);
+    const down=from>=0 && to>=0 ? from<=to :
+      (drag.sourceSlot?.top??rect.top)<=rect.top;
+    return {tab,phase:down ?
+      (ratio<CENTER_START?'guard':'sort') :
+      (ratio>CENTER_END?'guard':'sort')};
+  }
   function crossedFarSortEdge(event) {
     // Fast far-edge movement yields to native Zen/Zia sorting. Unlike
     // v1.0.5 this is NOT a permanent decision for the whole drag: a later
@@ -364,14 +386,8 @@
     // Native Zia may have reordered rows since the pre-drag snapshot.
     // Prefer a real event target when its current natural slot contains
     // the pointer; otherwise fall back to the captured positional hit.
-    const fromEvent=tabFromEvent(event);
-    const live=fromEvent!==drag.source && drag.targets.includes(fromEvent) ?
-      slotOf(fromEvent) : null;
-    const liveRatio=live ? (event.clientY-live.top)/live.height : -1;
-    const liveCenter=live && event.clientX>=live.left &&
-      event.clientX<=live.right && liveRatio>=CENTER_START &&
-      liveRatio<=CENTER_END;
-    const hit=liveCenter ? {tab:fromEvent,phase:'center'} : targetAt(event);
+    const live=liveTargetAt(event);
+    const hit=live?.phase==='center' ? live : targetAt(event);
     const target=hit?.phase==='center' ? hit.tab : null;
     if (!target || !eligible(target) || !Number.isFinite(event.clientX) ||
         !Number.isFinite(event.clientY)) {clearRearm();return;}
@@ -392,8 +408,10 @@
       const sourceSlot=slotOf(current.source);
       const targetSlot=slotOf(target);
       if (!sourceSlot || !targetSlot) return;
-      const offset=scrollOffset();
-      const ratio=(y-(targetSlot.top-offset))/targetSlot.height;
+      // Re-check the visually painted target; the natural tab slot used
+      // for the portal can differ from the Zia-shifted dragover hit box.
+      const visual=target.getBoundingClientRect?.();
+      const ratio=visual ? (y-visual.top)/visual.height : -1;
       if (ratio < CENTER_START-.12 || ratio > CENTER_END+.12) return;
       current.sourceSlot=sourceSlot;
       for (const tab of current.targets) {
@@ -574,7 +592,8 @@
     // Keep root-level previews aligned with their original *layout* slots
     // on sidebar scroll, never with Zia's translated source/target elements.
     positionPortals();
-    const hit=targetAt(event);
+    const hit=drag.hover ? targetAt(event) :
+      (liveTargetAt(event) || targetAt(event));
     const target=hit?.tab||null;
     if (hit?.phase==='sort') {
       if (drag.guard || drag.hover) clearCandidate();
