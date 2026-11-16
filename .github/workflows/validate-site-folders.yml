@@ -37,7 +37,7 @@ jobs:
           node --check site-folders-manual.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'),p=require('./preferences.json'); if(m.version !== '1.0.5' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || m.preferences !== 'preferences.json' || !p.some(x=>x.property==='zen.sitefolders.manual_group_drag.hold_seconds' && x.defaultValue==='1.2' && x.type==='string') || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js'] || !m.scripts['site-folders-manual.uc.js']) process.exit(1)"
+          node -e "const m=require('./theme.json'),p=require('./preferences.json'); if(m.version !== '1.0.6' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || m.preferences !== 'preferences.json' || !p.some(x=>x.property==='zen.sitefolders.manual_group_drag.hold_seconds' && x.defaultValue==='1.2' && x.type==='string') || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js'] || !m.scripts['site-folders-manual.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Check Sine update timestamp against previous release
