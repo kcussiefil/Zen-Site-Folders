@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Zen Site Folders — 拖曳及多選建立普通群組
+// @name         Zen Site Folders — 右鍵建立群組
 // @version      1.0.8
 // @description  Right-click-only native grouping for multiselected unpinned Zen tabs.
 // @include      chrome://browser/content/browser.xhtml
