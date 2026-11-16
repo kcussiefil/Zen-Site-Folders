@@ -317,7 +317,8 @@
    There is no tab-stack or transformed tab ancestor in this paint hierarchy. */
 :root > :is(#zsf-manual-merge-choice, #zsf-manual-pair) {
   position: fixed !important;
-  inset: auto !important;
+  right: auto !important;
+  bottom: auto !important;
   z-index: 2147483645 !important;
   display: flex !important;
   align-items: center !important;
