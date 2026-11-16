@@ -232,8 +232,21 @@
   function slotOf(tab) {
     const rect = tab?.getBoundingClientRect?.();
     if (!rect || rect.height < 15 || rect.width < 32) return null;
-    const dy = tab.hasAttribute?.('zia-shift') ?
+    let dy=tab.hasAttribute?.('zia-shift') ?
       parseFloat(tab.style?.getPropertyValue?.('--zia-drag-y')) || 0 : 0;
+    // The dragged SOURCE may already have a Zia translate when our capture
+    // handler runs. Read its natural row slot, not its moved visual ghost.
+    if (!tab.hasAttribute?.('zia-shift') && tab.hasAttribute?.('zia-dragging')) {
+      try {
+        const style=window.getComputedStyle?.(tab);
+        const transform=style?.transform;
+        if (transform && transform!=='none' && typeof DOMMatrix==='function')
+          dy+=new DOMMatrix(transform).m42;
+        const translate=style?.translate;
+        if (translate && translate!=='none')
+          dy+=parseFloat(translate.split(/\\s+/)[1])||0;
+      } catch (_) { /* Captured native rect remains a safe fallback. */ }
+    }
     return {left:rect.left,right:rect.right,top:rect.top-dy,
       bottom:rect.bottom-dy,height:rect.height,width:rect.width};
   }
