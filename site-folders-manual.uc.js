@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 拖曳及多選建立普通群組
-// @version      1.0.5
+// @version      1.0.6
 // @description  Opt-out-safe manual grouping for unpinned Zen tabs; no live DOM reorder.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -228,7 +228,7 @@
   // Both original rows are represented by viewport-fixed root overlays.
   // Neither preview node may be a child of a Zia-transformed native tab.
   // We capture natural slots before Zia's dragover neighbour translations.
-  let choice = null, pair = null, holdTimer = null;
+  let choice = null, pair = null, holdTimer = null, rearmTimer = null;
   function slotOf(tab) {
     const rect = tab?.getBoundingClientRect?.();
     if (!rect || rect.height < 15 || rect.width < 32) return null;
@@ -304,8 +304,14 @@
           y < here.top-offset || y > here.bottom-offset) return null;
       const ratio = (y-(here.top-offset))/here.height;
       const tolerance = Math.min(.12,HYSTERESIS_PX/here.height);
-      const centerStart = CENTER_START-(drag.hover===tab?tolerance:0);
-      const centerEnd = CENTER_END+(drag.hover===tab?tolerance:0);
+      // A formed preview gets a wider KEEP-alive zone than the initial
+      // 30–70% entry band. A few pixels of mouse jitter must not cancel
+      // the running 1.2s hold and irreversibly switch to sorting.
+      const activePreview=drag.hover===tab && !!choice;
+      const centerStart = activePreview ? .16 :
+        CENTER_START-(drag.hover===tab?tolerance:0);
+      const centerEnd = activePreview ? .84 :
+        CENTER_END+(drag.hover===tab?tolerance:0);
       if (ratio >= centerStart && ratio <= centerEnd) return 'center';
       // On approach, guard the upstream edge against Zia's eager avoidance.
       // On the far edge (after crossing the centre), let native sorting run.
@@ -330,17 +336,69 @@
     return closest;
   }
   function crossedFarSortEdge(event) {
-    // Once the pointer crosses the far 70%/30% boundary of the guarded
-    // target, hand this ENTIRE drag back to native Zen/Zia sorting. Do not
-    // accidentally start another group hold on the very next tab.
+    // Fast far-edge movement yields to native Zen/Zia sorting. Unlike
+    // v1.0.5 this is NOT a permanent decision for the whole drag: a later
+    // 150ms stationary centre hover may re-arm grouping.
+    // While an actual preview is visible, give it room for pointer jitter.
     const here=drag?.guard && drag.slots.get(drag.guard);
     if (!here || !Number.isFinite(event.clientY) ||
         !Number.isFinite(event.clientX) ||
         event.clientX < here.left || event.clientX > here.right) return false;
     const y=event.clientY+scrollOffset();
+    const preview=!!choice;
+    const farDown=preview ? .84 : CENTER_END;
+    const farUp=preview ? .16 : CENTER_START;
     return (drag.sourceSlot?.top ?? here.top) <= here.top ?
-      y > here.top + here.height*CENTER_END + HYSTERESIS_PX :
-      y < here.top + here.height*CENTER_START - HYSTERESIS_PX;
+      y > here.top + here.height*farDown + HYSTERESIS_PX :
+      y < here.top + here.height*farUp - HYSTERESIS_PX;
+  }
+  function clearRearm() {
+    if (rearmTimer !== null) clearTimeout(rearmTimer);
+    rearmTimer=null;
+    if (drag) drag.rearm=null;
+  }
+  function watchRearm(event) {
+    // While moving, NEVER intercept native dragover: tab sorting has full
+    // priority. Re-arm only when the pointer stays within 4px of one
+    // target's central band for the complete 150ms stability interval.
+    const hit=targetAt(event);
+    const target=hit?.phase==='center' ? hit.tab : null;
+    if (!target || !eligible(target) || !Number.isFinite(event.clientX) ||
+        !Number.isFinite(event.clientY)) {clearRearm();return;}
+    const p=drag.rearm;
+    if (p?.tab===target &&
+        Math.hypot(event.clientX-p.x,event.clientY-p.y)<=4) return;
+    clearRearm();
+    const current=drag;
+    const x=event.clientX,y=event.clientY;
+    current.rearm={tab:target,x,y};
+    rearmTimer=setTimeout(()=>{
+      rearmTimer=null;
+      if (destroyed || drag!==current || !current.sorting ||
+          current.rearm?.tab!==target || !eligible(target) ||
+          target.group || current.source.group) return;
+      // Keep portal placement in sync with any real native reordering
+      // that took place while we were giving Zen/Zia free dragover events.
+      const sourceSlot=slotOf(current.source);
+      const targetSlot=slotOf(target);
+      if (!sourceSlot || !targetSlot) return;
+      const offset=scrollOffset();
+      const ratio=(y-(targetSlot.top-offset))/targetSlot.height;
+      if (ratio < CENTER_START-.12 || ratio > CENTER_END+.12) return;
+      current.sourceSlot=sourceSlot;
+      for (const tab of current.targets) {
+        const rect=slotOf(tab);
+        if (rect) current.slots.set(tab,rect);
+      }
+      current.sorting=false;
+      current.hover=target;
+      current.guard=target;
+      current.rearm=null;
+      neutralizeAvoidance();
+      // The stability timer has already completed; begin the original
+      // configurable hold immediately, with no extra hidden waiting.
+      makeChoice(target);
+    },HOVER_MS);
   }
   function neutralizeAvoidance() {
     // CSS lock beats inline Zia shift even if Zia's earlier capture listener
@@ -378,6 +436,9 @@
     const ms=holdMs();
     choice.style.setProperty?.('--zsf-hold-ms',ms+'ms');
     document.documentElement.appendChild(choice);
+    // Hide the actual native close/reset X throughout a group candidate;
+    // it otherwise paints beside our "2" count in the title row.
+    document.documentElement.setAttribute('data-zsf-manual-preview-active','true');
     carryTabPaint(choice,upper);
     upper.setAttribute('data-zsf-manual-choice','true');
     // Hide Zia's *moving source row* only while the two root-level group
@@ -441,6 +502,7 @@
       tab?.removeAttribute?.('data-zsf-manual-pair');
     }
     choice?.remove();pair?.remove();
+    document.documentElement.removeAttribute('data-zsf-manual-preview-active');
     choice=null;pair=null;
     unfreeze({committing});
     if (drag) {
@@ -449,7 +511,11 @@
       drag.pairFrame=0;drag.pairTimer=null;
     }
   }
-  function clearDrag(options) {clearCandidate(options);drag=null;}
+  function clearDrag(options) {
+    clearRearm();
+    clearCandidate(options);
+    drag=null;
+  }
   function onDragStart(event) {
     finishLanding();
     clearDrag();
@@ -469,7 +535,7 @@
     const slots=new Map(targets.map(tab=>[tab,slotOf(tab)]));
     drag={source,sourceSlot:slotOf(source),workspace:workspace(source),
       targets,slots,scrolls:scrollPorts(source),verified:payload===source,
-      hover:null,ready:null,guard:null,sorting:false,
+      hover:null,ready:null,guard:null,sorting:false,rearm:null,
       visualTabs:[],previewSlots:null,pairFrame:0,pairTimer:null};
   }
   function onDragOver(event) {
@@ -482,12 +548,17 @@
       if (payload!==drag.source) {clearDrag();return;}
       drag.verified=true;
     }
-    // Sorting owns the remainder of this native drag once the user passes
-    // the group target's far middle boundary. Do not intercept later rows.
-    if (drag.sorting) return;
+    // Never block native dragover while actively sorting. Unlike the
+    // v1.0.5 permanent latch, a deliberate stationary centre hover can
+    // re-arm the 150ms stability + configurable hold without a new drag.
+    if (drag.sorting) {
+      watchRearm(event);
+      return;
+    }
     if (crossedFarSortEdge(event)) {
       clearCandidate();
       drag.sorting=true;
+      clearRearm();
       return;
     }
     // Keep root-level previews aligned with their original *layout* slots
@@ -498,7 +569,8 @@
     if (hit?.phase==='sort') {
       if (drag.guard || drag.hover) clearCandidate();
       drag.sorting=true;
-      return; // A direct far-edge entry also permanently yields to sorting.
+      clearRearm();
+      return; // A far-edge entry yields to sorting until a stable re-hover.
     }
     if (!target) {
       if (drag.guard || drag.hover) clearCandidate();
@@ -660,7 +732,7 @@
   const api = {start, destroy, createFromTabs, restore,
     debug: () => ({enabled: enabled(), dragging: !!drag,
       candidate: !!drag?.ready, portal:!!choice?.isConnected,
-      sorting:!!drag?.sorting,
+      sorting:!!drag?.sorting, rearming:!!drag?.rearm,
       phase:drag?.sorting?'sorting':drag?.hover?'center':drag?.guard?'guard':'none',
       holdMs:holdMs(), stableMs:HOVER_MS, lastDrop,
       storedGroups: Object.keys(registry()).length})};
