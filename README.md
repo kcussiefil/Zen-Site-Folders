@@ -39,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v1.0.5** (see `theme.json`) |
+| Current mod version | **v1.0.6** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -49,6 +49,8 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v1.0.6** fixes the v1.0.5 regression that made manual grouping nearly impossible after crossing a sort boundary. Native Zen/Zia sorting retains control while the pointer moves, but a **stationary 150ms centre hover** can now re-arm grouping **within the same drag**. The active group preview tolerates small pointer jitter before returning to sorting; the 1.2s default progress hold remains editable in Sine. The two site favicons now have a **real 8px gap**, not the earlier 2px overlap. While the group preview is visible, native tab close/reset X controls are hidden and restored immediately on cancel or drop. The root-fixed two-row preview and dragged-tab-first ordering remain. Physical macOS acceptance still required.
 
 **v1.0.5** restores fluid native sorting when dragging a standalone tab across another: after crossing the target's far central edge (70% downward, 30% upward, plus a 2px guard), the **remainder of this drag belongs to Zen/Zia sorting** and later rows cannot recapture it for a new group preview. Adjacent favicons in the lower preview overlap by only 2px rather than 7px. The dragged source row is hidden only while a group preview is visible; the mod no longer overrides Zia's native drag image, avoiding a duplicate cursor-following website icon where Zia manages dragging. Only the default manual-folder icon becomes white, including its preview and group header, while site/custom icons retain their colors. Stability (150ms) and the editable hold (default 1.2s) are unchanged. Hardware verification still required.
 
