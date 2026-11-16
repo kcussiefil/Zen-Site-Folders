@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 拖曳及多選建立普通群組
-// @version      1.0.6
+// @version      1.0.7
 // @description  Opt-out-safe manual grouping for unpinned Zen tabs; no live DOM reorder.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -13,10 +13,10 @@
   const STORE = 'zsf-manual-groups-v1';
   const NS = 'http://www.w3.org/1999/xhtml';
   const FOLDER_ICON = 'chrome://browser/skin/zen-icons/folder.svg';
-  // Candidate stays motionless during the short stability check, then the
-  // user-configurable horizontal fill runs. Ordinary sorting starts only
-  // after the pointer crosses the destination's central band.
-  const HOVER_MS = 150;
+  // Normal Zen/Zia sorting owns EVERY dragover and all unfinished drops.
+  // Only a stationary dwell inside a target's centre may arm grouping.
+  const HOVER_MS = 250;
+  const STATIONARY_PX = 3;
   const DEFAULT_HOLD_SECONDS = 1.2;
   const HOLD_PREF = 'zen.sitefolders.manual_group_drag.hold_seconds';
   const CENTER_START = .30, CENTER_END = .70;
@@ -398,66 +398,54 @@
     if (drag) drag.rearm=null;
   }
   function watchRearm(event) {
-    // While moving, NEVER intercept native dragover: tab sorting has full
-    // priority. Re-arm only when the pointer stays within 4px of one
-    // target's central band for the complete 150ms stability interval.
-    // Native Zia may have reordered rows since the pre-drag snapshot.
-    // Prefer a real event target when its current natural slot contains
-    // the pointer; otherwise fall back to the captured positional hit.
+    // Always let Zen/Zia handle the current dragover first. Only a truly
+    // stationary target-centre dwell may start a grouping preview.
+    const current=drag;
+    if (!current || current.hover) return;
     const live=liveTargetAt(event);
     const eventTab=tabFromEvent(event);
-    const old=drag.visualAt.get(eventTab);
-    const oldCentre=drag.targets.includes(eventTab) && eligible(eventTab) &&
-      centreOf(old,event);
-    // A full-row Zia shift between consecutive dragovers must NOT prevent
-    // a deliberate stable re-hover from being recognised.
+    const previous=current.visualAt.get(eventTab);
+    const previousCentre=current.targets.includes(eventTab) &&
+      eligible(eventTab) && centreOf(previous,event);
     const hit=live?.phase==='center' ? live :
-      oldCentre ? {tab:eventTab,phase:'center'} : targetAt(event);
-    const target=hit?.phase==='center' ? hit.tab : null;
-    drag.rearmDiagnostic={eventY:event.clientY,eventX:event.clientX,
-      eventTab:eventTab?.localName||null,
-      listed:drag.targets.includes(eventTab),
-      directEligible:eligible(eventTab),
-      livePhase:live?.phase||null,
-      capturedPhase:hit?.phase||null,
-      previousCentre:oldCentre,
-      previousTop:old?.top??null,
-      tabTop:eventTab?.getBoundingClientRect?.().top??null,
-      tabBottom:eventTab?.getBoundingClientRect?.().bottom??null};
+      previousCentre ? {tab:eventTab,phase:'center'} : targetAt(event);
+    const target=hit?.phase==='center' && hit.tab!==current.source ?
+      hit.tab : null;
+    current.rearmDiagnostic={eventX:event.clientX,eventY:event.clientY,
+      hitTarget:target?.label||null, previousCentre,
+      paintedTop:eventTab?.getBoundingClientRect?.().top??null};
     if (!target || !eligible(target) || !Number.isFinite(event.clientX) ||
-        !Number.isFinite(event.clientY)) {clearRearm();return;}
-    const p=drag.rearm;
-    if (p?.tab===target &&
-        Math.hypot(event.clientX-p.x,event.clientY-p.y)<=4) return;
-    clearRearm();
-    const current=drag;
+        !Number.isFinite(event.clientY)) {
+      clearRearm();
+      return;
+    }
     const x=event.clientX,y=event.clientY;
+    const pending=current.rearm;
+    if (pending?.tab===target &&
+        Math.hypot(x-pending.x,y-pending.y)<=STATIONARY_PX) return;
+    clearRearm();
     current.rearm={tab:target,x,y};
     rearmTimer=setTimeout(()=>{
       rearmTimer=null;
-      if (destroyed || drag!==current || !current.sorting ||
+      if (destroyed || drag!==current || current.hover ||
           current.rearm?.tab!==target || !eligible(target) ||
-          target.group || current.source.group) return;
-      // Keep portal placement in sync with any real native reordering
-      // that took place while we were giving Zen/Zia free dragover events.
+          !eligible(current.source)) return;
       const sourceSlot=slotOf(current.source);
       const targetSlot=slotOf(target);
       if (!sourceSlot || !targetSlot) return;
-      // The pointer was validated against the previous visual centre
-      // when rearm started. Do not invalidate a STILL stationary pointer
-      // merely because Zia shifted the tab under it during its animation.
+      // Zia may have moved the native rows during sorting, so refresh
+      // their natural slots ONLY after the stationary phase is complete.
       current.sourceSlot=sourceSlot;
       for (const tab of current.targets) {
-        const rect=slotOf(tab);
-        if (rect) current.slots.set(tab,rect);
+        const box=slotOf(tab);
+        if (box) current.slots.set(tab,box);
       }
       current.sorting=false;
       current.hover=target;
       current.guard=target;
+      current.anchor={x,y};
       current.rearm=null;
-      neutralizeAvoidance();
-      // The stability timer has already completed; begin the original
-      // configurable hold immediately, with no extra hidden waiting.
+      // Do not freeze transformations or intercept native dragover.
       makeChoice(target);
     },HOVER_MS);
   }
@@ -474,10 +462,11 @@
     if (!drag || drag.hover !== tab || !eligible(tab)) return;
     const source=drag.source;
     const s=drag.sourceSlot,t=drag.slots.get(tab);
-    const adjacent=!!s && !!t &&
-      Math.abs(s.top-t.top)<=Math.max(s.height,t.height)*1.9;
-    const upper=adjacent && s.top<t.top ? source : tab;
-    const lower=adjacent ? (upper===source?tab:source) : null;
+    if (!s || !t) return;
+    // Always build both rows, including after Zen/Zia has reordered tabs.
+    // The old "adjacent" condition silently skipped the favicon pair.
+    const upper=s.top<=t.top ? source : tab;
+    const lower=upper===source ? tab : source;
     choice=document.createElementNS(NS,'div');
     choice.className='zsf-manual-merge-choice';
     choice.id='zsf-manual-merge-choice';
@@ -596,7 +585,7 @@
     const slots=new Map(targets.map(tab=>[tab,slotOf(tab)]));
     drag={source,sourceSlot:slotOf(source),workspace:workspace(source),
       targets,slots,scrolls:scrollPorts(source),verified:payload===source,
-      hover:null,ready:null,guard:null,sorting:false,rearm:null,
+      hover:null,ready:null,guard:null,sorting:true,rearm:null,anchor:null,
       visualAt:new Map(),visualTabs:[],previewSlots:null,pairFrame:0,pairTimer:null};
   }
   function onDragOver(event) {
@@ -609,51 +598,24 @@
       if (payload!==drag.source) {clearDrag();return;}
       drag.verified=true;
     }
-    // Never block native dragover while actively sorting. Unlike the
-    // v1.0.5 permanent latch, a deliberate stationary centre hover can
-    // re-arm the 150ms stability + configurable hold without a new drag.
-    if (drag.sorting) {
-      watchRearm(event);
-      rememberVisualTarget(event);
-      return;
+    // Sorting remains native throughout the gesture, including when a
+    // visual candidate is armed. A moved pointer cancels the visual hold
+    // immediately; the subsequent native dragover is never intercepted.
+    if (drag.hover) {
+      const anchor=drag.anchor;
+      if (anchor && Number.isFinite(event.clientX) &&
+          Number.isFinite(event.clientY) &&
+          Math.hypot(event.clientX-anchor.x,
+            event.clientY-anchor.y)>STATIONARY_PX) {
+        clearCandidate();
+        drag.sorting=true;
+      } else {
+        positionPortals();
+        return;
+      }
     }
-    if (crossedFarSortEdge(event)) {
-      clearCandidate();
-      drag.sorting=true;
-      clearRearm();
-      rememberVisualTarget(event);
-      return;
-    }
-    // Keep root-level previews aligned with their original *layout* slots
-    // on sidebar scroll, never with Zia's translated source/target elements.
-    positionPortals();
-    const hit=drag.hover ? targetAt(event) :
-      (liveTargetAt(event) || targetAt(event));
-    const target=hit?.tab||null;
-    if (hit?.phase==='sort') {
-      if (drag.guard || drag.hover) clearCandidate();
-      drag.sorting=true;
-      clearRearm();
-      rememberVisualTarget(event);
-      return; // A far-edge entry yields to sorting until a stable re-hover.
-    }
-    if (!target) {
-      if (drag.guard || drag.hover) clearCandidate();
-      return;
-    }
-    if (drag.hover && (drag.hover!==target || hit.phase!=='center'))
-      clearCandidate();
-    drag.guard=target;
-    neutralizeAvoidance();
-    event.preventDefault();
-    event.stopPropagation();
-    if (hit.phase==='guard' || drag.hover===target) return;
-    drag.hover=target;
-    hoverTimer=setTimeout(()=>{
-      hoverTimer=null;
-      if (destroyed || !drag || drag.hover!==target || !eligible(target)) return;
-      makeChoice(target);
-    },HOVER_MS);
+    watchRearm(event);
+    rememberVisualTarget(event);
   }
   function finishLanding() {
     const item=settling;
@@ -682,12 +644,9 @@
   function onDrop(event) {
     lastDrop='received';
     if (!drag?.ready || !enabled()) {
-      lastDrop='not-ready';
-      // A release inside the still-pending central zone is cancellation,
-      // never an accidental native reorder after a prevented dragover.
-      if (enabled() && drag?.hover && drag.guard) {
-        event.preventDefault();event.stopImmediatePropagation();
-      }
+      lastDrop='native-sort';
+      // CRITICAL: an unfinished or cancelled candidate is NOT a drop.
+      // Allow Zen/Zia to finish the native reorder at its actual slot.
       clearDrag();return;
     }
     let payload=null;
@@ -799,7 +758,7 @@
       candidate: !!drag?.ready, portal:!!choice?.isConnected,
       sorting:!!drag?.sorting, rearming:!!drag?.rearm, rearmDiagnostic:drag?.rearmDiagnostic||null,
       phase:drag?.sorting?'sorting':drag?.hover?'center':drag?.guard?'guard':'none',
-      holdMs:holdMs(), stableMs:HOVER_MS, lastDrop,
+      holdMs:holdMs(), stableMs:HOVER_MS, stationaryPx:STATIONARY_PX, lastDrop,
       storedGroups: Object.keys(registry()).length})};
   window[KEY] = api;
   if (document.readyState === 'complete') start();
