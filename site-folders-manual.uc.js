@@ -244,7 +244,7 @@
           dy+=new DOMMatrix(transform).m42;
         const translate=style?.translate;
         if (translate && translate!=='none')
-          dy+=parseFloat(translate.split(/\\s+/)[1])||0;
+          dy+=parseFloat(translate.split(/\s+/)[1])||0;
       } catch (_) { /* Captured native rect remains a safe fallback. */ }
     }
     return {left:rect.left,right:rect.right,top:rect.top-dy,
