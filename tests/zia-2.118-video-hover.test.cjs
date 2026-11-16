@@ -9,10 +9,10 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'theme.json'), 'utf8
 const hover = fs.readFileSync(path.join(root, 'site-folders-hover.uc.js'), 'utf8');
 const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
-assert.equal(manifest.version, '1.0.8', 'release under test must be v1.0.8');
+assert.equal(manifest.version, '1.0.9', 'release under test must be v1.0.9');
 assert(!manifest.preferences &&
   !fs.existsSync(path.join(root,'preferences.json')),
-  'all user-facing Sine gear preferences are removed in menu-only v1.0.8');
+  'all user-facing Sine gear preferences are removed in menu-only v1.0.9');
 assert(hover.includes('getComputedStyle(source)'), 'inherit Zia actual native preview paint');
 assert(hover.includes("Services.prefs.addObserver('zia.'"), 'react to Zia pref changes');
 assert(hover.includes('data-zsf-preview-sidebar-hold'), 'sidebar stays open over independent card');
