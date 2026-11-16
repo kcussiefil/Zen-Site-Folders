@@ -9,13 +9,14 @@ Zen Site Folders is a [Sine](https://github.com/CosmoCreeper/Sine) mod for Zen B
 ## Features
 
 - **One-click organization:** group matching sites in the ordinary tab area. A new group needs at least two eligible tabs; a single tab may join an existing matching group.
+- **Context-menu grouping only:** multiselect two or more ordinary unpinned tabs and choose **建立群組** (Create group) from the tab context menu. Drag-to-group has been removed; Zen/Zia owns ordinary tab drag/reorder.
 - **Compact previews:** a separate group hover card with tab information, opening-time display when reliable, and Zia-compatible appearance and sound indicators.
 - **Native-feeling interaction:** expand/collapse animation, visual drag-and-drop feedback and automatic scrolling near the edge.
 - **Preserve your tabs:** sorting and undo use local snapshots and the browser's tab-group APIs; the mod does not intentionally close or reload tabs while organizing.
 - **Sensible standalone tabs:** remaining independent web tabs are ordered on an explicit Organize action, with a fallback for unknown opening times.
 - **Automatic single-member cleanup:** closing a tab may dissolve a Site Folders-owned group when exactly one member remains; manually dragging a tab out does not trigger this behavior.
 
-- **Background-tab dragging:** move unselected or discarded tabs without selecting them first; normal clicks still activate them. Toggle in Sine preferences (enabled by default). Split-view tabs keep Zen's native behavior.
+- **Background-tab dragging:** move unselected or discarded tabs without selecting them first; normal clicks still activate them. Enabled by default; no Sine gear toggle. Split-view tabs keep Zen's native behavior.
 
 ## Requirements and installation
 
@@ -39,7 +40,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v1.0.7** (see `theme.json`) |
+| Current mod version | **v1.0.8** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -49,6 +50,8 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v1.0.8** removes drag-to-create manual groups entirely. Multiselected unpinned tabs can still be grouped with the **建立群組** context-menu action, renamed from **建立普通群組**. The mod no longer binds tab drag or drop events and no longer installs group-hold overlays, progress animations, hold-time preferences, or a Sine gear entry. Existing manual groups retain their labels, icons, collapse/hover behaviour and persisted restoration. Background dragging, native Zen/Zia sorting, and automatic site grouping remain unchanged.
 
 **v1.0.7** prioritizes native Zen/Zia sorting above manual grouping: **no `dragover` is intercepted**, and releasing before the editable group-fill completes **never intercepts the native `drop`**. A manual preview appears only after an actual **250ms stationary dwell within 3px** of a target tab's centre, then displays the usual configurable 1.2-second horizontal fill. Deliberate movement immediately cancels the preview and restores native sorting. Both favicon icons always render even when Zia has reordered the two tabs beyond adjacent rows; no more conditional second-row disappearance. Root-fixed preview, 8px icon separation, white default folder and dragged-first group ordering remain. macOS real-input acceptance is still required.
 

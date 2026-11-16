@@ -1,9 +1,0 @@
-[
-  {
-    "type": "string",
-    "property": "zen.sitefolders.manual_group_drag.hold_seconds",
-    "label": "新群組等待時間（秒；預設 1.2，範圍 0.3～2.5，每次 0.1；數值越大越不易誤觸）",
-    "defaultValue": "1.2",
-    "placeholder": "1.2"
-  }
-]

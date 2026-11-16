@@ -1,38 +1,29 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const code = fs.readFileSync('site-folders-manual.uc.js','utf8');
-const css = fs.readFileSync('userChrome.css','utf8');
+const code=fs.readFileSync('site-folders-manual.uc.js','utf8');
+const css=fs.readFileSync('userChrome.css','utf8');
+const theme=JSON.parse(fs.readFileSync('theme.json','utf8'));
 new vm.Script(code);
-assert(css.includes('#zsf-manual-merge-choice'), 'Yab-style integrated New Group row is present');
-assert(css.includes('zsf-manual-horizontal-fill'), 'horizontal left-to-right progress is present');
-assert(css.includes('visibility: hidden !important'), 'original tab contents are replaced, not duplicated');
-assert(!css.includes('#zsf-manual-merge-progress'), 'circular ring removed');
-assert(!css.includes('#zsf-manual-merge-preview'), 'old translucent row card removed');
-assert(!css.includes('zsf-manual-ring-fill'), 'ring animation removed');
-assert(!css.includes('data-zsf-color-custom'), 'no color-accent styling remains');
-assert(css.includes('[data-zsf-manual]'), 'manual groups have scoped native icon styling');
-assert(css.includes('opacity(0.3025)'), 'dark Zia effective asleep icon filter remains');
-assert(css.includes('opacity(0.5625)'), 'light Zia effective asleep icon filter remains');
-assert(!/\.pinTab\(|\.unpinTab\(/.test(code), 'manual groups must never pin or unpin');
-assert(!/\.appendChild\(source\)|\.insertBefore\(source/.test(code),
-  'preview must not reorder source DOM before drop');
-assert(!/event\.dataTransfer\.setDragImage\s*\(/.test(code),
-  'do not override the native/Zia drag picture with a second moving favicon');
-assert(css.includes('gap: 8px !important') &&
-  css.includes('margin-inline-start: 0 !important'),
-  'two site favicons now have an 8px visible gap, no overlapping margin');
-assert(css.includes(':root[data-zsf-manual-preview-active] :is(.tab-close-button, .tab-reset-button)') &&
-  css.includes('visibility: hidden !important'),
-  'native close/reset X is hidden only while manual preview is active');
-assert(css.includes('#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source]') &&
-  css.includes('opacity: 0 !important'),
-  'the moving tab image is hidden only while group portals are active');
-assert(css.includes('brightness(0) invert(1)') &&
-  css.includes('zsf-manual-merge-icon') &&
-  css.includes('.zsf-favicon[src="chrome://browser/skin/zen-icons/folder.svg"]'),
-  'native default folder icons turn white without tinting arbitrary favicons');
-
+assert(!theme.preferences && !fs.existsSync('preferences.json'),
+  'Sine mod has no gear preferences or drag hold setting file');
+for (const event of ['dragstart','dragover','dragend','drop']) {
+  assert(!code.includes("bind(window, '"+event+"'"),
+    'manual groups must not attach any '+event+' listener');
+}
+assert(!code.includes('manual_group_drag') && !code.includes('HOVER_MS') &&
+  !code.includes('setDragImage') && !code.includes('previewSlots'),
+  'old drag grouping controller, hold timer and preference are removed');
+assert(!/zsf-manual-(merge-choice|pair|source|committing|preview-active)/.test(css),
+  'obsolete manual drag preview CSS and native tab hiding are removed');
+assert(code.includes("menuItem.setAttribute('label', '建立群組')") &&
+  !code.includes('建立普通群組'), 'right-click option is named 建立群組');
+assert(css.includes('.zsf-favicon[src="chrome://browser/skin/zen-icons/folder.svg"]') &&
+  css.includes('brightness(0) invert(1)'),
+  'existing manual folder white icon styling is preserved');
+assert(css.includes('[data-zsf-manual]') &&
+  css.includes('opacity(0.3025)') && css.includes('opacity(0.5625)'),
+  'existing native folder style and asleep Zia filters remain');
 class Node {
   constructor(localName = 'div') {
     this.localName = localName; this.isConnected = true;
@@ -170,188 +161,54 @@ function harness({enabled=true}={}) {
 }
 const delay=ms=>new Promise(res=>setTimeout(res,ms));
 (async()=>{
-  const fresh=()=>harness();
-  const h=fresh();
-  assert.equal(h.count(),0);
-  assert.equal(h.api.debug().stableMs,250,'need a genuine 250ms stationary centre dwell');
-  assert.equal(h.api.debug().stationaryPx,3,'movement threshold rejects in-flight sort pauses');
-  assert.equal(h.api.debug().holdMs,1200);
+  const h=harness();
+  assert(h.api?.createFromTabs && h.api?.restore);
+  assert(h.api.debug().mode==='context-menu-only' &&
+    h.api.debug().dragging===false);
+  assert(!['dragstart','dragover','dragend','drop'].some(
+    event=>(h.root.events[event]||[]).length),
+    'no native tab sorting/drag event is intercepted by manual group mod');
   h.fire('dragstart',h.a);
-  const first=h.fire('dragover',h.b);
-  assert(!first.prevented && !first.propagationStopped,
-    'candidate observation NEVER blocks Zen/Zia native dragover');
-  assert(h.api.debug().sorting && h.api.debug().rearming &&
-    !h.root.hasAttribute('data-zsf-manual-preview-active'));
-  await delay(110);
-  assert(!h.root.children.some(x=>x.isConnected && x.id==='zsf-manual-merge-choice'),
-    'short sorting pause does not show New Group');
-  // Moving through another tab cancels the first dwell; native sorting owns it.
-  const across=h.fire('dragover',h.c);
-  assert(!across.prevented && h.api.debug().sorting);
-  await delay(160);
-  assert(!h.api.debug().portal && h.count()===0,
-    'crossing between rows is ordinary sorting without a preview');
-  const nativeDrop=h.fire('drop',h.c);
-  assert(!nativeDrop.prevented && !nativeDrop.stopped &&
-    h.api.debug().lastDrop==='native-sort',
-    'normal one-slot/multi-slot release is never intercepted or snapped back');
-  h.fire('dragend',h.a);h.api.destroy();
+  h.fire('dragover',h.b);
+  const ordinary=h.fire('drop',h.b);
+  assert(!ordinary.prevented && !ordinary.stopped && h.count()===0,
+    'ordinary drag remains unchanged and never makes a group');
 
-  // Leaving a centre before stable dwell must also preserve native drop.
-  const early=fresh();
-  early.fire('dragstart',early.a);
-  early.fire('dragover',early.b);
-  await delay(270);
-  const earlyChoice=early.root.children.find(x=>x.isConnected &&
-    x.id==='zsf-manual-merge-choice');
-  assert(earlyChoice && early.api.debug().portal,
-    '250ms stable dwell starts the editable horizontal fill');
-  const earlyDrop=early.fire('drop',early.b);
-  assert(!earlyDrop.prevented && !earlyDrop.stopped && early.count()===0,
-    'even AFTER preview appears, dropping before 1.2s fill remains native sort');
-  assert(!early.root.hasAttribute('data-zsf-manual-preview-active') &&
-    !earlyChoice.isConnected && !early.a.hasAttribute('data-zsf-manual-source'),
-    'unfinished preview, close X suppression and source hiding are cleaned');
-  early.api.destroy();
-
-  const h2=fresh();
-  h2.fire('dragstart',h2.a);
-  h2.fire('dragover',h2.b);
-  await delay(280);
-  const choice=h2.root.children.find(x=>x.isConnected && x.id==='zsf-manual-merge-choice');
-  const pair=h2.root.children.find(x=>x.isConnected && x.id==='zsf-manual-pair');
-  assert(choice && pair,'both original rows MUST be created');
-  assert(choice.parentElement===h2.root && pair.parentElement===h2.root,
-    'previews are root portals, never reparent native tabs');
-  assert.equal(choice.style.getPropertyValue('top'),'100px');
-  assert.equal(pair.style.getPropertyValue('top'),'136px');
-  assert.equal(choice.style.getPropertyValue('--zsf-hold-ms'),'1200ms');
-  assert.deepEqual(pair.children.map(x=>x.getAttribute('src')),
-    ['chrome://test/A.svg','chrome://test/B.svg']);
-  assert(h2.a.hasAttribute('data-zsf-manual-source') &&
-    h2.root.hasAttribute('data-zsf-manual-preview-active'));
-  assert.equal(choice.children.find(x=>x.className==='zsf-manual-merge-title').textContent,
-    '新群組');
-  assert(!h2.b.hasAttribute('data-zsf-manual-ready'));
-  // Moving <3px preserves the hold, so unintentional jitter is harmless.
-  const jitter=h2.fire('dragover',h2.b,{
-    clientY:h2.b.getBoundingClientRect().top+18});
-  assert(!jitter.prevented && h2.api.debug().portal &&
-    choice.isConnected,'pointer jitter must not cancel running fill');
-  // Zia may shift the target visually. Preview remains at the original row
-  // while ordinary native dragover is never swallowed.
-  h2.b.shiftY=84;h2.b.setAttribute('zia-shift','true');
-  h2.b.style.setProperty('--zia-drag-y','48px');
-  const shifted=h2.fire('dragover',h2.c,{clientY:154});
-  assert(!shifted.prevented && pair.isConnected &&
-    pair.style.getPropertyValue('top')==='136px');
-  h2.scrollPort.scrollTop=20;
-  h2.fire('scroll',h2.b);
-  assert.equal(choice.style.getPropertyValue('top'),'80px');
-  assert.equal(pair.style.getPropertyValue('top'),'116px');
-  await delay(1230);
-  assert(choice.hasAttribute('data-ready') && h2.b.hasAttribute('data-zsf-manual-ready'),
-    'only completed 1.2s fill authorizes manual grouping');
-  const accepted=h2.fire('drop',h2.b);
-  assert(accepted.prevented && accepted.stopped && h2.count()===1);
-  assert.deepEqual(h2.a.group.tabs.map(t=>t.label),['A','B']);
-  assert.equal(h2.a.group.insertBefore,h2.a);
-  h2.fire('dragend',h2.a);
-  assert(!choice.isConnected && !pair.isConnected &&
-    !h2.root.hasAttribute('data-zsf-manual-preview-active'));
-  assert(h2.a.group===h2.b.group && h2.a.group.label==='新群組');
-  assert(h2.a.group.hasAttribute('data-zsf-manual'));
-  assert.equal(JSON.parse(h2.store['zsf-manual-groups-v1'])[h2.a.group.id].kind,'mixed');
-  assert.equal(h2.a.group.querySelector('.tab-group-label-container')
+  const menu=h.menu;
+  const item=menu.children.find(n=>n.id==='zsf-manual-create-group');
+  assert(item && item.getAttribute('label')==='建立群組',
+    'context menu contains renamed item');
+  for(const cb of menu.events.popupshowing||[])cb({target:menu});
+  assert(item.hidden,'menu option is hidden without multiselection');
+  h.win.TabContextMenu.contextTab.multiselected=true;
+  for(const cb of menu.events.popupshowing||[])cb({target:menu});
+  assert(!item.hidden,'menu option appears when multiple ordinary tabs selected');
+  item.click();
+  assert.equal(h.count(),1,'right click command creates native ordinary group');
+  assert(h.a.group && h.a.group===h.b.group &&
+    h.a.group.localName==='tab-group');
+  assert.equal(h.a.group.label,'新群組');
+  assert.equal(h.a.group.color,'gray');
+  assert(!h.a.pinned && !h.b.pinned);
+  assert.deepEqual(h.a.group.tabs.map(x=>x.label),['A','B']);
+  assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].kind,'mixed');
+  assert.equal(h.a.group.querySelector('.tab-group-label-container')
     .querySelector(':scope > .zsf-favicon').getAttribute('src'),
     'chrome://browser/skin/zen-icons/folder.svg');
-  h2.a.group.removeAttribute('data-zsf-manual');h2.api.restore();
-  assert(h2.a.group.hasAttribute('data-zsf-manual'));
-  assert.equal(h2.api.createFromTabs([h2.a,h2.c]),null);
-  h2.api.destroy();
+  h.a.group.removeAttribute('data-zsf-manual');
+  h.api.restore();
+  assert(h.a.group.hasAttribute('data-zsf-manual') &&
+    h.a.group.color==='gray','existing manual group styling can be restored');
+  assert.equal(h.api.createFromTabs([h.a,h.c]),null,
+    'grouped or invalid members are rejected');
+  h.api.destroy();
+  assert(!item.isConnected,'destroy cleans only the installed right click item');
 
-  const reverse=fresh();
-  reverse.payload(reverse.c);
-  reverse.fire('dragstart',reverse.c);
-  reverse.fire('dragover',reverse.b);
-  await delay(280);
-  const label=reverse.root.children.find(x=>x.isConnected && x.id==='zsf-manual-merge-choice');
-  const icons=reverse.root.children.find(x=>x.isConnected && x.id==='zsf-manual-pair');
-  assert(label && icons && label.style.getPropertyValue('top')==='136px' &&
-    icons.style.getPropertyValue('top')==='172px');
-  assert.equal(icons.style.getPropertyValue('--zsf-pair-start-y'),'-36px');
-  await delay(1230);
-  assert(reverse.fire('drop',reverse.b).prevented && reverse.count()===1);
-  assert.deepEqual(reverse.b.group.tabs.map(x=>x.label),['C','B'],
-    'upward grouping remains dragged-first');
-  reverse.fire('dragend',reverse.c);reverse.api.destroy();
+  const same=harness();
+  const s=same.api.createFromTabs([same.a,same.c]);
+  assert(s && s.label==='YouTube' && s.color==='gray',
+    'same-site selected tabs create native group with site label');
+  same.api.destroy();
 
-  // The old adjacency test made icons disappear if native Zia re-sorted
-  // beyond one original row. Both icons are required for ALL valid pairs.
-  const distant=fresh();
-  distant.fire('dragstart',distant.a);
-  distant.fire('dragover',distant.d);
-  await delay(280);
-  const farPair=distant.root.children.find(x=>x.isConnected &&
-    x.id==='zsf-manual-pair');
-  assert(farPair && farPair.children.length===2 &&
-    farPair.children.every(x=>x.getAttribute('src')),
-    'a nonadjacent candidate must still show both website icons');
-  distant.fire('dragend',distant.a);distant.api.destroy();
-
-  // Preview cancellation releases the original source and lets Zen/Zia
-  // finish the one-slot reorder. It must NOT cancel an unfinished drop.
-  const move=fresh();
-  move.fire('dragstart',move.a);
-  move.fire('dragover',move.b);
-  await delay(280);
-  const preview=move.root.children.find(x=>x.isConnected &&
-    x.id==='zsf-manual-merge-choice');
-  const moveEvent=move.fire('dragover',move.b,{
-    clientY:move.b.getBoundingClientRect().top+26});
-  assert(!moveEvent.prevented && !move.api.debug().portal &&
-    !preview.isConnected && !move.a.hasAttribute('data-zsf-manual-source') &&
-    !move.root.hasAttribute('data-zsf-manual-preview-active'),
-    'deliberate movement cancels grouping and restores native row immediately');
-  const movedDrop=move.fire('drop',move.b);
-  assert(!movedDrop.prevented && !movedDrop.stopped && move.count()===0,
-    'cancelled candidate leaves drop available to native sort');
-  move.api.destroy();
-
-  // Zia can shift an event target one entire row while hovering. Previous
-  // painted rects remain a fallback, without hijacking any dragover.
-  const shift=fresh();
-  shift.setHold('0.3');
-  shift.fire('dragstart',shift.a);
-  const oldRect=shift.b.getBoundingClientRect();
-  shift.fire('dragover',shift.b,{clientY:oldRect.top+16});
-  shift.b.shiftY-=36;
-  shift.fire('dragover',shift.b,{clientY:oldRect.top+16});
-  await delay(280);
-  assert(shift.api.debug().portal,
-    'stationary dwell remains valid across a Zia one-row shift');
-  shift.fire('dragend',shift.a);shift.api.destroy();
-
-  const custom=fresh();
-  custom.setHold('0.3');assert.equal(custom.api.debug().holdMs,300);
-  custom.setHold('2.8');assert.equal(custom.api.debug().holdMs,2500);
-  custom.setHold('invalid');assert.equal(custom.api.debug().holdMs,1200);
-  custom.api.destroy();
-
-  const multi=fresh();
-  multi.win.TabContextMenu.contextTab.multiselected=true;
-  for(const fn of multi.menu.events.popupshowing||[])fn({target:multi.menu});
-  const menuItem=multi.menu.children.find(x=>x.id==='zsf-manual-create-group');
-  assert(menuItem && !menuItem.hidden);
-  menuItem.click();assert.equal(multi.count(),1);
-  multi.api.destroy();
-
-  const off=harness({enabled:false});
-  off.fire('dragstart',off.a);
-  off.fire('dragover',off.b);
-  await delay(270);
-  assert(!off.fire('drop',off.b).prevented && off.count()===0);
-  off.api.destroy();
-
-  console.log('PASS: native sort-first drag/drop, 250ms stationary gate, no premature capture, two icons always shown, source cleanup, both native group directions');
+  console.log('PASS: menu-only manual grouping, native drag untouched, renamed right-click item, no Sine gear, preserved restore/icon/style');
 })().catch(error=>{console.error(error);process.exitCode=1});

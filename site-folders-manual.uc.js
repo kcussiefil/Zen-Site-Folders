@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Zen Site Folders — 拖曳及多選建立普通群組
-// @version      1.0.7
-// @description  Opt-out-safe manual grouping for unpinned Zen tabs; no live DOM reorder.
+// @name         Zen Site Folders — 右鍵建立群組
+// @version      1.0.8
+// @description  Right-click-only native grouping for multiselected unpinned Zen tabs.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
 (() => {
@@ -9,29 +9,11 @@
   const KEY = '__zsfManualGroupsV099';
   if (window[KEY]?.destroy) window[KEY].destroy();
   const TAG = '[ZenSiteFoldersManual]';
-  const PREF = 'zen.sitefolders.manual_group_drag.enabled';
   const STORE = 'zsf-manual-groups-v1';
-  const NS = 'http://www.w3.org/1999/xhtml';
   const FOLDER_ICON = 'chrome://browser/skin/zen-icons/folder.svg';
-  // Normal Zen/Zia sorting owns EVERY dragover and all unfinished drops.
-  // Only a stationary dwell inside a target's centre may arm grouping.
-  const HOVER_MS = 250;
-  const STATIONARY_PX = 3;
-  const DEFAULT_HOLD_SECONDS = 1.2;
-  const HOLD_PREF = 'zen.sitefolders.manual_group_drag.hold_seconds';
-  const CENTER_START = .30, CENTER_END = .70;
-  const HYSTERESIS_PX = 2;
-  function holdMs() {
-    let raw = String(DEFAULT_HOLD_SECONDS);
-    try { raw = Services.prefs.getStringPref(HOLD_PREF,raw); } catch (_) {}
-    const n = Number(String(raw).trim());
-    return (Number.isFinite(n)
-      ? Math.round(Math.max(.3,Math.min(2.5,n))*10) : 12)*100;
-  }
   const listeners = [];
-  let destroyed = false, started = false, drag = null, hoverTimer = null;
-  let lastDrop = 'none';
-  let menuItem = null, restoreTimer = null, settling = null;
+  let destroyed = false, started = false;
+  let menuItem = null, restoreTimer = null;
   let sessionStore = null;
   try {
     sessionStore = window.SessionStore ||
@@ -42,10 +24,6 @@
     if (!node?.addEventListener) return;
     node.addEventListener(name, fn, capture);
     listeners.push([node, name, fn, capture]);
-  }
-  function enabled() {
-    try { return Services.prefs.getBoolPref(PREF, true); }
-    catch (_) { return true; }
   }
   function registry() {
     try {
@@ -178,14 +156,10 @@
     if (restoreTimer != null) clearTimeout(restoreTimer);
     restoreTimer = setTimeout(() => { restoreTimer = null; restore(); }, 120);
   }
-  function createFromTabs(input, {dragSource = null, anchor = null} = {}) {
-    const validated = validTabs(input);
-    // The dragged tab must be first for either drop direction. The native
-    // group itself stays at the original upper row; no visual re-sort pass.
-    const tabs = validated && dragSource && validated.includes(dragSource) ?
-      [dragSource, ...validated.filter(tab => tab !== dragSource)] : validated;
-    const before = validated && anchor && validated.includes(anchor) ?
-      anchor : validated?.[0];
+  function createFromTabs(input) {
+    const tabs = validTabs(input);
+    // The multiselection is grouped in the current native tab order.
+    const before = tabs?.[0];
     const browser = window.gBrowser;
     if (!tabs || typeof browser?.addTabGroup !== 'function' ||
         !sessionStore?.setCustomWindowValue) return null;
@@ -201,8 +175,6 @@
       if (!group?.isConnected || group.isZenFolder ||
           tabs.some(tab => tab.group !== group || tab.pinned))
         throw new Error('Native group creation was incomplete');
-      if (dragSource && [...(group.tabs || [])].some((tab, i) => tab !== tabs[i]))
-        console.warn(TAG, 'Native Zen returned unexpected manual group order');
       if (!group.id) throw new Error('Native group has no stable ID');
       const map = registry();
       map[group.id] = {kind: info.kind, icon: info.icon};
@@ -217,460 +189,6 @@
     }
   }
 
-  function tabFromEvent(event) {
-    for (const node of event.composedPath?.() || [event.target]) {
-      const tab = node?.localName === 'tab' ? node :
-        node?.closest?.('.tabbrowser-tab');
-      if (tab?.localName === 'tab') return tab;
-    }
-    return null;
-  }
-  // Both original rows are represented by viewport-fixed root overlays.
-  // Neither preview node may be a child of a Zia-transformed native tab.
-  // We capture natural slots before Zia's dragover neighbour translations.
-  let choice = null, pair = null, holdTimer = null, rearmTimer = null;
-  function slotOf(tab) {
-    const rect = tab?.getBoundingClientRect?.();
-    if (!rect || rect.height < 15 || rect.width < 32) return null;
-    let dy=tab.hasAttribute?.('zia-shift') ?
-      parseFloat(tab.style?.getPropertyValue?.('--zia-drag-y')) || 0 : 0;
-    // The dragged SOURCE may already have a Zia translate when our capture
-    // handler runs. Read its natural row slot, not its moved visual ghost.
-    if (!tab.hasAttribute?.('zia-shift') && tab.hasAttribute?.('zia-dragging')) {
-      try {
-        const style=window.getComputedStyle?.(tab);
-        const transform=style?.transform;
-        if (transform && transform!=='none' && typeof DOMMatrix==='function')
-          dy+=new DOMMatrix(transform).m42;
-        const translate=style?.translate;
-        if (translate && translate!=='none')
-          dy+=parseFloat(translate.split(/\s+/)[1])||0;
-      } catch (_) { /* Captured native rect remains a safe fallback. */ }
-    }
-    return {left:rect.left,right:rect.right,top:rect.top-dy,
-      bottom:rect.bottom-dy,height:rect.height,width:rect.width};
-  }
-  function scrollPorts(tab) {
-    const ws=workspace(tab);
-    const candidates=[ws?.scrollbox?.scrollbox,ws?.scrollbox,
-      ws?.querySelector?.('.workspace-arrowscrollbox')?.scrollbox,
-      ws?.querySelector?.('.workspace-arrowscrollbox'),
-      window.gZenWorkspaces?.activeWorkspaceElement?.scrollbox?.scrollbox];
-    return [...new Set(candidates.filter(node =>
-      node && typeof node.scrollTop==='number' &&
-      node.scrollHeight>node.clientHeight+3))].map(node=>({node,top:node.scrollTop}));
-  }
-  function scrollOffset() {
-    return (drag?.scrolls||[]).reduce((delta,item)=>
-      delta+item.node.scrollTop-item.top,0);
-  }
-  function setPortalBounds(node,box) {
-    if (!node || !box) return;
-    const top=box.top-scrollOffset();
-    node.style.setProperty('left',box.left+'px');
-    node.style.setProperty('top',top+'px');
-    node.style.setProperty('width',box.width+'px');
-    node.style.setProperty('height',box.height+'px');
-    // A root-level overlay must not leak over the URL bar when tabs scroll.
-    const clip=drag?.scrolls?.[0]?.node?.getBoundingClientRect?.();
-    node.hidden=!!(clip && (top>=clip.bottom || top+box.height<=clip.top));
-  }
-  function positionPortals() {
-    if (!drag?.previewSlots) return;
-    setPortalBounds(choice,drag.previewSlots.upper);
-    setPortalBounds(pair,drag.previewSlots.lower);
-  }
-  function carryTabPaint(node,tab) {
-    // Root overlays do not inherit tab-scoped Zia variables. Copy just the
-    // computed theme tokens; never force a hard-coded light/dark paint.
-    if (!node) return;
-    try {
-      const paint=window.getComputedStyle?.(tab);
-      for (const [from,to] of [
-        ['--zia-tab-hover-bg','--zsf-manual-preview-bg'],
-        ['--zia-sidebar-ink','--zsf-manual-preview-ink'],
-        ['--zia-tab-radius','--zsf-manual-preview-radius']]) {
-        const value=paint?.getPropertyValue?.(from)?.trim();
-        if (value) node.style.setProperty(to,value);
-      }
-    } catch (_) { /* Root theme variables are the safe CSS fallback. */ }
-  }
-  function targetAt(event) {
-    if (!drag) return null;
-    const {clientX:x,clientY:y} = event;
-    const offset=scrollOffset();
-    const phaseOf = (tab, here) => {
-      if (!here || x < here.left || x > here.right ||
-          y < here.top-offset || y > here.bottom-offset) return null;
-      const ratio = (y-(here.top-offset))/here.height;
-      const tolerance = Math.min(.12,HYSTERESIS_PX/here.height);
-      // A formed preview gets a wider KEEP-alive zone than the initial
-      // 30–70% entry band. A few pixels of mouse jitter must not cancel
-      // the running 1.2s hold and irreversibly switch to sorting.
-      const activePreview=drag.hover===tab && !!choice;
-      const centerStart = activePreview ? .16 :
-        CENTER_START-(drag.hover===tab?tolerance:0);
-      const centerEnd = activePreview ? .84 :
-        CENTER_END+(drag.hover===tab?tolerance:0);
-      if (ratio >= centerStart && ratio <= centerEnd) return 'center';
-      // On approach, guard the upstream edge against Zia's eager avoidance.
-      // On the far edge (after crossing the centre), let native sorting run.
-      const down = drag.sourceSlot?.top <= here.top;
-      return down ? (ratio < centerStart ? 'guard' : 'sort') :
-        (ratio > centerEnd ? 'guard' : 'sort');
-    };
-    if (drag.hover) {
-      const here = drag.slots.get(drag.hover);
-      const phase=phaseOf(drag.hover,here);
-      if (phase) return {tab:drag.hover,phase};
-    }
-    let closest=null,best=Infinity;
-    for (const tab of drag.targets) {
-      if (!eligible(tab) || workspace(tab)!==drag.workspace) continue;
-      const here=drag.slots.get(tab);
-      const phase=phaseOf(tab,here);
-      if (!phase) continue;
-      const distance=Math.abs(y-(here.top-offset)-here.height/2);
-      if (distance<best) {closest={tab,phase};best=distance;}
-    }
-    return closest;
-  }
-  function liveTargetAt(event) {
-    // Zia may have visually moved a tab by the time its native dragover is
-    // dispatched. Its ACTUAL event target and painted row rect are the
-    // correct geometry for deciding whether a passing cursor should sort.
-    // The frozen slots are still used after a group candidate has started.
-    const tab=tabFromEvent(event);
-    if (!drag?.targets.includes(tab) || !eligible(tab) ||
-        !Number.isFinite(event.clientY) || !Number.isFinite(event.clientX)) return null;
-    const rect=tab.getBoundingClientRect?.();
-    if (!rect || rect.height<15 || rect.width<32 ||
-        event.clientX<rect.left || event.clientX>rect.right ||
-        event.clientY<rect.top || event.clientY>rect.bottom) return null;
-    const ratio=(event.clientY-rect.top)/rect.height;
-    if (ratio>=CENTER_START && ratio<=CENTER_END) return {tab,phase:'center'};
-    const tabs=[...(window.gBrowser?.tabs||[])];
-    const from=tabs.indexOf(drag.source),to=tabs.indexOf(tab);
-    const down=from>=0 && to>=0 ? from<=to :
-      (drag.sourceSlot?.top??rect.top)<=rect.top;
-    return {tab,phase:down ?
-      (ratio<CENTER_START?'guard':'sort') :
-      (ratio>CENTER_END?'guard':'sort')};
-  }
-  function rememberVisualTarget(event) {
-    // Zia's earlier dragover capture listener can shift the actual target
-    // by a full row BEFORE our listener runs. The previously painted rect
-    // is then the only reliable map for the pointer in this SAME event.
-    const tab=tabFromEvent(event);
-    if (!drag?.targets.includes(tab) || !eligible(tab)) return;
-    const r=tab.getBoundingClientRect?.();
-    if (r && r.width>=32 && r.height>=15)
-      drag.visualAt.set(tab,{left:r.left,right:r.right,
-        top:r.top,bottom:r.bottom,height:r.height,width:r.width});
-  }
-  function centreOf(rect,event) {
-    if (!rect || !Number.isFinite(event.clientX) ||
-        !Number.isFinite(event.clientY) ||
-        event.clientX<rect.left || event.clientX>rect.right) return false;
-    const ratio=(event.clientY-rect.top)/rect.height;
-    return ratio>=CENTER_START && ratio<=CENTER_END;
-  }
-  function clearRearm() {
-    if (rearmTimer !== null) clearTimeout(rearmTimer);
-    rearmTimer=null;
-    if (drag) drag.rearm=null;
-  }
-  function watchRearm(event) {
-    // Always let Zen/Zia handle the current dragover first. Only a truly
-    // stationary target-centre dwell may start a grouping preview.
-    const current=drag;
-    if (!current || current.hover) return;
-    const live=liveTargetAt(event);
-    const eventTab=tabFromEvent(event);
-    const previous=current.visualAt.get(eventTab);
-    const previousCentre=current.targets.includes(eventTab) &&
-      eligible(eventTab) && centreOf(previous,event);
-    const hit=live?.phase==='center' ? live :
-      previousCentre ? {tab:eventTab,phase:'center'} : targetAt(event);
-    const target=hit?.phase==='center' && hit.tab!==current.source ?
-      hit.tab : null;
-    current.rearmDiagnostic={eventX:event.clientX,eventY:event.clientY,
-      hitTarget:target?.label||null, previousCentre,
-      paintedTop:eventTab?.getBoundingClientRect?.().top??null};
-    if (!target || !eligible(target) || !Number.isFinite(event.clientX) ||
-        !Number.isFinite(event.clientY)) {
-      clearRearm();
-      return;
-    }
-    const x=event.clientX,y=event.clientY;
-    const pending=current.rearm;
-    if (pending?.tab===target &&
-        Math.hypot(x-pending.x,y-pending.y)<=STATIONARY_PX) return;
-    clearRearm();
-    current.rearm={tab:target,x,y};
-    rearmTimer=setTimeout(()=>{
-      rearmTimer=null;
-      if (destroyed || drag!==current || current.hover ||
-          current.rearm?.tab!==target || !eligible(target) ||
-          !eligible(current.source)) return;
-      const sourceSlot=slotOf(current.source);
-      const targetSlot=slotOf(target);
-      if (!sourceSlot || !targetSlot) return;
-      // Zia may have moved the native rows during sorting, so refresh
-      // their natural slots ONLY after the stationary phase is complete.
-      current.sourceSlot=sourceSlot;
-      for (const tab of current.targets) {
-        const box=slotOf(tab);
-        if (box) current.slots.set(tab,box);
-      }
-      current.sorting=false;
-      current.hover=target;
-      current.guard=target;
-      current.anchor={x,y};
-      current.rearm=null;
-      // Do not freeze transformations or intercept native dragover.
-      makeChoice(target);
-    },HOVER_MS);
-  }
-  function unfreeze() {
-    window.gBrowser?.tabContainer?.removeAttribute('data-zsf-manual-guard');
-  }
-  function makeChoice(tab) {
-    if (!drag || drag.hover !== tab || !eligible(tab)) return;
-    const source=drag.source;
-    const s=drag.sourceSlot,t=drag.slots.get(tab);
-    if (!s || !t) return;
-    // Always build both rows, including after Zen/Zia has reordered tabs.
-    // The old "adjacent" condition silently skipped the favicon pair.
-    const upper=s.top<=t.top ? source : tab;
-    const lower=upper===source ? tab : source;
-    choice=document.createElementNS(NS,'div');
-    choice.className='zsf-manual-merge-choice';
-    choice.id='zsf-manual-merge-choice';
-    choice.setAttribute('aria-hidden','true');
-    const fill=document.createElementNS(NS,'div');
-    fill.className='zsf-manual-merge-fill';
-    const icon=document.createElementNS(NS,'img');
-    icon.className='zsf-manual-merge-icon';
-    icon.setAttribute('src',FOLDER_ICON);
-    const title=document.createElementNS(NS,'span');
-    title.className='zsf-manual-merge-title';
-    title.textContent='新群組';
-    const count=document.createElementNS(NS,'span');
-    count.className='zsf-manual-merge-count';
-    count.textContent='2';
-    choice.append(fill,icon,title,count);
-    const ms=holdMs();
-    choice.style.setProperty?.('--zsf-hold-ms',ms+'ms');
-    document.documentElement.appendChild(choice);
-    // Hide the actual native close/reset X throughout a group candidate;
-    // it otherwise paints beside our "2" count in the title row.
-    document.documentElement.setAttribute('data-zsf-manual-preview-active','true');
-    carryTabPaint(choice,upper);
-    upper.setAttribute('data-zsf-manual-choice','true');
-    // Hide Zia's *moving source row* only while the two root-level group
-    // previews are visible. It must reappear immediately on ordinary sort.
-    source.setAttribute('data-zsf-manual-source','true');
-    drag.visualTabs=[upper];
-    drag.previewSlots={upper:upper===source?s:t,lower:lower===source?s:t};
-    if (lower) {
-      pair=document.createElementNS(NS,'div');
-      pair.id='zsf-manual-pair';
-      pair.className='zsf-manual-pair';
-      pair.setAttribute('aria-hidden','true');
-      for (const member of [source,tab]) {
-        const image=document.createElementNS(NS,'img');
-        image.className='zsf-manual-pair-icon';
-        image.setAttribute('src',nativeIcon(member));
-        pair.appendChild(image);
-      }
-      const offset=(upper===tab && source===lower) ? (t.top-s.top) : 0;
-      pair.style.setProperty?.('--zsf-pair-start-y',offset+'px');
-      document.documentElement.appendChild(pair);
-      carryTabPaint(pair,lower);
-      lower.setAttribute('data-zsf-manual-pair','true');
-      drag.visualTabs.push(lower);
-      // B upward into A: overlapped favicons start on A, glide into B's
-      // original slot. A downward into B: the pair is already in B's slot.
-      if (!offset) pair.setAttribute('data-settled','true');
-      else {
-        const activePair=pair;
-        const frame=()=> {
-          if (drag?.hover===tab && activePair.isConnected)
-            activePair.setAttribute('data-settled','true');
-        };
-        const raf=window.requestAnimationFrame?.bind(window);
-        if (raf) drag.pairFrame=raf(()=>{drag.pairFrame=raf(frame);});
-        else drag.pairTimer=setTimeout(frame,20);
-      }
-    }
-    positionPortals();
-    choice.setAttribute('data-running','true');
-    holdTimer=setTimeout(()=>{
-      holdTimer=null;
-      if (destroyed || !drag || drag.hover!==tab || !eligible(tab)) return;
-      drag.ready=tab;
-      tab.setAttribute('data-zsf-manual-ready','true');
-      choice?.setAttribute('data-ready','true');
-    },ms);
-  }
-  function clearCandidate({committing=false}={}) {
-    if (hoverTimer!==null) clearTimeout(hoverTimer);
-    if (holdTimer!==null) clearTimeout(holdTimer);
-    if (drag?.pairFrame) window.cancelAnimationFrame?.(drag.pairFrame);
-    if (drag?.pairTimer) clearTimeout(drag.pairTimer);
-    hoverTimer=null;holdTimer=null;
-    for (const tab of [drag?.hover,drag?.ready]) {
-      tab?.removeAttribute?.('data-zsf-manual-ready');
-    }
-    drag?.source?.removeAttribute?.('data-zsf-manual-source');
-    for (const tab of drag?.visualTabs||[]) {
-      tab?.removeAttribute?.('data-zsf-manual-choice');
-      tab?.removeAttribute?.('data-zsf-manual-pair');
-    }
-    choice?.remove();pair?.remove();
-    document.documentElement.removeAttribute('data-zsf-manual-preview-active');
-    choice=null;pair=null;
-    unfreeze({committing});
-    if (drag) {
-      drag.hover=null;drag.ready=null;drag.guard=null;
-      drag.visualTabs=[];drag.previewSlots=null;
-      drag.pairFrame=0;drag.pairTimer=null;
-    }
-  }
-  function clearDrag(options) {
-    clearRearm();
-    clearCandidate(options);
-    drag=null;
-  }
-  function onDragStart(event) {
-    finishLanding();
-    clearDrag();
-    if (!enabled()) return;
-    const source=tabFromEvent(event);
-    if (!eligible(source) || source.multiselected) return;
-    let payload=null;
-    try {payload=event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0);}
-    catch (_) {}
-    if (payload && payload!==source) return;
-    // Zia already manages the native drag picture (blank while it renders
-    // its own moving row). A second favicon-only setDragImage left an X-like
-    // site icon stuck next to the cursor throughout the group preview.
-    // Never override Zen/Zia's DataTransfer drag image here.
-    const targets=[...(window.gBrowser?.tabs||[])].filter(tab=>
-      tab!==source && eligible(tab) && workspace(tab)===workspace(source));
-    const slots=new Map(targets.map(tab=>[tab,slotOf(tab)]));
-    drag={source,sourceSlot:slotOf(source),workspace:workspace(source),
-      targets,slots,scrolls:scrollPorts(source),verified:payload===source,
-      hover:null,ready:null,guard:null,sorting:true,rearm:null,anchor:null,
-      visualAt:new Map(),visualTabs:[],previewSlots:null,pairFrame:0,pairTimer:null};
-  }
-  function onDragOver(event) {
-    if (!drag || !drag.source?.isConnected || !enabled() ||
-        drag.source.group || drag.source.pinned) {clearDrag();return;}
-    if (!drag.verified) {
-      let payload=null;
-      try {payload=event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0);}
-      catch (_) {}
-      if (payload!==drag.source) {clearDrag();return;}
-      drag.verified=true;
-    }
-    // Sorting remains native throughout the gesture, including when a
-    // visual candidate is armed. A moved pointer cancels the visual hold
-    // immediately; the subsequent native dragover is never intercepted.
-    if (drag.hover) {
-      const anchor=drag.anchor;
-      if (anchor && Number.isFinite(event.clientX) &&
-          Number.isFinite(event.clientY) &&
-          Math.hypot(event.clientX-anchor.x,
-            event.clientY-anchor.y)>STATIONARY_PX) {
-        clearCandidate();
-        drag.sorting=true;
-      } else {
-        positionPortals();
-        return;
-      }
-    }
-    watchRearm(event);
-    rememberVisualTarget(event);
-  }
-  function finishLanding() {
-    const item=settling;
-    if (!item) return;
-    settling=null;
-    if (item.backup !== null) clearTimeout(item.backup);
-    for (const tab of item.tabs) {
-      // This is our temporary forced transform, never clear a later native
-      // or Zia value that was applied during an unrelated new drag.
-      if (tab.style?.getPropertyValue?.('transform') === 'none')
-        tab.style.removeProperty('transform');
-      tab.removeAttribute('data-zsf-manual-committing');
-    }
-    item.group?.removeAttribute?.('data-zsf-manual-committing');
-  }
-  function onDragEnd() {
-    clearDrag();
-    if (!settling) return;
-    // Zia and Gecko finish their drag-end cleanup first (they registered
-    // earlier on window capture). Resume transitions after the layout and
-    // the group's native membership are both settled.
-    const frame=window.requestAnimationFrame?.bind(window);
-    if (frame) frame(()=>frame(finishLanding));
-    else finishLanding();
-  }
-  function onDrop(event) {
-    lastDrop='received';
-    if (!drag?.ready || !enabled()) {
-      lastDrop='native-sort';
-      // CRITICAL: an unfinished or cancelled candidate is NOT a drop.
-      // Allow Zen/Zia to finish the native reorder at its actual slot.
-      clearDrag();return;
-    }
-    let payload=null;
-    try {payload=event.dataTransfer?.mozGetDataAt?.('application/x-moz-tabbrowser-tab',0);}
-    catch (_) {}
-    if (payload !== drag.source) {lastDrop='wrong-payload';clearDrag();return;}
-    const target=drag.ready,source=drag.source;
-    const original=validTabs([source,target]);
-    if (!original || typeof window.gBrowser?.addTabGroup !== 'function') {
-      lastDrop='invalid-tabs';clearDrag();return;
-    }
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    // Never modify Zen's global tabDragAndDrop animation flag: doing so
-    // can break subsequent ordinary tab reorders and leave stale moves.
-    // Avoid Zia's stale reorder transform in the same paint as native
-    // addTabGroup(). It is a temporary, scoped commit state, not a global
-    // transition setting.
-    for (const tab of original) {
-      tab.setAttribute('data-zsf-manual-committing','true');
-      tab.style?.setProperty?.('transform','none','important');
-    }
-    // Place the new group at the original upper slot; member order is
-    // always dragged source FIRST, hovered destination SECOND.
-    const sourceTop=drag.sourceSlot?.top ?? Infinity;
-    const targetTop=drag.slots.get(target)?.top ?? Infinity;
-    const anchor=sourceTop<=targetTop ? source : target;
-    const group=createFromTabs([source,target],{dragSource:source,anchor});
-    if (group) group.setAttribute('data-zsf-manual-committing','true');
-    lastDrop=group?'created':'creation-failed';
-    clearDrag({committing:!!group});
-    if (group) {
-      finishLanding(); // Never carry state over from another operation.
-      settling={tabs:original,group,backup:null};
-      // Safety fallback for platforms where a DOM-reparented tab never
-      // dispatches dragend. This is cleanup, not a timer-based reorder.
-      settling.backup=setTimeout(finishLanding,350);
-      if (event.dataTransfer) event.dataTransfer.dropEffect='move';
-    } else {
-      for(const tab of original) {
-        if(tab.style?.getPropertyValue?.('transform')==='none')
-          tab.style.removeProperty('transform');
-        tab.removeAttribute('data-zsf-manual-committing');
-      }
-    }
-  }
-
   function selectedForMenu() {
     const context = window.TabContextMenu?.contextTab;
     if (!context?.multiselected) return null;
@@ -682,7 +200,7 @@
     if (!popup || menuItem?.isConnected) return !!menuItem?.isConnected;
     menuItem = document.createXULElement('menuitem');
     menuItem.id = 'zsf-manual-create-group';
-    menuItem.setAttribute('label', '建立普通群組');
+    menuItem.setAttribute('label', '建立群組');
     menuItem.setAttribute('hidden', 'true');
     popup.appendChild(menuItem);
     bind(popup, 'popupshowing', event => {
@@ -698,17 +216,9 @@
   function start() {
     if (destroyed || started || !window.gBrowser?.tabContainer) return false;
     started = true;
-    // Arm in window capture before Zen/Zia can consume native dragstart.
-    // Verify the actual tab DataTransfer before showing a merge candidate.
-    bind(window, 'dragstart', onDragStart, true);
-    // Drop interception is capture-phase, before the native reorder target.
-    bind(window, 'dragover', onDragOver, true);
-    bind(window, 'scroll', positionPortals, true);
-    bind(window, 'drop', onDrop, true);
-    bind(window, 'dragend', onDragEnd, true);
-    bind(window, 'deactivate', clearDrag, true);
-    bind(window, 'keydown', e => { if (e.key === 'Escape') clearDrag(); }, true);
-    bind(window, 'ZenWorkspacesUIUpdate', () => { clearDrag(); scheduleRestore(); });
+    // Deliberately DO NOT register dragstart, dragover, drop or dragend.
+    // Zen/Zia retain exclusive ownership of all native tab reordering.
+    bind(window, 'ZenWorkspacesUIUpdate', scheduleRestore);
     bind(window, 'AfterWorkspacesSessionRestore', scheduleRestore);
     bind(window.gBrowser.tabContainer, 'TabGroupCreate', scheduleRestore);
     bind(window.gBrowser.tabContainer, 'TabGroupRemoved', scheduleRestore);
@@ -721,8 +231,6 @@
   function destroy() {
     if (destroyed) return;
     destroyed = true;
-    clearDrag();
-    finishLanding();
     if (restoreTimer !== null) clearTimeout(restoreTimer);
     for (const [node, name, fn, cap] of listeners)
       try { node.removeEventListener(name, fn, cap); } catch (_) {}
@@ -731,12 +239,8 @@
     if (window[KEY] === api) delete window[KEY];
   }
   const api = {start, destroy, createFromTabs, restore,
-    debug: () => ({enabled: enabled(), dragging: !!drag,
-      candidate: !!drag?.ready, portal:!!choice?.isConnected,
-      sorting:!!drag?.sorting, rearming:!!drag?.rearm, rearmDiagnostic:drag?.rearmDiagnostic||null,
-      phase:drag?.sorting?'sorting':drag?.hover?'center':drag?.guard?'guard':'none',
-      holdMs:holdMs(), stableMs:HOVER_MS, stationaryPx:STATIONARY_PX, lastDrop,
-      storedGroups: Object.keys(registry()).length})};
+    debug: () => ({enabled:true, mode:'context-menu-only', dragging:false,
+      storedGroups:Object.keys(registry()).length})};
   window[KEY] = api;
   if (document.readyState === 'complete') start();
   else bind(window, 'load', start, {once:true});

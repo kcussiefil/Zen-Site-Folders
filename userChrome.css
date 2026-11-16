@@ -299,22 +299,8 @@
   background: transparent !important;
   opacity: 1 !important;
 }
-/* Only the native drag source is hidden during group preview, not during
-   ordinary sorting or the initial 150ms candidate stability phase. */
-:root #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source] {
-  opacity: 0 !important;
-}
-/* Zen/Zia can animate the source tab's opacity or its inner stack
-   independently. Conceal its moving contents as well, without mutating
-   drag ownership or the tab's real DOM position. */
-:root #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source] > .tab-stack {
-  visibility: hidden !important;
-}
 /* A default (non-custom) manual folder uses Zen's monochrome folder.svg.
    White only this icon; all site and user-selected favicons keep their paint. */
-#zsf-manual-merge-choice .zsf-manual-merge-icon {
-  filter: brightness(0) invert(1) !important;
-}
 #tabbrowser-tabs tab-group[data-zsf-manual]:not([data-zsf-custom-icon]) >
   .tab-group-label-container > .zsf-favicon[src="chrome://browser/skin/zen-icons/folder.svg"] {
   filter: brightness(0) invert(1) !important;
@@ -331,130 +317,6 @@
     filter: brightness(0) invert(1) opacity(0.5625) !important;
   }
 }
-/* Manual grouping v1.0.7: sorting always remains Zen/Zia-native.
-   Fixed root previews never freeze transforms of actual native tab rows;
-   only their text and background are visually masked during the hold. */
-#tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack > .tab-content {
-  visibility: hidden !important;
-}
-#tabbrowser-tabs .tabbrowser-tab:is([data-zsf-manual-choice], [data-zsf-manual-pair]) > .tab-stack > .tab-background {
-  opacity: 0 !important;
-}
-/* Both boxes are positioned using the two captured pre-Zia row rectangles.
-   There is no tab-stack or transformed tab ancestor in this paint hierarchy. */
-:root > :is(#zsf-manual-merge-choice, #zsf-manual-pair) {
-  position: fixed !important;
-  right: auto !important;
-  bottom: auto !important;
-  z-index: 2147483645 !important;
-  display: flex !important;
-  align-items: center !important;
-  box-sizing: border-box !important;
-  overflow: hidden !important;
-  pointer-events: none !important;
-  border: 0 !important;
-  border-radius: var(--zsf-manual-preview-radius, var(--zia-tab-radius, 9px)) !important;
-  background: var(--zsf-manual-preview-bg, var(--zia-tab-hover-bg, color-mix(in srgb, currentColor 10%, transparent))) !important;
-  color: var(--zsf-manual-preview-ink, var(--zia-sidebar-ink, currentColor)) !important;
-}
-:root > :is(#zsf-manual-merge-choice, #zsf-manual-pair)[hidden] {
-  display: none !important;
-}
-:root > #zsf-manual-merge-choice {
-  gap: 8px !important;
-  padding-inline: 10px !important;
-  white-space: nowrap !important;
-}
-#zsf-manual-merge-choice .zsf-manual-merge-fill {
-  position: absolute !important;
-  inset-block: 0 !important;
-  inset-inline-start: 0 !important;
-  width: 100% !important;
-  transform: scaleX(0);
-  transform-origin: left center !important;
-  z-index: 0 !important;
-  background: color-mix(in srgb, currentColor 10%, transparent) !important;
-  pointer-events: none !important;
-}
-#zsf-manual-merge-choice[data-running] .zsf-manual-merge-fill {
-  animation: zsf-manual-horizontal-fill var(--zsf-hold-ms, 1200ms) linear both !important;
-}
-#zsf-manual-merge-choice[data-ready] .zsf-manual-merge-fill {
-  transform: scaleX(1);
-}
-@keyframes zsf-manual-horizontal-fill {
-  from { transform: scaleX(0); }
-  to   { transform: scaleX(1); }
-}
-#zsf-manual-merge-choice > :is(.zsf-manual-merge-icon, .zsf-manual-merge-title, .zsf-manual-merge-count) {
-  position: relative !important;
-  z-index: 1 !important;
-}
-#zsf-manual-merge-choice .zsf-manual-merge-icon {
-  width: 16px !important;
-  height: 16px !important;
-  object-fit: contain !important;
-  flex: none !important;
-}
-#zsf-manual-merge-choice .zsf-manual-merge-title {
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-  flex: 1 1 auto !important;
-}
-#zsf-manual-merge-choice .zsf-manual-merge-count {
-  color: inherit !important;
-  opacity: .65 !important;
-  font-size: 12px !important;
-  flex: none !important;
-}
-/* B moves upward into A: favicons appear at A and then move to B's
-   original lower row in 170ms. Downward drag starts already at lower row. */
-/* Two website icons must have an actual visual GAP, not an overlap.
-   v1.0.5's -2px negative margin still made the images look attached. */
-:root > #zsf-manual-pair {
-  justify-content: center !important;
-  flex-direction: row !important;
-  gap: 8px !important;
-  transform: translateY(var(--zsf-pair-start-y, 0px)) !important;
-  transition: transform 170ms ease-out !important;
-}
-:root > #zsf-manual-pair[data-settled] {
-  transform: translateY(0px) !important;
-}
-#zsf-manual-pair > .zsf-manual-pair-icon {
-  width: 21px !important;
-  height: 21px !important;
-  object-fit: contain !important;
-  flex: 0 0 21px !important;
-}
-#zsf-manual-pair > .zsf-manual-pair-icon + .zsf-manual-pair-icon {
-  margin-inline-start: 0 !important;
-}
-/* The close X is a real Zen/Zia tab-close-button, not the removed
-   DataTransfer drag-image. During the 'New Group' title/fill, conceal
-   native close/reset controls even if Zia paints a dragged tab clone or
-   puts the button outside .tab-content. Restore on preview cleanup. */
-:root[data-zsf-manual-preview-active] :is(.tab-close-button, .tab-reset-button) {
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-/* One accepted native group drop remains atomic. */
-#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-committing],
-#tabbrowser-tabs tab-group[data-zsf-manual-committing],
-#tabbrowser-tabs tab-group[data-zsf-manual-committing] .tabbrowser-tab {
-  animation: none !important;
-  transition: none !important;
-  transform: none !important;
-}
-@media (prefers-reduced-motion: reduce) {
-  :root > #zsf-manual-pair {
-    transition: none !important;
-  }
-}
-
 /* v0.9.7: Zia filters BOTH nested .tab-icon-stack and .tab-icon-image
    in a pending tab. Their effective alpha compounds: dark 0.55² = 0.3025;
    light 0.75² = 0.5625. The Site Folders favicon has no native icon stack.

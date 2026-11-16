@@ -5,10 +5,9 @@ const path = require('node:path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'site-folders-background-drag.uc.js'), 'utf8');
 new vm.Script(src);
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'theme.json'), 'utf8'));
-const prefs = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'preferences.json'),'utf8'));
-assert.equal(manifest.preferences,'preferences.json','only manual-group duration has a Sine gear');
-assert(prefs.length===1 && prefs[0].property==='zen.sitefolders.manual_group_drag.hold_seconds',
-  'background drag must still have no visible Sine toggle');
+assert(!manifest.preferences &&
+  !fs.existsSync(path.join(__dirname, '..', 'preferences.json')),
+  'Sine gear is completely removed; background drag still has no visible toggle');
 assert.match(src, /zen\.sitefolders\.background_drag\.enabled/,
   'hidden about:config kill switch remains implemented');
 assert(!src.includes('preventDefault(') && !src.includes('stopPropagation('),
