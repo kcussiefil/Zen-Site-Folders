@@ -39,7 +39,7 @@ Back up your Zen profile before first using an organizer that moves existing tab
 
 | Item | Location |
 | --- | --- |
-| Current mod version | **v1.0.6** (see `theme.json`) |
+| Current mod version | **v1.0.7** (see `theme.json`) |
 | Installation metadata | [`theme.json`](theme.json) |
 | Version changes | [`CHANGELOG.md`](CHANGELOG.md) and [Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases) |
 | Detailed historical release notes | [`releases/`](releases/) |
@@ -49,6 +49,8 @@ Back up your Zen profile before first using an organizer that moves existing tab
 **Updating documentation does not create a new mod version.** Feature changes must be validated separately before updating `theme.json` and publishing a release.
 
 Selected-tab colour, its native context-menu command and the non-modal picker are now owned independently by [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5. Background dragging is built in by default without a Sine checkbox; advanced rollback is `zen.sitefolders.background_drag.enabled=false` in `about:config`.
+
+**v1.0.7** prioritizes native Zen/Zia sorting above manual grouping: **no `dragover` is intercepted**, and releasing before the editable group-fill completes **never intercepts the native `drop`**. A manual preview appears only after an actual **250ms stationary dwell within 3px** of a target tab's centre, then displays the usual configurable 1.2-second horizontal fill. Deliberate movement immediately cancels the preview and restores native sorting. Both favicon icons always render even when Zia has reordered the two tabs beyond adjacent rows; no more conditional second-row disappearance. Root-fixed preview, 8px icon separation, white default folder and dragged-first group ordering remain. macOS real-input acceptance is still required.
 
 **v1.0.6** fixes the v1.0.5 regression that made manual grouping nearly impossible after crossing a sort boundary. Native Zen/Zia sorting retains control while the pointer moves, but a **stationary 150ms centre hover** can now re-arm grouping **within the same drag**. The active group preview tolerates small pointer jitter before returning to sorting; the 1.2s default progress hold remains editable in Sine. The two site favicons now have a **real 8px gap**, not the earlier 2px overlap. While the group preview is visible, native tab close/reset X controls are hidden and restored immediately on cancel or drop. The root-fixed two-row preview and dragged-tab-first ordering remain. Physical macOS acceptance still required.
 
