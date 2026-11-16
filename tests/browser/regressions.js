@@ -183,7 +183,7 @@ const finish = arguments[arguments.length - 1];
     assert(manual?.debug().dragging, 'native dragstart must arm manual group gesture: ' +
       JSON.stringify(manual?.debug()));
     emit(target,'dragover');
-    await delay(175);
+    await delay(285);
     const choice=document.getElementById('zsf-manual-merge-choice');
     assert(choice && choice.parentElement===document.documentElement &&
       !choice.closest('.tabbrowser-tab') &&
@@ -195,12 +195,13 @@ const finish = arguments[arguments.length - 1];
       parseFloat(choice.style.width)>40 && parseFloat(choice.style.height)>15,
       'root overlay is anchored to a real captured row rectangle');
     const pair=document.getElementById('zsf-manual-pair');
-    if (pair) {
-      assert(pair.parentElement===document.documentElement &&
-        getComputedStyle(pair).position==='fixed' &&
-        parseFloat(pair.style.top)>previewTop,
-        'icon pair is independently anchored BELOW the New Group title');
-    }
+    assert(pair && pair.parentElement===document.documentElement &&
+      !pair.hidden && getComputedStyle(pair).display!=='none' &&
+      getComputedStyle(pair).position==='fixed' &&
+      parseFloat(pair.style.top)>previewTop,
+      'both favicon icons MUST appear in a visible fixed lower preview row');
+    assert(pair.querySelectorAll('.zsf-manual-pair-icon').length===2,
+      'source and target favicon nodes must never disappear after Zia reorder');
     assert(!document.getElementById('zsf-manual-merge-progress') &&
       !document.getElementById('zsf-manual-merge-preview'),
       'obsolete ring and translucent card do not appear');
@@ -222,7 +223,7 @@ const finish = arguments[arguments.length - 1];
     const defaultFolder=choice.querySelector('.zsf-manual-merge-icon');
     assert(defaultFolder && getComputedStyle(defaultFolder).filter.includes('invert(1)'),
       'New Group uses a white default folder icon, not a black fallback');
-    if (pair) {
+    {
       const images=pair.querySelectorAll('.zsf-manual-pair-icon');
       assert(images.length===2 &&
         getComputedStyle(pair).columnGap==='8px' &&
@@ -304,25 +305,26 @@ const finish = arguments[arguments.length - 1];
     const order=[...(gBrowser.tabs||[])];
     const down=order.indexOf(source)<=order.indexOf(target);
     emit(target,'dragover',down?.95:.05);
-    assert(manual.debug().sorting,'far-edge dragover yields to native Zia sorting: ' +
+    assert(manual.debug().sorting && !manual.debug().portal,
+      'far-edge dragover stays with native Zia sorting: ' +
       JSON.stringify({down,state:manual.debug(),sourceY:source.getBoundingClientRect().top,
         targetY:target.getBoundingClientRect().top}));
     emit(target,'dragover',.5);
     // Zia itself can preventDefault() to ACCEPT a native drop. Validate
     // our state instead of interpreting dispatchEvent() as our listener.
     assert(manual.debug().rearming && !manual.debug().portal,
-      'while waiting for 150ms stability the mod has not taken over native sorting: '+
+      'while waiting for 250ms stability the mod has not taken over native sorting: '+
       JSON.stringify({state:manual.debug(),sourceGroup:source.group?.id||null,
         targetGroup:target.group?.id||null,
         sourceIndex:[...gBrowser.tabs].indexOf(source),
         targetIndex:[...gBrowser.tabs].indexOf(target),
         sourceRect:source.getBoundingClientRect().toJSON?.(),
         targetRect:target.getBoundingClientRect().toJSON?.()}));
-    await delay(180);
+    await delay(285);
     const preview=document.getElementById('zsf-manual-merge-choice');
     assert(preview && manual.debug().portal && !manual.debug().sorting &&
       document.documentElement.hasAttribute('data-zsf-manual-preview-active'),
-      '150ms stationary re-hover restores root preview and hides native close X');
+      '250ms stationary re-hover restores root preview and hides native close X');
     await delay(1250);
     assert(target.hasAttribute('data-zsf-manual-ready'),
       'restored preview completes the unchanged user-configurable hold');
@@ -336,6 +338,46 @@ const finish = arguments[arguments.length - 1];
     assert(!document.documentElement.hasAttribute('data-zsf-manual-preview-active') &&
       !document.getElementById('zsf-manual-merge-choice'),
       'native close buttons and preview portals are restored after drop');
+  });
+
+  // Both a fast one-row drag and a release after preview-but-before-fill
+  // must remain a NATIVE drop. v1.0.6 intercepted the latter and snapped
+  // the tab back to its old position.
+  await test('manual ordinary tab native reorder survives unfinished group hold', async h => {
+    const source=h.prefix,target=h.suffix;
+    const transfer=new DataTransfer();
+    transfer.mozSetDataAt('application/x-moz-tabbrowser-tab',source,0);
+    const emit=(node,type)=>{
+      const r=node.getBoundingClientRect();
+      return node.dispatchEvent(new DragEvent(type,{
+        bubbles:true,composed:true,cancelable:true,dataTransfer:transfer,
+        clientX:r.left+r.width/2,clientY:r.top+r.height/2}));
+    };
+    const manual=window.__zsfManualGroupsV099;
+    emit(source,'dragstart');
+    emit(target,'dragover');
+    await delay(110);
+    assert(!manual.debug().portal && manual.debug().sorting,
+      'fast one-row drag never creates a group preview');
+    emit(target,'drop');
+    assert(manual.debug().lastDrop==='native-sort' &&
+      !source.group && !target.group,
+      'short centre drop is passed to native Zen/Zia reorder unchanged');
+    emit(source,'dragend');
+    // A fresh gesture held for a full 250ms enters preview, but an
+    // unfinished 1.2s progress MUST still be accepted by native sorting.
+    emit(source,'dragstart');
+    emit(target,'dragover');
+    await delay(285);
+    assert(manual.debug().portal &&
+      document.getElementById('zsf-manual-merge-choice'),
+      'deliberate stationary hover displays both manual-group preview rows');
+    emit(target,'drop');
+    assert(manual.debug().lastDrop==='native-sort' &&
+      !source.group && !target.group &&
+      !document.getElementById('zsf-manual-merge-choice'),
+      'releasing during progress never prevents native drop or leaves ghosts');
+    emit(source,'dragend');
   });
 
   // Compare effective native Zia dimming of BOTH nested tab-icon nodes

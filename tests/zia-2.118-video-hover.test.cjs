@@ -9,7 +9,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'theme.json'), 'utf8
 const hover = fs.readFileSync(path.join(root, 'site-folders-hover.uc.js'), 'utf8');
 const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
-assert.equal(manifest.version, '1.0.6', 'release under test must be v1.0.6');
+assert.equal(manifest.version, '1.0.7', 'release under test must be v1.0.7');
 const prefs=JSON.parse(fs.readFileSync(path.join(root,'preferences.json'),'utf8'));
 assert.equal(manifest.preferences,'preferences.json');
 assert(prefs.length===1 && prefs[0].property==='zen.sitefolders.manual_group_drag.hold_seconds',
