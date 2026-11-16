@@ -298,8 +298,15 @@ const finish = arguments[arguments.length - 1];
     emit(source,'dragstart');
     const manual=window.__zsfManualGroupsV099;
     assert(manual?.debug().dragging,'native manual drag is armed');
-    emit(target,'dragover',.90);
-    assert(manual.debug().sorting,'far-edge dragover yields to native Zia sorting');
+    // Zen's tab-group insertion can move the two standalone fixture tabs
+    // to opposite physical order on macOS/Linux. Use the actual current
+    // order to cross the destination's FAR edge, not a hard-coded 90%.
+    const order=[...(gBrowser.tabs||[])];
+    const down=order.indexOf(source)<=order.indexOf(target);
+    emit(target,'dragover',down?.95:.05);
+    assert(manual.debug().sorting,'far-edge dragover yields to native Zia sorting: ' +
+      JSON.stringify({down,state:manual.debug(),sourceY:source.getBoundingClientRect().top,
+        targetY:target.getBoundingClientRect().top}));
     emit(target,'dragover',.5);
     // Zia itself can preventDefault() to ACCEPT a native drop. Validate
     // our state instead of interpreting dispatchEvent() as our listener.
