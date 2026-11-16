@@ -170,313 +170,188 @@ function harness({enabled=true}={}) {
 }
 const delay=ms=>new Promise(res=>setTimeout(res,ms));
 (async()=>{
-  const h=harness();
-  assert.equal(h.count(),0,'no automatic creation at startup');
-  assert.equal(h.api.debug().stableMs,150);
-  assert.equal(h.api.debug().holdMs,1200,'Sine number input defaults to 1.2 seconds');
+  const fresh=()=>harness();
+  const h=fresh();
+  assert.equal(h.count(),0);
+  assert.equal(h.api.debug().stableMs,250,'need a genuine 250ms stationary centre dwell');
+  assert.equal(h.api.debug().stationaryPx,3,'movement threshold rejects in-flight sort pauses');
+  assert.equal(h.api.debug().holdMs,1200);
   h.fire('dragstart',h.a);
-  // Entering the upstream edge must NOT make B avoid A yet.
-  const approach=h.fire('dragover',h.b,{clientY:h.b.getBoundingClientRect().top+3});
-  assert(approach.prevented && h.browser.tabContainer.hasAttribute('data-zsf-manual-guard'),
-    'approach edge holds the source slot and blocks early native avoidance');
-  await delay(175);
-  assert(!h.root.children.some(n=>n.id==='zsf-manual-merge-choice'),
-    'no group fill in the upstream guard zone');
-  // The central 40% starts the 150ms stability check.
-  h.fire('dragover',h.b);
-  await delay(170);
-  const choice=h.root.children.find(n=>n.id==='zsf-manual-merge-choice');
-  const pair=h.root.children.find(n=>n.id==='zsf-manual-pair');
-  assert(choice && pair && choice.parentElement===h.root && pair.parentElement===h.root,
-    'downward A→B previews are root-fixed, never nested in a Zia-transformed tab');
-  assert(h.a.hasAttribute('data-zsf-manual-source') &&
-    h.root.hasAttribute('data-zsf-manual-preview-active'),
-    'moving A and its native close X are hidden only while preview is active');
-  assert(!h.a.children.includes(choice) && !h.b.children.includes(pair),
-    'neither native row owns a draggable preview node');
-  assert.equal(choice.style.getPropertyValue('top'),'100px','New Group occupies original upper A slot');
-  assert.equal(pair.style.getPropertyValue('top'),'136px','overlapping icons occupy original lower B slot');
-  assert.equal(choice.style.getPropertyValue('width'),'248px','root preview keeps original row width');
-  assert.equal(choice.children.find(n=>n.className==='zsf-manual-merge-title')?.textContent,
-    '新群組');
-  assert.deepEqual(pair.children.map(n=>n.getAttribute('src')),
-    ['chrome://test/A.svg','chrome://test/B.svg'],
-    'only dragged/target favicons overlap, in dragged-first order');
-  assert(choice.hasAttribute('data-running'),'horizontal fill started after stability check');
-  assert.equal(choice.style.getPropertyValue('--zsf-hold-ms'),'1200ms');
-  assert(!h.b.hasAttribute('data-zsf-manual-ready'),'not ready before 1.2s');
-  // A shifted Zia row must NOT change which original centre band is held.
-  const originalY=152;
-  h.b.shiftY=84; h.b.setAttribute('zia-shift','true');
-  h.b.style.setProperty('--zia-drag-y','48px');
-  const moved=h.fire('dragover',h.c,{clientY:originalY});
-  assert(moved.prevented && h.api.debug().phase==='center',
-    'fixed original B slot remains locked despite Zia visual shift');
-  assert.equal(choice.style.getPropertyValue('top'),'100px',
-    'even when Zia translates B, the upper heading stays in A original slot');
-  assert.equal(pair.style.getPropertyValue('top'),'136px',
-    'even when Zia translates B, the lower pair never slides into the title');
-  // When the sidebar scrolls, only the actual scroll offset adjusts both
-  // root-level viewports, not the moving tab's temporary Zia transform.
-  h.scrollPort.scrollTop=20;
-  h.fire('scroll',h.b);
-  assert.equal(choice.style.getPropertyValue('top'),'80px');
-  assert.equal(pair.style.getPropertyValue('top'),'116px');
-  const scrolled=h.fire('dragover',h.c,{clientY:132});
-  assert(scrolled.prevented && h.api.debug().phase==='center',
-    'the central hit area remains aligned with scrolled original slots');
-  await delay(1230);
-  assert(choice.hasAttribute('data-ready') && h.b.hasAttribute('data-zsf-manual-ready'),
-    'after 1.2 seconds of fill A→B is ready');
-  assert.equal(h.count(),0,'preview does not mutate tab identities or native DOM');
-  const result=h.fire('drop',h.b);
-  assert(result.prevented && result.stopped,'ready drop intercepted before native reorder');
-  assert.equal(h.count(),1);
-  assert.deepEqual(h.a.group.tabs.map(t=>t.label),['A','B'],
-    'dragged A remains before hovered B');
-  assert.equal(h.a.group.insertBefore,h.a,'group title remains in original top A slot');
-  assert.equal(h.browser.tabContainer.tabDragAndDrop._dontAnimateTabMove,false);
-  h.fire('dragend',h.a);
-  assert(!h.browser.tabContainer.hasAttribute('data-zsf-manual-guard'),
-    'native sorting is unlocked after commit');
-  assert(h.a.group===h.b.group && !h.a.pinned && !h.b.pinned);
-  assert.equal(h.a.group.label,'新群組');
-  assert(h.a.group.hasAttribute('data-zsf-manual'));
-  assert(!h.a.hasAttribute('data-zsf-manual-choice'));
-  assert(!h.a.hasAttribute('data-zsf-manual-source') &&
-    !h.root.hasAttribute('data-zsf-manual-preview-active'),
-    'dragged source and native close X are immediately restored after drop');
-  assert(!h.b.hasAttribute('data-zsf-manual-pair'));
-  assert(!choice.isConnected && !pair.isConnected,
-    'root-level portals are removed on drop and never survive the drag');
-  assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].kind,'mixed');
-  assert.equal(h.a.group.color,'gray');
-  assert.equal(JSON.parse(h.store['zsf-manual-groups-v1'])[h.a.group.id].color,undefined);
-  assert.equal(h.a.group.querySelector('.tab-group-label-container').querySelector(':scope > .zsf-favicon')
-    .getAttribute('src'),'chrome://browser/skin/zen-icons/folder.svg');
-  h.a.group.removeAttribute('data-zsf-manual');h.api.restore();
-  assert(h.a.group.hasAttribute('data-zsf-manual'));
-  assert.equal(h.api.createFromTabs([h.a,h.c]),null);
-  assert(!('setColor' in h.api));
-  h.api.destroy();
+  const first=h.fire('dragover',h.b);
+  assert(!first.prevented && !first.propagationStopped,
+    'candidate observation NEVER blocks Zen/Zia native dragover');
+  assert(h.api.debug().sorting && h.api.debug().rearming &&
+    !h.root.hasAttribute('data-zsf-manual-preview-active'));
+  await delay(110);
+  assert(!h.root.children.some(x=>x.isConnected && x.id==='zsf-manual-merge-choice'),
+    'short sorting pause does not show New Group');
+  // Moving through another tab cancels the first dwell; native sorting owns it.
+  const across=h.fire('dragover',h.c);
+  assert(!across.prevented && h.api.debug().sorting);
+  await delay(160);
+  assert(!h.api.debug().portal && h.count()===0,
+    'crossing between rows is ordinary sorting without a preview');
+  const nativeDrop=h.fire('drop',h.c);
+  assert(!nativeDrop.prevented && !nativeDrop.stopped &&
+    h.api.debug().lastDrop==='native-sort',
+    'normal one-slot/multi-slot release is never intercepted or snapped back');
+  h.fire('dragend',h.a);h.api.destroy();
 
-  const r=harness();
-  const same=r.api.createFromTabs([r.c,r.a]);
-  assert.equal(same.label,'YouTube','same-site groups receive site title');
-  assert.equal(same.querySelector('.tab-group-label-container').querySelector(':scope > .zsf-favicon')
-    .getAttribute('src'),'chrome://test/A.svg','site groups reuse original favicon');
-  r.api.destroy();
-
-  const reverse=harness();
-  reverse.payload(reverse.c); // B is above C; drag C upward onto B.
-  reverse.fire('dragstart',reverse.c);
-  reverse.fire('dragover',reverse.b);
-  await delay(175);
-  const label=reverse.root.children.find(n=>n.id==='zsf-manual-merge-choice');
-  const icons=reverse.root.children.find(n=>n.id==='zsf-manual-pair');
-  assert(label && icons && label.parentElement===reverse.root &&
-    icons.parentElement===reverse.root,
-    'upward C→B also renders both preview rows outside all Zia-transformed tabs');
-  assert(reverse.c.hasAttribute('data-zsf-manual-source'),
-    'upward dragging also hides only its active source row');
-  assert.equal(label.style.getPropertyValue('top'),'136px','label occupies upper B slot');
-  assert.equal(icons.style.getPropertyValue('top'),'172px','favicons occupy lower C slot');
-  assert.equal(icons.style.getPropertyValue('--zsf-pair-start-y'),'-36px',
-    'upward merged icons start in upper row and animate downward');
-  await delay(1230);
-  reverse.fire('drop',reverse.b);
-  assert.equal(reverse.count(),1);
-  assert.deepEqual(reverse.b.group.tabs.map(t=>t.label),['C','B'],
-    'upward grouping is still dragged-first');
-  assert.equal(reverse.b.group.insertBefore,reverse.b,'group title stays in B top slot');
-  reverse.fire('dragend',reverse.c);
-  assert(!label.isConnected && !icons.isConnected,'upward portals are cleaned after drop');
-  assert(!reverse.c.hasAttribute('data-zsf-manual-source'),
-    'upward dragged source restores after drop');
-  reverse.api.destroy();
-
-  const early=harness();
+  // Leaving a centre before stable dwell must also preserve native drop.
+  const early=fresh();
   early.fire('dragstart',early.a);
   early.fire('dragover',early.b);
-  await delay(250);
+  await delay(270);
+  const earlyChoice=early.root.children.find(x=>x.isConnected &&
+    x.id==='zsf-manual-merge-choice');
+  assert(earlyChoice && early.api.debug().portal,
+    '250ms stable dwell starts the editable horizontal fill');
   const earlyDrop=early.fire('drop',early.b);
-  assert.equal(early.count(),0,'release before 1.2s fill never groups tabs');
-  assert(!early.root.children.some(n=>n.isConnected &&
-    (n.id==='zsf-manual-merge-choice'||n.id==='zsf-manual-pair')) &&
-    !early.root.hasAttribute('data-zsf-manual-preview-active'),
-    'premature release cleans independent previews and close-X suppression');
-  assert(earlyDrop.prevented,'premature centre release must not reorder tabs');
+  assert(!earlyDrop.prevented && !earlyDrop.stopped && early.count()===0,
+    'even AFTER preview appears, dropping before 1.2s fill remains native sort');
+  assert(!early.root.hasAttribute('data-zsf-manual-preview-active') &&
+    !earlyChoice.isConnected && !early.a.hasAttribute('data-zsf-manual-source'),
+    'unfinished preview, close X suppression and source hiding are cleaned');
   early.api.destroy();
 
-  // A downward into B: once the pointer leaves an ACTIVE preview past
-  // the 84% + 2px edge native sorting resumes; no new candidate is armed
-  // merely by quickly crossing the next tab.
-  const downSort=harness();
-  downSort.fire('dragstart',downSort.a);
-  downSort.fire('dragover',downSort.b);
-  await delay(180);
-  assert(downSort.a.hasAttribute('data-zsf-manual-source'));
-  const bRect=downSort.b.getBoundingClientRect();
-  const crossDown=downSort.fire('dragover',downSort.b,{
-    clientY:bRect.top+bRect.height*.84+3});
-  assert(!crossDown.prevented,'crossing active preview at 84% + 2px returns sorting to Zen/Zia');
-  assert(downSort.api.debug().sorting && downSort.api.debug().phase==='sorting',
-    'native sorting begins immediately after crossing far edge');
-  assert(!downSort.browser.tabContainer.hasAttribute('data-zsf-manual-guard') &&
-    !downSort.a.hasAttribute('data-zsf-manual-source') &&
-    !downSort.root.children.some(x=>x.isConnected &&
-      (x.id==='zsf-manual-merge-choice'||x.id==='zsf-manual-pair')),
-    'crossing the far edge cleans preview, restores source and releases avoidance');
-  const stillSort=downSort.fire('dragover',downSort.c);
-  assert(!stillSort.prevented && downSort.api.debug().sorting &&
-    !downSort.browser.tabContainer.hasAttribute('data-zsf-manual-guard'),
-    'next row cannot immediately re-arm group hold while pointer is still moving');
-  downSort.fire('drop',downSort.c);
-  assert.equal(downSort.count(),0,'native sort does not silently group');
-  downSort.fire('dragend',downSort.a);
-  downSort.api.destroy();
+  const h2=fresh();
+  h2.fire('dragstart',h2.a);
+  h2.fire('dragover',h2.b);
+  await delay(280);
+  const choice=h2.root.children.find(x=>x.isConnected && x.id==='zsf-manual-merge-choice');
+  const pair=h2.root.children.find(x=>x.isConnected && x.id==='zsf-manual-pair');
+  assert(choice && pair,'both original rows MUST be created');
+  assert(choice.parentElement===h2.root && pair.parentElement===h2.root,
+    'previews are root portals, never reparent native tabs');
+  assert.equal(choice.style.getPropertyValue('top'),'100px');
+  assert.equal(pair.style.getPropertyValue('top'),'136px');
+  assert.equal(choice.style.getPropertyValue('--zsf-hold-ms'),'1200ms');
+  assert.deepEqual(pair.children.map(x=>x.getAttribute('src')),
+    ['chrome://test/A.svg','chrome://test/B.svg']);
+  assert(h2.a.hasAttribute('data-zsf-manual-source') &&
+    h2.root.hasAttribute('data-zsf-manual-preview-active'));
+  assert.equal(choice.children.find(x=>x.className==='zsf-manual-merge-title').textContent,
+    '新群組');
+  assert(!h2.b.hasAttribute('data-zsf-manual-ready'));
+  // Moving <3px preserves the hold, so unintentional jitter is harmless.
+  const jitter=h2.fire('dragover',h2.b,{
+    clientY:h2.b.getBoundingClientRect().top+18});
+  assert(!jitter.prevented && h2.api.debug().portal &&
+    choice.isConnected,'pointer jitter must not cancel running fill');
+  // Zia may shift the target visually. Preview remains at the original row
+  // while ordinary native dragover is never swallowed.
+  h2.b.shiftY=84;h2.b.setAttribute('zia-shift','true');
+  h2.b.style.setProperty('--zia-drag-y','48px');
+  const shifted=h2.fire('dragover',h2.c,{clientY:154});
+  assert(!shifted.prevented && pair.isConnected &&
+    pair.style.getPropertyValue('top')==='136px');
+  h2.scrollPort.scrollTop=20;
+  h2.fire('scroll',h2.b);
+  assert.equal(choice.style.getPropertyValue('top'),'80px');
+  assert.equal(pair.style.getPropertyValue('top'),'116px');
+  await delay(1230);
+  assert(choice.hasAttribute('data-ready') && h2.b.hasAttribute('data-zsf-manual-ready'),
+    'only completed 1.2s fill authorizes manual grouping');
+  const accepted=h2.fire('drop',h2.b);
+  assert(accepted.prevented && accepted.stopped && h2.count()===1);
+  assert.deepEqual(h2.a.group.tabs.map(t=>t.label),['A','B']);
+  assert.equal(h2.a.group.insertBefore,h2.a);
+  h2.fire('dragend',h2.a);
+  assert(!choice.isConnected && !pair.isConnected &&
+    !h2.root.hasAttribute('data-zsf-manual-preview-active'));
+  assert(h2.a.group===h2.b.group && h2.a.group.label==='新群組');
+  assert(h2.a.group.hasAttribute('data-zsf-manual'));
+  assert.equal(JSON.parse(h2.store['zsf-manual-groups-v1'])[h2.a.group.id].kind,'mixed');
+  assert.equal(h2.a.group.querySelector('.tab-group-label-container')
+    .querySelector(':scope > .zsf-favicon').getAttribute('src'),
+    'chrome://browser/skin/zen-icons/folder.svg');
+  h2.a.group.removeAttribute('data-zsf-manual');h2.api.restore();
+  assert(h2.a.group.hasAttribute('data-zsf-manual'));
+  assert.equal(h2.api.createFromTabs([h2.a,h2.c]),null);
+  h2.api.destroy();
 
-  // Direct far-edge entry must yield sorting without first passing
-  // through the narrow grouping band.
-  const directSort=harness();
-  directSort.fire('dragstart',directSort.a);
-  const directRect=directSort.b.getBoundingClientRect();
-  const direct=directSort.fire('dragover',directSort.b,{
-    clientY:directRect.top+directRect.height*.85});
-  assert(!direct.prevented && directSort.api.debug().sorting,
-    'directly entering the far edge is a normal sort, not a new group candidate');
-  assert(!directSort.fire('dragover',directSort.c).prevented,
-    'direct sort remains active while crossing into C');
-  directSort.fire('dragend',directSort.a);
-  directSort.api.destroy();
+  const reverse=fresh();
+  reverse.payload(reverse.c);
+  reverse.fire('dragstart',reverse.c);
+  reverse.fire('dragover',reverse.b);
+  await delay(280);
+  const label=reverse.root.children.find(x=>x.isConnected && x.id==='zsf-manual-merge-choice');
+  const icons=reverse.root.children.find(x=>x.isConnected && x.id==='zsf-manual-pair');
+  assert(label && icons && label.style.getPropertyValue('top')==='136px' &&
+    icons.style.getPropertyValue('top')==='172px');
+  assert.equal(icons.style.getPropertyValue('--zsf-pair-start-y'),'-36px');
+  await delay(1230);
+  assert(reverse.fire('drop',reverse.b).prevented && reverse.count()===1);
+  assert.deepEqual(reverse.b.group.tabs.map(x=>x.label),['C','B'],
+    'upward grouping remains dragged-first');
+  reverse.fire('dragend',reverse.c);reverse.api.destroy();
 
-  // C upward into B: crossing the upper 16% - 2px of a visible
-  // preview restores native sorting with the same cleanup.
-  const upSort=harness();
-  upSort.payload(upSort.c);
-  upSort.fire('dragstart',upSort.c);
-  upSort.fire('dragover',upSort.b);
-  await delay(180);
-  const upperRect=upSort.b.getBoundingClientRect();
-  const crossUp=upSort.fire('dragover',upSort.b,{
-    clientY:upperRect.top+upperRect.height*.16-3});
-  assert(!crossUp.prevented && upSort.api.debug().sorting,
-    'upward crossing active preview at 16% - 2px yields native sorting');
-  assert(!upSort.c.hasAttribute('data-zsf-manual-source'));
-  assert(!upSort.fire('dragover',upSort.a).prevented &&
-    upSort.api.debug().phase==='sorting',
-    'moving into A cannot instantly re-enter a group before 150ms stability');
-  upSort.fire('dragend',upSort.c);
-  upSort.api.destroy();
+  // The old adjacency test made icons disappear if native Zia re-sorted
+  // beyond one original row. Both icons are required for ALL valid pairs.
+  const distant=fresh();
+  distant.fire('dragstart',distant.a);
+  distant.fire('dragover',distant.d);
+  await delay(280);
+  const farPair=distant.root.children.find(x=>x.isConnected &&
+    x.id==='zsf-manual-pair');
+  assert(farPair && farPair.children.length===2 &&
+    farPair.children.every(x=>x.getAttribute('src')),
+    'a nonadjacent candidate must still show both website icons');
+  distant.fire('dragend',distant.a);distant.api.destroy();
 
-  // Regression for v1.0.5: a single overstep permanently disabled
-  // grouping. A deliberate 150ms stationary re-hover MUST reactivate a
-  // preview without releasing the mouse or starting another drag.
-  const recover=harness();
-  recover.setHold('0.3');
-  recover.fire('dragstart',recover.a);
-  const rb=recover.b.getBoundingClientRect();
-  recover.fire('dragover',recover.b,{clientY:rb.top+rb.height*.85});
-  assert(recover.api.debug().sorting,'the initial far edge gives native sort priority');
-  const back=recover.fire('dragover',recover.b);
-  assert(!back.prevented && recover.api.debug().rearming &&
-    !recover.root.hasAttribute('data-zsf-manual-preview-active'),
-    're-entering centre waits for stability but does not block native sorting');
-  await delay(175);
-  assert(!recover.api.debug().sorting && recover.api.debug().portal &&
-    recover.root.hasAttribute('data-zsf-manual-preview-active'),
-    'stable re-hover within same drag restores the real preview and hides X');
-  const recoveredChoice=recover.root.children.find(n=>n.isConnected &&
-    n.id==='zsf-manual-merge-choice');
-  assert(recoveredChoice?.style.getPropertyValue('--zsf-hold-ms')==='300ms',
-    'rearmed preview uses the same Sine-configurable hold duration');
-  await delay(350);
-  const recoveredDrop=recover.fire('drop',recover.b);
-  assert(recoveredDrop.prevented && recover.count()===1,
-    'after re-arming, the SAME drag successfully creates a normal native group');
-  assert.deepEqual(recover.a.group.tabs.map(t=>t.label),['A','B'],
-    'successful group ordering stays dragged-source-first after rearm');
-  assert(!recover.root.hasAttribute('data-zsf-manual-preview-active'),
-    'preview X suppression clears after success');
-  recover.fire('dragend',recover.a);recover.api.destroy();
+  // Preview cancellation releases the original source and lets Zen/Zia
+  // finish the one-slot reorder. It must NOT cancel an unfinished drop.
+  const move=fresh();
+  move.fire('dragstart',move.a);
+  move.fire('dragover',move.b);
+  await delay(280);
+  const preview=move.root.children.find(x=>x.isConnected &&
+    x.id==='zsf-manual-merge-choice');
+  const moveEvent=move.fire('dragover',move.b,{
+    clientY:move.b.getBoundingClientRect().top+26});
+  assert(!moveEvent.prevented && !move.api.debug().portal &&
+    !preview.isConnected && !move.a.hasAttribute('data-zsf-manual-source') &&
+    !move.root.hasAttribute('data-zsf-manual-preview-active'),
+    'deliberate movement cancels grouping and restores native row immediately');
+  const movedDrop=move.fire('drop',move.b);
+  assert(!movedDrop.prevented && !movedDrop.stopped && move.count()===0,
+    'cancelled candidate leaves drop available to native sort');
+  move.api.destroy();
 
-  const shiftedRearm=harness();
-  shiftedRearm.setHold('0.3');
-  shiftedRearm.fire('dragstart',shiftedRearm.a);
-  const oldB=shiftedRearm.b.getBoundingClientRect();
-  shiftedRearm.fire('dragover',shiftedRearm.b,{
-    clientY:oldB.top+oldB.height*.85});
-  assert(shiftedRearm.api.debug().sorting);
-  // Simulate Zia moving B visually one row before our next window-capture
-  // listener receives a new dragover at B's formerly painted centre.
-  shiftedRearm.b.shiftY-=36;
-  shiftedRearm.fire('dragover',shiftedRearm.b,{
-    clientY:oldB.top+oldB.height*.5});
-  assert(shiftedRearm.api.debug().rearming &&
-    shiftedRearm.api.debug().rearmDiagnostic?.previousCentre,
-    'previous painted target centre remains valid across a one-row Zia shift');
-  await delay(175);
-  assert(shiftedRearm.api.debug().portal && !shiftedRearm.api.debug().sorting,
-    'stationary re-hover starts the hold even though Zia shifted B');
-  shiftedRearm.fire('dragend',shiftedRearm.a);
-  shiftedRearm.api.destroy();
+  // Zia can shift an event target one entire row while hovering. Previous
+  // painted rects remain a fallback, without hijacking any dragover.
+  const shift=fresh();
+  shift.setHold('0.3');
+  shift.fire('dragstart',shift.a);
+  const oldRect=shift.b.getBoundingClientRect();
+  shift.fire('dragover',shift.b,{clientY:oldRect.top+16});
+  shift.b.shiftY-=36;
+  shift.fire('dragover',shift.b,{clientY:oldRect.top+16});
+  await delay(280);
+  assert(shift.api.debug().portal,
+    'stationary dwell remains valid across a Zia one-row shift');
+  shift.fire('dragend',shift.a);shift.api.destroy();
 
-  const moving=harness();
-  moving.fire('dragstart',moving.a);
-  const mb=moving.b.getBoundingClientRect();
-  moving.fire('dragover',moving.b,{clientY:mb.top+mb.height*.85});
-  moving.fire('dragover',moving.b);
-  await delay(60);
-  moving.fire('dragover',moving.c);
-  await delay(60);
-  moving.fire('dragover',moving.d);
-  await delay(60);
-  moving.fire('dragover',moving.d,{clientY:1100});
-  await delay(175);
-  assert(moving.api.debug().sorting && !moving.api.debug().portal &&
-    !moving.api.debug().rearming,
-    'passing through C and D without a stationary 150ms hover leaves native sorting responsive');
-  moving.fire('dragend',moving.a);moving.api.destroy();
-
-  const jitter=harness();
-  jitter.fire('dragstart',jitter.a);
-  jitter.fire('dragover',jitter.b);
-  await delay(180);
-  const jr=jitter.b.getBoundingClientRect();
-  const wobble=jitter.fire('dragover',jitter.b,{
-    clientY:jr.top+jr.height*.77});
-  assert(wobble.prevented && jitter.api.debug().portal &&
-    !jitter.api.debug().sorting,
-    'small pointer drift beyond 70% does not cancel a running hold');
-  jitter.fire('dragend',jitter.a);
-  assert(!jitter.root.hasAttribute('data-zsf-manual-preview-active'),
-    'cancellation immediately restores native X buttons');
-  jitter.api.destroy();
-
-  const custom=harness();
-  custom.setHold('0.3');
-  assert.equal(custom.api.debug().holdMs,300,'Sine user input can shorten hold to 0.3s');
-  custom.setHold('2.8');
-  assert.equal(custom.api.debug().holdMs,2500,'out-of-range hold clamps safely at 2.5s');
-  custom.setHold('invalid');
-  assert.equal(custom.api.debug().holdMs,1200,'invalid input safely reverts to 1.2s');
+  const custom=fresh();
+  custom.setHold('0.3');assert.equal(custom.api.debug().holdMs,300);
+  custom.setHold('2.8');assert.equal(custom.api.debug().holdMs,2500);
+  custom.setHold('invalid');assert.equal(custom.api.debug().holdMs,1200);
   custom.api.destroy();
 
-  const m=harness();
-  m.win.TabContextMenu.contextTab.multiselected=true;
-  for(const fn of m.menu.events.popupshowing||[])fn({target:m.menu});
-  const item=m.menu.children.find(n=>n.id==='zsf-manual-create-group');
-  assert(item && !item.hidden,'native tab context menu exposes multi-selection grouping');
-  item.click();
-  assert.equal(m.count(),1,'multi-select right click uses the same native group API');
-  m.api.destroy();
+  const multi=fresh();
+  multi.win.TabContextMenu.contextTab.multiselected=true;
+  for(const fn of multi.menu.events.popupshowing||[])fn({target:multi.menu});
+  const menuItem=multi.menu.children.find(x=>x.id==='zsf-manual-create-group');
+  assert(menuItem && !menuItem.hidden);
+  menuItem.click();assert.equal(multi.count(),1);
+  multi.api.destroy();
 
   const off=harness({enabled:false});
   off.fire('dragstart',off.a);
   off.fire('dragover',off.b);
-  await delay(180);
-  off.fire('drop',off.b);
-  assert.equal(off.count(),0,'disabled drag pref leaves existing native drag unchanged');
+  await delay(270);
+  assert(!off.fire('drop',off.b).prevented && off.count()===0);
   off.api.destroy();
-  console.log('PASS: 150ms stationary group rearm after native sorting, 8px separated favicons, preview-only native close X suppression, drag cleanup and grouping');
+
+  console.log('PASS: native sort-first drag/drop, 250ms stationary gate, no premature capture, two icons always shown, source cleanup, both native group directions');
 })().catch(error=>{console.error(error);process.exitCode=1});
