@@ -43,7 +43,13 @@ class Node {
   }
   appendChild(child) { child.parentElement = this; this.children.push(child); return child; }
   append(...nodes) { for(const node of nodes) this.appendChild(node); }
-  insertBefore(child) { return this.appendChild(child); }
+  insertBefore(child, before) {
+    if (!before) return this.appendChild(child);
+    const i=this.children.indexOf(before);
+    if (i<0) throw Error('Anchor is not a direct child');
+    child.parentElement=this; this.children.splice(i,0,child);
+    return child;
+  }
   get firstChild() { return this.children[0] || null; }
   remove() {
     this.isConnected = false;
@@ -83,6 +89,13 @@ function harness({enabled=true}={}) {
   port.getBoundingClientRect=()=>({top:0,bottom:900});
   ws.scrollbox={scrollbox:port};
   const menu=new Node('menupopup');
+  // Replicate the original Zen's edit-icon/hidden-separator boundary.
+  // Calmer's inShownOrder and applyCustomOrder group native DOM segments.
+  const titleCommand=new Node('menuitem');titleCommand.id='context_zen-edit-tab-title';
+  const editIconCommand=new Node('menuitem');editIconCommand.id='context_zen-edit-tab-icon';
+  const postEditSeparator=new Node('menuseparator');
+  const bookmarkCommand=new Node('menuitem');bookmarkCommand.id='context_bookmarkTab';
+  menu.append(titleCommand,editIconCommand,postEditSeparator,bookmarkCommand);
   const tabContainer=new Node('tabs');
   tabContainer.tabDragAndDrop={_dontAnimateTabMove:false};
   const groups=[];
@@ -130,7 +143,8 @@ function harness({enabled=true}={}) {
     readyState:'complete',documentElement:root,
     createXULElement:name=>new Node(name),
     createElementNS:(_ns,name)=>new Node(name),
-    getElementById:id=>id==='tabContextMenu'?menu:null,
+    getElementById:id=>id==='tabContextMenu'?menu:
+      menu.children.find(x=>x.id===id)||null,
     querySelectorAll:sel=>sel==='tab-group:not([split-view-group])'?groups:[],
     elementFromPoint:(_x,_y)=>doc.pointTarget
   };
@@ -178,6 +192,24 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   const item=menu.children.find(n=>n.id==='zsf-manual-create-group');
   assert(item && item.getAttribute('label')==='建立群組',
     'context menu contains renamed item');
+  const editIcon=menu.children.find(x=>x.id==='context_zen-edit-tab-icon');
+  const editedAt=menu.children.indexOf(editIcon);
+  assert(menu.children.indexOf(item)===editedAt-1 &&
+    menu.children[editedAt+1].localName==='menuseparator',
+    'new group sits BEFORE native edit-icon, preserving its adjacent separator rule');
+  // HDR Guard may load before OR after Site Folders. Both mods use the same
+  // anchor, so the result is one Calmer sortable segment in either order.
+  const colorItem=new Node('menuitem'); colorItem.id='zsf-change-selected-tab-color';
+  menu.insertBefore(colorItem,editIcon);
+  const indexes=[menu.children.indexOf(colorItem),menu.children.indexOf(item)];
+  assert(indexes.every(n=>n < menu.children.indexOf(editIcon)) &&
+    !menu.children.slice(Math.min(...indexes),Math.max(...indexes)+1)
+      .some(n=>n.localName==='menuseparator'),
+    'the two independently inserted commands share exactly one Calmer segment');
+  assert(menu.children[menu.children.indexOf(editIcon)+1]===
+    menu.children.find(n=>n.localName==='menuseparator'),
+    'the native hidden separator remains directly after Change Icon');
+
   for(const cb of menu.events.popupshowing||[])cb({target:menu});
   assert(item.hidden,'menu option is hidden without multiselection');
   h.win.TabContextMenu.contextTab.multiselected=true;
@@ -210,5 +242,5 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
     'same-site selected tabs create native group with site label');
   same.api.destroy();
 
-  console.log('PASS: menu-only manual grouping, native drag untouched, renamed right-click item, no Sine gear, preserved restore/icon/style');
+  console.log('PASS: menu-only grouping, Calmer reorderable native segment, untouched native separator, drag isolation, persisted manual groups');
 })().catch(error=>{console.error(error);process.exitCode=1});

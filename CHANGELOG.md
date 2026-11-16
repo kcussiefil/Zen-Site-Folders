@@ -4,6 +4,7 @@ This file is a short index of published changes, not a second copy of the full r
 
 | Version | Summary |
 | --- | --- |
+| [v1.0.9](releases/v1.0.9.md) | Align 建立群組 with HDR Guard color command inside one native Calmer-sortable separator segment. |
 | [v1.0.8](releases/v1.0.8.md) | Remove drag-to-create manual groups and Sine gear; keep right-click multi-select 建立群組, preserved native tab sorting and existing group restore. |
 | [v1.0.7](releases/v1.0.7.md) | Native sort-first drag/drop, 250ms stationary centre dwell within 3px, and always-present two-favicon preview after reordering. |
 | [v1.0.6](releases/v1.0.6.md) | Re-arm manual grouping after 150ms stationary centre hover even after native sorting; preserve progress through pointer jitter, give favicon pair an 8px gap and hide native close X only during preview. |

@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 右鍵建立群組
-// @version      1.0.8
+// @version      1.0.9
 // @description  Right-click-only native grouping for multiselected unpinned Zen tabs.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -202,7 +202,19 @@
     menuItem.id = 'zsf-manual-create-group';
     menuItem.setAttribute('label', '建立群組');
     menuItem.setAttribute('hidden', 'true');
-    popup.appendChild(menuItem);
+    // Keep this and HDR Guard's selected-color action in one *native*
+    // separator segment. Calmer Context Menu can reorder only within that
+    // segment, even when its preview displays items in another CSS order.
+    // Insert BEFORE Change Icon: Zen's ":has(+ edit-title)" and
+    // "edit-icon + menuseparator" selectors remain undisturbed.
+    const anchor = [
+      'context_zen-edit-tab-icon',
+      'context_bookmarkTab',
+      'context_bookmarkSelectedTabs',
+      'context_duplicateTab',
+    ].map(id => document.getElementById(id))
+      .find(node => node?.parentElement === popup);
+    popup.insertBefore(menuItem, anchor || null);
     bind(popup, 'popupshowing', event => {
       if (event.target !== popup) return;
       menuItem.hidden = !selectedForMenu();
