@@ -19,8 +19,12 @@ assert(!/\.appendChild\(source\)|\.insertBefore\(source/.test(code),
   'preview must not reorder source DOM before drop');
 assert(!/event\.dataTransfer\.setDragImage\s*\(/.test(code),
   'do not override the native/Zia drag picture with a second moving favicon');
-assert(css.includes('margin-inline-start: -2px !important'),
-  'two 21px favicons overlap by only 2px, not 7px');
+assert(css.includes('gap: 8px !important') &&
+  css.includes('margin-inline-start: 0 !important'),
+  'two site favicons now have an 8px visible gap, no overlapping margin');
+assert(css.includes(':root[data-zsf-manual-preview-active] :is(.tab-close-button, .tab-reset-button)') &&
+  css.includes('visibility: hidden !important'),
+  'native close/reset X is hidden only while manual preview is active');
 assert(css.includes('#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source]') &&
   css.includes('opacity: 0 !important'),
   'the moving tab image is hidden only while group portals are active');
@@ -185,8 +189,9 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   const pair=h.root.children.find(n=>n.id==='zsf-manual-pair');
   assert(choice && pair && choice.parentElement===h.root && pair.parentElement===h.root,
     'downward A→B previews are root-fixed, never nested in a Zia-transformed tab');
-  assert(h.a.hasAttribute('data-zsf-manual-source'),
-    'moving A is visually suppressed only while preview is active');
+  assert(h.a.hasAttribute('data-zsf-manual-source') &&
+    h.root.hasAttribute('data-zsf-manual-preview-active'),
+    'moving A and its native close X are hidden only while preview is active');
   assert(!h.a.children.includes(choice) && !h.b.children.includes(pair),
     'neither native row owns a draggable preview node');
   assert.equal(choice.style.getPropertyValue('top'),'100px','New Group occupies original upper A slot');
@@ -238,8 +243,9 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   assert.equal(h.a.group.label,'新群組');
   assert(h.a.group.hasAttribute('data-zsf-manual'));
   assert(!h.a.hasAttribute('data-zsf-manual-choice'));
-  assert(!h.a.hasAttribute('data-zsf-manual-source'),
-    'native dragged source is immediately restored after drop');
+  assert(!h.a.hasAttribute('data-zsf-manual-source') &&
+    !h.root.hasAttribute('data-zsf-manual-preview-active'),
+    'dragged source and native close X are immediately restored after drop');
   assert(!h.b.hasAttribute('data-zsf-manual-pair'));
   assert(!choice.isConnected && !pair.isConnected,
     'root-level portals are removed on drop and never survive the drag');
@@ -296,13 +302,15 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   const earlyDrop=early.fire('drop',early.b);
   assert.equal(early.count(),0,'release before 1.2s fill never groups tabs');
   assert(!early.root.children.some(n=>n.isConnected &&
-    (n.id==='zsf-manual-merge-choice'||n.id==='zsf-manual-pair')),
-    'premature release cleans both independently positioned preview rows');
+    (n.id==='zsf-manual-merge-choice'||n.id==='zsf-manual-pair')) &&
+    !early.root.hasAttribute('data-zsf-manual-preview-active'),
+    'premature release cleans independent previews and close-X suppression');
   assert(earlyDrop.prevented,'premature centre release must not reorder tabs');
   early.api.destroy();
 
-  // A downward into B: once the pointer passes 70% + 2px the current
-  // drag MUST become a normal reorder, without re-arming on next C row.
+  // A downward into B: once the pointer leaves an ACTIVE preview past
+  // the 84% + 2px edge native sorting resumes; no new candidate is armed
+  // merely by quickly crossing the next tab.
   const downSort=harness();
   downSort.fire('dragstart',downSort.a);
   downSort.fire('dragover',downSort.b);
@@ -310,10 +318,10 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   assert(downSort.a.hasAttribute('data-zsf-manual-source'));
   const bRect=downSort.b.getBoundingClientRect();
   const crossDown=downSort.fire('dragover',downSort.b,{
-    clientY:bRect.top+bRect.height*.70+3});
-  assert(!crossDown.prevented,'crossing 70% + 2px gives this event back to Zen/Zia');
+    clientY:bRect.top+bRect.height*.84+3});
+  assert(!crossDown.prevented,'crossing active preview at 84% + 2px returns sorting to Zen/Zia');
   assert(downSort.api.debug().sorting && downSort.api.debug().phase==='sorting',
-    'native sorting latches until this drag ends');
+    'native sorting begins immediately after crossing far edge');
   assert(!downSort.browser.tabContainer.hasAttribute('data-zsf-manual-guard') &&
     !downSort.a.hasAttribute('data-zsf-manual-source') &&
     !downSort.root.children.some(x=>x.isConnected &&
@@ -322,13 +330,13 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   const stillSort=downSort.fire('dragover',downSort.c);
   assert(!stillSort.prevented && downSort.api.debug().sorting &&
     !downSort.browser.tabContainer.hasAttribute('data-zsf-manual-guard'),
-    'next row cannot capture and re-arm group hold during native reordering');
+    'next row cannot immediately re-arm group hold while pointer is still moving');
   downSort.fire('drop',downSort.c);
   assert.equal(downSort.count(),0,'native sort does not silently group');
   downSort.fire('dragend',downSort.a);
   downSort.api.destroy();
 
-  // Direct far-edge entry must also latch sorting without first passing
+  // Direct far-edge entry must yield sorting without first passing
   // through the narrow grouping band.
   const directSort=harness();
   directSort.fire('dragstart',directSort.a);
@@ -338,12 +346,12 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   assert(!direct.prevented && directSort.api.debug().sorting,
     'directly entering the far edge is a normal sort, not a new group candidate');
   assert(!directSort.fire('dragover',directSort.c).prevented,
-    'direct sort stays latched when passing C');
+    'direct sort remains active while crossing into C');
   directSort.fire('dragend',directSort.a);
   directSort.api.destroy();
 
-  // C upward into B: crossing the upper 30% - 2px triggers sorting
-  // with the same source restoration and no next-target hold.
+  // C upward into B: crossing the upper 16% - 2px of a visible
+  // preview restores native sorting with the same cleanup.
   const upSort=harness();
   upSort.payload(upSort.c);
   upSort.fire('dragstart',upSort.c);
@@ -351,15 +359,99 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   await delay(180);
   const upperRect=upSort.b.getBoundingClientRect();
   const crossUp=upSort.fire('dragover',upSort.b,{
-    clientY:upperRect.top+upperRect.height*.30-3});
+    clientY:upperRect.top+upperRect.height*.16-3});
   assert(!crossUp.prevented && upSort.api.debug().sorting,
-    'upward crossing the 30% - 2px far edge returns sorting to native Zen');
+    'upward crossing active preview at 16% - 2px yields native sorting');
   assert(!upSort.c.hasAttribute('data-zsf-manual-source'));
   assert(!upSort.fire('dragover',upSort.a).prevented &&
     upSort.api.debug().phase==='sorting',
-    'moving into A cannot re-enter a fresh group hold');
+    'moving into A cannot instantly re-enter a group before 150ms stability');
   upSort.fire('dragend',upSort.c);
   upSort.api.destroy();
+
+  // Regression for v1.0.5: a single overstep permanently disabled
+  // grouping. A deliberate 150ms stationary re-hover MUST reactivate a
+  // preview without releasing the mouse or starting another drag.
+  const recover=harness();
+  recover.setHold('0.3');
+  recover.fire('dragstart',recover.a);
+  const rb=recover.b.getBoundingClientRect();
+  recover.fire('dragover',recover.b,{clientY:rb.top+rb.height*.85});
+  assert(recover.api.debug().sorting,'the initial far edge gives native sort priority');
+  const back=recover.fire('dragover',recover.b);
+  assert(!back.prevented && recover.api.debug().rearming &&
+    !recover.root.hasAttribute('data-zsf-manual-preview-active'),
+    're-entering centre waits for stability but does not block native sorting');
+  await delay(175);
+  assert(!recover.api.debug().sorting && recover.api.debug().portal &&
+    recover.root.hasAttribute('data-zsf-manual-preview-active'),
+    'stable re-hover within same drag restores the real preview and hides X');
+  const recoveredChoice=recover.root.children.find(n=>n.isConnected &&
+    n.id==='zsf-manual-merge-choice');
+  assert(recoveredChoice?.style.getPropertyValue('--zsf-hold-ms')==='300ms',
+    'rearmed preview uses the same Sine-configurable hold duration');
+  await delay(350);
+  const recoveredDrop=recover.fire('drop',recover.b);
+  assert(recoveredDrop.prevented && recover.count()===1,
+    'after re-arming, the SAME drag successfully creates a normal native group');
+  assert.deepEqual(recover.a.group.tabs.map(t=>t.label),['A','B'],
+    'successful group ordering stays dragged-source-first after rearm');
+  assert(!recover.root.hasAttribute('data-zsf-manual-preview-active'),
+    'preview X suppression clears after success');
+  recover.fire('dragend',recover.a);recover.api.destroy();
+
+  const shiftedRearm=harness();
+  shiftedRearm.setHold('0.3');
+  shiftedRearm.fire('dragstart',shiftedRearm.a);
+  const oldB=shiftedRearm.b.getBoundingClientRect();
+  shiftedRearm.fire('dragover',shiftedRearm.b,{
+    clientY:oldB.top+oldB.height*.85});
+  assert(shiftedRearm.api.debug().sorting);
+  // Simulate Zia moving B visually one row before our next window-capture
+  // listener receives a new dragover at B's formerly painted centre.
+  shiftedRearm.b.shiftY-=36;
+  shiftedRearm.fire('dragover',shiftedRearm.b,{
+    clientY:oldB.top+oldB.height*.5});
+  assert(shiftedRearm.api.debug().rearming &&
+    shiftedRearm.api.debug().rearmDiagnostic?.previousCentre,
+    'previous painted target centre remains valid across a one-row Zia shift');
+  await delay(175);
+  assert(shiftedRearm.api.debug().portal && !shiftedRearm.api.debug().sorting,
+    'stationary re-hover starts the hold even though Zia shifted B');
+  shiftedRearm.fire('dragend',shiftedRearm.a);
+  shiftedRearm.api.destroy();
+
+  const moving=harness();
+  moving.fire('dragstart',moving.a);
+  const mb=moving.b.getBoundingClientRect();
+  moving.fire('dragover',moving.b,{clientY:mb.top+mb.height*.85});
+  moving.fire('dragover',moving.b);
+  await delay(60);
+  moving.fire('dragover',moving.c);
+  await delay(60);
+  moving.fire('dragover',moving.d);
+  await delay(60);
+  moving.fire('dragover',moving.d,{clientY:1100});
+  await delay(175);
+  assert(moving.api.debug().sorting && !moving.api.debug().portal &&
+    !moving.api.debug().rearming,
+    'passing through C and D without a stationary 150ms hover leaves native sorting responsive');
+  moving.fire('dragend',moving.a);moving.api.destroy();
+
+  const jitter=harness();
+  jitter.fire('dragstart',jitter.a);
+  jitter.fire('dragover',jitter.b);
+  await delay(180);
+  const jr=jitter.b.getBoundingClientRect();
+  const wobble=jitter.fire('dragover',jitter.b,{
+    clientY:jr.top+jr.height*.77});
+  assert(wobble.prevented && jitter.api.debug().portal &&
+    !jitter.api.debug().sorting,
+    'small pointer drift beyond 70% does not cancel a running hold');
+  jitter.fire('dragend',jitter.a);
+  assert(!jitter.root.hasAttribute('data-zsf-manual-preview-active'),
+    'cancellation immediately restores native X buttons');
+  jitter.api.destroy();
 
   const custom=harness();
   custom.setHold('0.3');
@@ -386,5 +478,5 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
   off.fire('drop',off.b);
   assert.equal(off.count(),0,'disabled drag pref leaves existing native drag unchanged');
   off.api.destroy();
-  console.log('PASS: manual hold, fixed group previews, 2px icon overlap, white default folder, native drag image, source suppression and persistent far-edge sorting');
+  console.log('PASS: 150ms stationary group rearm after native sorting, 8px separated favicons, preview-only native close X suppression, drag cleanup and grouping');
 })().catch(error=>{console.error(error);process.exitCode=1});

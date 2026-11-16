@@ -331,7 +331,7 @@
     filter: brightness(0) invert(1) opacity(0.5625) !important;
   }
 }
-/* Manual grouping v1.0.5: the original tab rows stay native, but their
+/* Manual grouping v1.0.6: the original tab rows stay native, but their
    visual replacements are FIXED root children, like the independent hover
    card. Zia can translate a source tab without dragging either preview. */
 #tabbrowser-tabs[data-zsf-manual-guard] .tabbrowser-tab[zia-shift]:not([zia-dragging]),
@@ -416,9 +416,12 @@
 }
 /* B moves upward into A: favicons appear at A and then move to B's
    original lower row in 170ms. Downward drag starts already at lower row. */
+/* Two website icons must have an actual visual GAP, not an overlap.
+   v1.0.5's -2px negative margin still made the images look attached. */
 :root > #zsf-manual-pair {
   justify-content: center !important;
   flex-direction: row !important;
+  gap: 8px !important;
   transform: translateY(var(--zsf-pair-start-y, 0px)) !important;
   transition: transform 170ms ease-out !important;
 }
@@ -432,7 +435,16 @@
   flex: 0 0 21px !important;
 }
 #zsf-manual-pair > .zsf-manual-pair-icon + .zsf-manual-pair-icon {
-  margin-inline-start: -2px !important;
+  margin-inline-start: 0 !important;
+}
+/* The close X is a real Zen/Zia tab-close-button, not the removed
+   DataTransfer drag-image. During the 'New Group' title/fill, conceal
+   native close/reset controls even if Zia paints a dragged tab clone or
+   puts the button outside .tab-content. Restore on preview cleanup. */
+:root[data-zsf-manual-preview-active] :is(.tab-close-button, .tab-reset-button) {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 /* One accepted native group drop remains atomic. */
 #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-committing],

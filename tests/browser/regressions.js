@@ -207,6 +207,11 @@ const finish = arguments[arguments.length - 1];
     assert([source,target].some(tab=>tab.hasAttribute('data-zsf-manual-choice')) &&
       choice.querySelector('.zsf-manual-merge-title')?.textContent==='新群組',
       'an original row is masked while its root portal shows 新群組');
+    assert(document.documentElement.hasAttribute('data-zsf-manual-preview-active'),
+      'New Group candidate activates native close-X suppression in this window');
+    const close=document.querySelector('#tabbrowser-tabs .tab-close-button');
+    if (close) assert(getComputedStyle(close).visibility!=='visible',
+      'the original close X is not drawn above New Group while preview is visible');
     const sourceOpacity=getComputedStyle(source).opacity;
     assert(source.hasAttribute('data-zsf-manual-source') &&
       (sourceOpacity==='0' || getComputedStyle(source.querySelector('.tab-stack')).visibility==='hidden'),
@@ -220,8 +225,9 @@ const finish = arguments[arguments.length - 1];
     if (pair) {
       const images=pair.querySelectorAll('.zsf-manual-pair-icon');
       assert(images.length===2 &&
-        getComputedStyle(images[1]).marginInlineStart==='-2px',
-        'both web favicons remain distinct, with only 2px overlap');
+        getComputedStyle(pair).columnGap==='8px' &&
+        getComputedStyle(images[1]).marginInlineStart==='0px',
+        'two favicon icons have an explicit 8px gap with no negative overlap');
     }
     const progress=choice.querySelector('.zsf-manual-merge-fill');
     assert(progress && getComputedStyle(progress).animationName.includes('zsf-manual-horizontal-fill'),
@@ -268,11 +274,68 @@ const finish = arguments[arguments.length - 1];
         'the default native manual folder icon stays white after commit');
     }
     assert(!document.getElementById('zsf-manual-merge-choice') &&
-      !document.getElementById('zsf-manual-pair'),
-      'both original preview rows are restored after commit');
+      !document.getElementById('zsf-manual-pair') &&
+      !document.documentElement.hasAttribute('data-zsf-manual-preview-active'),
+      'both preview portals and native X suppression are removed after commit');
     assert(!source.pinned && !target.pinned, 'drag-created group keeps unpinned tabs');
     assert(!document.getElementById('zsf-manual-merge-preview'),
       'no visual preview remains after drop');
+  });
+
+  // v1.0.6 actual Zen/Zia DOM regression: a far-edge dragover must not
+  // permanently disable manual grouping in the SAME native drag gesture.
+  await test('manual group restores preview after sorting in the same drag', async h => {
+    const source=h.prefix,target=h.suffix;
+    const transfer=new DataTransfer();
+    transfer.mozSetDataAt('application/x-moz-tabbrowser-tab',source,0);
+    const emit=(node,type,ratio=.5)=>{
+      const rect=node.getBoundingClientRect();
+      return node.dispatchEvent(new DragEvent(type,{
+        bubbles:true,composed:true,cancelable:true,dataTransfer:transfer,
+        clientX:rect.left+rect.width/2,
+        clientY:rect.top+rect.height*ratio}));
+    };
+    emit(source,'dragstart');
+    const manual=window.__zsfManualGroupsV099;
+    assert(manual?.debug().dragging,'native manual drag is armed');
+    // Zen's tab-group insertion can move the two standalone fixture tabs
+    // to opposite physical order on macOS/Linux. Use the actual current
+    // order to cross the destination's FAR edge, not a hard-coded 90%.
+    const order=[...(gBrowser.tabs||[])];
+    const down=order.indexOf(source)<=order.indexOf(target);
+    emit(target,'dragover',down?.95:.05);
+    assert(manual.debug().sorting,'far-edge dragover yields to native Zia sorting: ' +
+      JSON.stringify({down,state:manual.debug(),sourceY:source.getBoundingClientRect().top,
+        targetY:target.getBoundingClientRect().top}));
+    emit(target,'dragover',.5);
+    // Zia itself can preventDefault() to ACCEPT a native drop. Validate
+    // our state instead of interpreting dispatchEvent() as our listener.
+    assert(manual.debug().rearming && !manual.debug().portal,
+      'while waiting for 150ms stability the mod has not taken over native sorting: '+
+      JSON.stringify({state:manual.debug(),sourceGroup:source.group?.id||null,
+        targetGroup:target.group?.id||null,
+        sourceIndex:[...gBrowser.tabs].indexOf(source),
+        targetIndex:[...gBrowser.tabs].indexOf(target),
+        sourceRect:source.getBoundingClientRect().toJSON?.(),
+        targetRect:target.getBoundingClientRect().toJSON?.()}));
+    await delay(180);
+    const preview=document.getElementById('zsf-manual-merge-choice');
+    assert(preview && manual.debug().portal && !manual.debug().sorting &&
+      document.documentElement.hasAttribute('data-zsf-manual-preview-active'),
+      '150ms stationary re-hover restores root preview and hides native close X');
+    await delay(1250);
+    assert(target.hasAttribute('data-zsf-manual-ready'),
+      'restored preview completes the unchanged user-configurable hold');
+    assert(!emit(target,'drop'),
+      'a ready manual drop is accepted and prevents native reordering');
+    emit(source,'dragend');
+    await delay(80);
+    assert(source.group && source.group===target.group &&
+      [...source.group.tabs][0]===source,
+      'same drag successfully forms source-first group after ordinary sorting');
+    assert(!document.documentElement.hasAttribute('data-zsf-manual-preview-active') &&
+      !document.getElementById('zsf-manual-merge-choice'),
+      'native close buttons and preview portals are restored after drop');
   });
 
   // Compare effective native Zia dimming of BOTH nested tab-icon nodes

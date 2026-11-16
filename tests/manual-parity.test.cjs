@@ -39,8 +39,9 @@ assert(!css.includes('zsf-manual-ring-fill') &&
 assert(manual.includes('drag.slots.get(tab)') && manual.includes('drag.slots.get(drag.hover)') &&
   manual.includes('const HYSTERESIS_PX = 2') &&
   manual.includes('function crossedFarSortEdge(event)') &&
-  manual.includes('drag.sorting=true') && manual.includes('if (drag.sorting) return'),
-  '2px far-side hysteresis permanently hands drag back to native sorting');
+  manual.includes('function watchRearm(event)') &&
+  manual.includes('watchRearm(event)') && manual.includes('current.sorting=false'),
+  'native sorting permits same-gesture group rearm only after 150ms stable centre dwell');
 assert(manual.includes("color: 'gray'"), 'use native Firefox gray, not invalid grey');
 assert(!manual.includes("color: 'grey'"));
 assert(!manual.includes('function setColor(') && !manual.includes('GROUP_COLORS'), 'no color feature');
@@ -78,8 +79,14 @@ assert(manual.includes("source.setAttribute('data-zsf-manual-source','true')") &
   manual.includes("drag?.source?.removeAttribute?.('data-zsf-manual-source')") &&
   css.includes('.tabbrowser-tab[data-zsf-manual-source]'),
   'hide moving native source only while manual group preview is visible');
-assert(css.includes('margin-inline-start: -2px !important'),
-  'two site favicons overlap by 2px instead of 7px');
+assert(css.includes('gap: 8px !important') &&
+  css.includes('margin-inline-start: 0 !important'),
+  'manual group site favicons are separated by an actual 8px gap');
+assert(manual.includes("document.documentElement.setAttribute('data-zsf-manual-preview-active','true')") &&
+  manual.includes("document.documentElement.removeAttribute('data-zsf-manual-preview-active')") &&
+  css.includes(':root[data-zsf-manual-preview-active] :is(.tab-close-button, .tab-reset-button)') &&
+  css.includes('visibility: hidden !important'),
+  'native tab close/reset X is suppressed only for the active group preview');
 assert(css.includes('brightness(0) invert(1)') &&
   css.includes('.zsf-favicon[src="chrome://browser/skin/zen-icons/folder.svg"]') &&
   css.includes('zsf-manual-merge-icon'),
