@@ -301,8 +301,14 @@
 }
 /* Only the native drag source is hidden during group preview, not during
    ordinary sorting or the initial 150ms candidate stability phase. */
-#tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source] {
+:root #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source] {
   opacity: 0 !important;
+}
+/* Zen/Zia can animate the source tab's opacity or its inner stack
+   independently. Conceal its moving contents as well, without mutating
+   drag ownership or the tab's real DOM position. */
+:root #tabbrowser-tabs .tabbrowser-tab[data-zsf-manual-source] > .tab-stack {
+  visibility: hidden !important;
 }
 /* A default (non-custom) manual folder uses Zen's monochrome folder.svg.
    White only this icon; all site and user-selected favicons keep their paint. */
