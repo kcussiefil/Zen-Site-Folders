@@ -300,9 +300,11 @@ const finish = arguments[arguments.length - 1];
     assert(manual?.debug().dragging,'native manual drag is armed');
     emit(target,'dragover',.90);
     assert(manual.debug().sorting,'far-edge dragover yields to native Zia sorting');
-    const allowed=emit(target,'dragover',.5);
-    assert(allowed && manual.debug().rearming && !manual.debug().portal,
-      'native dragover is NOT blocked while waiting 150ms for a steady centre');
+    emit(target,'dragover',.5);
+    // Zia itself can preventDefault() to ACCEPT a native drop. Validate
+    // our state instead of interpreting dispatchEvent() as our listener.
+    assert(manual.debug().rearming && !manual.debug().portal,
+      'while waiting for 150ms stability the mod has not taken over native sorting');
     await delay(180);
     const preview=document.getElementById('zsf-manual-merge-choice');
     assert(preview && manual.debug().portal && !manual.debug().sorting &&
