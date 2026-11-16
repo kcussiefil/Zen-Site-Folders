@@ -311,7 +311,13 @@ const finish = arguments[arguments.length - 1];
     // Zia itself can preventDefault() to ACCEPT a native drop. Validate
     // our state instead of interpreting dispatchEvent() as our listener.
     assert(manual.debug().rearming && !manual.debug().portal,
-      'while waiting for 150ms stability the mod has not taken over native sorting');
+      'while waiting for 150ms stability the mod has not taken over native sorting: '+
+      JSON.stringify({state:manual.debug(),sourceGroup:source.group?.id||null,
+        targetGroup:target.group?.id||null,
+        sourceIndex:[...gBrowser.tabs].indexOf(source),
+        targetIndex:[...gBrowser.tabs].indexOf(target),
+        sourceRect:source.getBoundingClientRect().toJSON?.(),
+        targetRect:target.getBoundingClientRect().toJSON?.()}));
     await delay(180);
     const preview=document.getElementById('zsf-manual-merge-choice');
     assert(preview && manual.debug().portal && !manual.debug().sorting &&
