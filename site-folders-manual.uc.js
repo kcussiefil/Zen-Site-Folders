@@ -495,9 +495,14 @@
     positionPortals();
     const hit=targetAt(event);
     const target=hit?.tab||null;
-    if (!target || hit.phase==='sort') {
+    if (hit?.phase==='sort') {
       if (drag.guard || drag.hover) clearCandidate();
-      return; // Crossing the far edge releases Zen/Zia's normal reorder.
+      drag.sorting=true;
+      return; // A direct far-edge entry also permanently yields to sorting.
+    }
+    if (!target) {
+      if (drag.guard || drag.hover) clearCandidate();
+      return;
     }
     if (drag.hover && (drag.hover!==target || hit.phase!=='center'))
       clearCandidate();
