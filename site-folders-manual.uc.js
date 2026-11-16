@@ -374,6 +374,24 @@
       y > here.top + here.height*farDown + HYSTERESIS_PX :
       y < here.top + here.height*farUp - HYSTERESIS_PX;
   }
+  function rememberVisualTarget(event) {
+    // Zia's earlier dragover capture listener can shift the actual target
+    // by a full row BEFORE our listener runs. The previously painted rect
+    // is then the only reliable map for the pointer in this SAME event.
+    const tab=tabFromEvent(event);
+    if (!drag?.targets.includes(tab) || !eligible(tab)) return;
+    const r=tab.getBoundingClientRect?.();
+    if (r && r.width>=32 && r.height>=15)
+      drag.visualAt.set(tab,{left:r.left,right:r.right,
+        top:r.top,bottom:r.bottom,height:r.height,width:r.width});
+  }
+  function centreOf(rect,event) {
+    if (!rect || !Number.isFinite(event.clientX) ||
+        !Number.isFinite(event.clientY) ||
+        event.clientX<rect.left || event.clientX>rect.right) return false;
+    const ratio=(event.clientY-rect.top)/rect.height;
+    return ratio>=CENTER_START && ratio<=CENTER_END;
+  }
   function clearRearm() {
     if (rearmTimer !== null) clearTimeout(rearmTimer);
     rearmTimer=null;
@@ -387,15 +405,23 @@
     // Prefer a real event target when its current natural slot contains
     // the pointer; otherwise fall back to the captured positional hit.
     const live=liveTargetAt(event);
-    const hit=live?.phase==='center' ? live : targetAt(event);
-    const target=hit?.phase==='center' ? hit.tab : null;
     const eventTab=tabFromEvent(event);
+    const old=drag.visualAt.get(eventTab);
+    const oldCentre=drag.targets.includes(eventTab) && eligible(eventTab) &&
+      centreOf(old,event);
+    // A full-row Zia shift between consecutive dragovers must NOT prevent
+    // a deliberate stable re-hover from being recognised.
+    const hit=live?.phase==='center' ? live :
+      oldCentre ? {tab:eventTab,phase:'center'} : targetAt(event);
+    const target=hit?.phase==='center' ? hit.tab : null;
     drag.rearmDiagnostic={eventY:event.clientY,eventX:event.clientX,
       eventTab:eventTab?.localName||null,
       listed:drag.targets.includes(eventTab),
       directEligible:eligible(eventTab),
       livePhase:live?.phase||null,
       capturedPhase:hit?.phase||null,
+      previousCentre:oldCentre,
+      previousTop:old?.top??null,
       tabTop:eventTab?.getBoundingClientRect?.().top??null,
       tabBottom:eventTab?.getBoundingClientRect?.().bottom??null};
     if (!target || !eligible(target) || !Number.isFinite(event.clientX) ||
@@ -417,11 +443,9 @@
       const sourceSlot=slotOf(current.source);
       const targetSlot=slotOf(target);
       if (!sourceSlot || !targetSlot) return;
-      // Re-check the visually painted target; the natural tab slot used
-      // for the portal can differ from the Zia-shifted dragover hit box.
-      const visual=target.getBoundingClientRect?.();
-      const ratio=visual ? (y-visual.top)/visual.height : -1;
-      if (ratio < CENTER_START-.12 || ratio > CENTER_END+.12) return;
+      // The pointer was validated against the previous visual centre
+      // when rearm started. Do not invalidate a STILL stationary pointer
+      // merely because Zia shifted the tab under it during its animation.
       current.sourceSlot=sourceSlot;
       for (const tab of current.targets) {
         const rect=slotOf(tab);
@@ -573,7 +597,7 @@
     drag={source,sourceSlot:slotOf(source),workspace:workspace(source),
       targets,slots,scrolls:scrollPorts(source),verified:payload===source,
       hover:null,ready:null,guard:null,sorting:false,rearm:null,
-      visualTabs:[],previewSlots:null,pairFrame:0,pairTimer:null};
+      visualAt:new Map(),visualTabs:[],previewSlots:null,pairFrame:0,pairTimer:null};
   }
   function onDragOver(event) {
     if (!drag || !drag.source?.isConnected || !enabled() ||
@@ -590,12 +614,14 @@
     // re-arm the 150ms stability + configurable hold without a new drag.
     if (drag.sorting) {
       watchRearm(event);
+      rememberVisualTarget(event);
       return;
     }
     if (crossedFarSortEdge(event)) {
       clearCandidate();
       drag.sorting=true;
       clearRearm();
+      rememberVisualTarget(event);
       return;
     }
     // Keep root-level previews aligned with their original *layout* slots
@@ -608,6 +634,7 @@
       if (drag.guard || drag.hover) clearCandidate();
       drag.sorting=true;
       clearRearm();
+      rememberVisualTarget(event);
       return; // A far-edge entry yields to sorting until a stable re-hover.
     }
     if (!target) {
