@@ -9,6 +9,8 @@
   const KEY = '__zsfManualGroupsV099';
   if (window[KEY]?.destroy) window[KEY].destroy();
   const TAG = '[ZenSiteFoldersManual]';
+  const STORE = 'zsf-manual-groups-v1';
+  const FOLDER_ICON = 'chrome://browser/skin/zen-icons/folder.svg';
   const listeners = [];
   let destroyed = false, started = false;
   let menuItem = null, restoreTimer = null;
