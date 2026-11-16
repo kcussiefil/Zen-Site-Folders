@@ -357,23 +357,6 @@
       (ratio<CENTER_START?'guard':'sort') :
       (ratio>CENTER_END?'guard':'sort')};
   }
-  function crossedFarSortEdge(event) {
-    // Fast far-edge movement yields to native Zen/Zia sorting. Unlike
-    // v1.0.5 this is NOT a permanent decision for the whole drag: a later
-    // 150ms stationary centre hover may re-arm grouping.
-    // While an actual preview is visible, give it room for pointer jitter.
-    const here=drag?.guard && drag.slots.get(drag.guard);
-    if (!here || !Number.isFinite(event.clientY) ||
-        !Number.isFinite(event.clientX) ||
-        event.clientX < here.left || event.clientX > here.right) return false;
-    const y=event.clientY+scrollOffset();
-    const preview=!!choice;
-    const farDown=preview ? .84 : CENTER_END;
-    const farUp=preview ? .16 : CENTER_START;
-    return (drag.sourceSlot?.top ?? here.top) <= here.top ?
-      y > here.top + here.height*farDown + HYSTERESIS_PX :
-      y < here.top + here.height*farUp - HYSTERESIS_PX;
-  }
   function rememberVisualTarget(event) {
     // Zia's earlier dragover capture listener can shift the actual target
     // by a full row BEFORE our listener runs. The previously painted rect
@@ -448,12 +431,6 @@
       // Do not freeze transformations or intercept native dragover.
       makeChoice(target);
     },HOVER_MS);
-  }
-  function neutralizeAvoidance() {
-    // CSS lock beats inline Zia shift even if Zia's earlier capture listener
-    // ran first. We never overwrite Zia's inline transform or native DOM order.
-    if (drag?.guard)
-      window.gBrowser?.tabContainer?.setAttribute('data-zsf-manual-guard','true');
   }
   function unfreeze() {
     window.gBrowser?.tabContainer?.removeAttribute('data-zsf-manual-guard');
