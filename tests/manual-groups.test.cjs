@@ -400,6 +400,27 @@ const delay=ms=>new Promise(res=>setTimeout(res,ms));
     'preview X suppression clears after success');
   recover.fire('dragend',recover.a);recover.api.destroy();
 
+  const shiftedRearm=harness();
+  shiftedRearm.setHold('0.3');
+  shiftedRearm.fire('dragstart',shiftedRearm.a);
+  const oldB=shiftedRearm.b.getBoundingClientRect();
+  shiftedRearm.fire('dragover',shiftedRearm.b,{
+    clientY:oldB.top+oldB.height*.85});
+  assert(shiftedRearm.api.debug().sorting);
+  // Simulate Zia moving B visually one row before our next window-capture
+  // listener receives a new dragover at B's formerly painted centre.
+  shiftedRearm.b.shiftY-=36;
+  shiftedRearm.fire('dragover',shiftedRearm.b,{
+    clientY:oldB.top+oldB.height*.5});
+  assert(shiftedRearm.api.debug().rearming &&
+    shiftedRearm.api.debug().rearmDiagnostic?.previousCentre,
+    'previous painted target centre remains valid across a one-row Zia shift');
+  await delay(175);
+  assert(shiftedRearm.api.debug().portal && !shiftedRearm.api.debug().sorting,
+    'stationary re-hover starts the hold even though Zia shifted B');
+  shiftedRearm.fire('dragend',shiftedRearm.a);
+  shiftedRearm.api.destroy();
+
   const moving=harness();
   moving.fire('dragstart',moving.a);
   const mb=moving.b.getBoundingClientRect();
