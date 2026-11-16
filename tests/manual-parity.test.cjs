@@ -47,7 +47,17 @@ assert(manual.includes("delete info.color") && manual.includes("group.color = 'g
   'pre-v1.0.1 color selections migrate safely to neutral');
 assert(css.includes('#zsf-manual-merge-choice') &&
   css.includes('#zsf-manual-pair') && !css.includes('#zsf-manual-merge-preview'),
-  'original two rows host integrated title and overlapping favicons, not a floating card');
+  'two original row positions display title and overlapping favicons');
+assert(manual.includes('document.documentElement.appendChild(choice)') &&
+  manual.includes('document.documentElement.appendChild(pair)') &&
+  !manual.includes('stack.appendChild(choice)') &&
+  !manual.includes('bottomStack.appendChild(pair)'),
+  'both previews must be root portals, never descendants of Zia-transformed tabs');
+assert(css.includes(':root > :is(#zsf-manual-merge-choice, #zsf-manual-pair)') &&
+  css.includes('position: fixed !important') &&
+  manual.includes('setPortalBounds(choice,drag.previewSlots.upper)') &&
+  manual.includes('setPortalBounds(pair,drag.previewSlots.lower)'),
+  'upper and lower rows use independent fixed viewport positions from pre-drag snapshots');
 assert(css.includes('data-zsf-manual-guard') &&
   manual.includes("'data-zsf-manual-guard'"),
   'native avoidance suppressed only inside approach/central band');

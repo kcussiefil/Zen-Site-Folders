@@ -185,16 +185,28 @@ const finish = arguments[arguments.length - 1];
     emit(target,'dragover');
     await delay(175);
     const choice=document.getElementById('zsf-manual-merge-choice');
-    const owner=choice?.closest('.tabbrowser-tab');
-    assert(choice && [source,target].includes(owner) &&
-      choice.parentElement===owner.querySelector('.tab-stack'),
-      'New Group occupies an original row, never a floating translucent card');
+    assert(choice && choice.parentElement===document.documentElement &&
+      !choice.closest('.tabbrowser-tab') &&
+      getComputedStyle(choice).position==='fixed',
+      'New Group is fixed at the root, never nested inside a Zia-translated row');
+    const previewTop=parseFloat(choice.style.top);
+    const previewLeft=parseFloat(choice.style.left);
+    assert(Number.isFinite(previewTop) && Number.isFinite(previewLeft) &&
+      parseFloat(choice.style.width)>40 && parseFloat(choice.style.height)>15,
+      'root overlay is anchored to a real captured row rectangle');
+    const pair=document.getElementById('zsf-manual-pair');
+    if (pair) {
+      assert(pair.parentElement===document.documentElement &&
+        getComputedStyle(pair).position==='fixed' &&
+        parseFloat(pair.style.top)>previewTop,
+        'icon pair is independently anchored BELOW the New Group title');
+    }
     assert(!document.getElementById('zsf-manual-merge-progress') &&
       !document.getElementById('zsf-manual-merge-preview'),
       'obsolete ring and translucent card do not appear');
-    assert(owner.hasAttribute('data-zsf-manual-choice') &&
+    assert([source,target].some(tab=>tab.hasAttribute('data-zsf-manual-choice')) &&
       choice.querySelector('.zsf-manual-merge-title')?.textContent==='新群組',
-      'upper original row shows the Chinese New Group label');
+      'an original row is masked while its root portal shows 新群組');
     const progress=choice.querySelector('.zsf-manual-merge-fill');
     assert(progress && getComputedStyle(progress).animationName.includes('zsf-manual-horizontal-fill'),
       'configurable horizontal fill animation is actually running');
