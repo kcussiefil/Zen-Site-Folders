@@ -380,6 +380,9 @@
     document.documentElement.appendChild(choice);
     carryTabPaint(choice,upper);
     upper.setAttribute('data-zsf-manual-choice','true');
+    // Hide Zia's *moving source row* only while the two root-level group
+    // previews are visible. It must reappear immediately on ordinary sort.
+    source.setAttribute('data-zsf-manual-source','true');
     drag.visualTabs=[upper];
     drag.previewSlots={upper:upper===source?s:t,lower:lower===source?s:t};
     if (lower) {
@@ -432,6 +435,7 @@
     for (const tab of [drag?.hover,drag?.ready]) {
       tab?.removeAttribute?.('data-zsf-manual-ready');
     }
+    drag?.source?.removeAttribute?.('data-zsf-manual-source');
     for (const tab of drag?.visualTabs||[]) {
       tab?.removeAttribute?.('data-zsf-manual-choice');
       tab?.removeAttribute?.('data-zsf-manual-pair');
