@@ -133,6 +133,10 @@ jobs:
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "manual ordinary group creation" --output native-results/manual-group
       - name: Verify manual center-drop gesture creates native unpinned group
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "manual ordinary group center drag" --output native-results/manual-center-drag
+      - name: Verify manual center-drop gesture with Zia 2.121.4
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.121.4 --case "manual ordinary group center drag" --output native-results/manual-center-drag-zia-21214
+      - name: Verify manual center-drop gesture with Zia 2.122.4
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.122.4 --case "manual ordinary group center drag" --output native-results/manual-center-drag-zia-21224
       - name: Verify asleep site favicon equals native Zia icon compositing
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "header asleep filters match native Zia icon composition" --output native-results/header-asleep-native
       - name: Verify preview-selected related background links stay adjacent
