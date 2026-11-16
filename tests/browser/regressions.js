@@ -175,6 +175,21 @@ const finish = arguments[arguments.length - 1];
     const item=document.getElementById('zsf-manual-create-group');
     assert(item && item.getAttribute('label')==='建立群組',
       'the multiselection right-click menu label is 建立群組');
+    const popup=document.getElementById('tabContextMenu');
+    const editIcon=document.getElementById('context_zen-edit-tab-icon');
+    const color=document.getElementById('zsf-change-selected-tab-color');
+    if (editIcon?.parentElement===popup) {
+      const rows=[...popup.children];
+      assert(rows.indexOf(item)>=0 && rows.indexOf(item)<rows.indexOf(editIcon),
+        'manual group is inserted before Zen Change Icon (same Calmer section)');
+      if (color?.parentElement===popup) {
+        const indexes=[rows.indexOf(item),rows.indexOf(color)];
+        assert(indexes.every(i=>i>=0 && i<rows.indexOf(editIcon)) &&
+          !rows.slice(Math.min(...indexes),Math.max(...indexes)+1)
+            .some(x=>x.localName==='menuseparator'),
+          'HDR Guard color and manual group share one actual native separator section');
+      }
+    }
     assert(!document.getElementById('zsf-manual-merge-choice') &&
       !document.getElementById('zsf-manual-pair') &&
       !document.documentElement.hasAttribute('data-zsf-manual-preview-active'),
