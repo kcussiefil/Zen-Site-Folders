@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Zen Site Folders — 拖曳及多選建立普通群組
-// @version      1.0.3
+// @version      1.0.4
 // @description  Opt-out-safe manual grouping for unpinned Zen tabs; no live DOM reorder.
 // @include      chrome://browser/content/browser.xhtml
 // ==/UserScript==
@@ -225,8 +225,9 @@
     }
     return null;
   }
-  // The source and target retain their native DOM slots throughout hover.
-  // Snapshots are read BEFORE Zia starts translating neighbour rows.
+  // Both original rows are represented by viewport-fixed root overlays.
+  // Neither preview node may be a child of a Zia-transformed native tab.
+  // We capture natural slots before Zia's dragover neighbour translations.
   let choice = null, pair = null, holdTimer = null;
   function slotOf(tab) {
     const rect = tab?.getBoundingClientRect?.();
@@ -236,13 +237,59 @@
     return {left:rect.left,right:rect.right,top:rect.top-dy,
       bottom:rect.bottom-dy,height:rect.height,width:rect.width};
   }
+  function scrollPorts(tab) {
+    const ws=workspace(tab);
+    const candidates=[ws?.scrollbox?.scrollbox,ws?.scrollbox,
+      ws?.querySelector?.('.workspace-arrowscrollbox')?.scrollbox,
+      ws?.querySelector?.('.workspace-arrowscrollbox'),
+      window.gZenWorkspaces?.activeWorkspaceElement?.scrollbox?.scrollbox];
+    return [...new Set(candidates.filter(node =>
+      node && typeof node.scrollTop==='number' &&
+      node.scrollHeight>node.clientHeight+3))].map(node=>({node,top:node.scrollTop}));
+  }
+  function scrollOffset() {
+    return (drag?.scrolls||[]).reduce((delta,item)=>
+      delta+item.node.scrollTop-item.top,0);
+  }
+  function setPortalBounds(node,box) {
+    if (!node || !box) return;
+    const top=box.top-scrollOffset();
+    node.style.setProperty('left',box.left+'px');
+    node.style.setProperty('top',top+'px');
+    node.style.setProperty('width',box.width+'px');
+    node.style.setProperty('height',box.height+'px');
+    // A root-level overlay must not leak over the URL bar when tabs scroll.
+    const clip=drag?.scrolls?.[0]?.node?.getBoundingClientRect?.();
+    node.hidden=!!(clip && (top>=clip.bottom || top+box.height<=clip.top));
+  }
+  function positionPortals() {
+    if (!drag?.previewSlots) return;
+    setPortalBounds(choice,drag.previewSlots.upper);
+    setPortalBounds(pair,drag.previewSlots.lower);
+  }
+  function carryTabPaint(node,tab) {
+    // Root overlays do not inherit tab-scoped Zia variables. Copy just the
+    // computed theme tokens; never force a hard-coded light/dark paint.
+    if (!node) return;
+    try {
+      const paint=window.getComputedStyle?.(tab);
+      for (const [from,to] of [
+        ['--zia-tab-hover-bg','--zsf-manual-preview-bg'],
+        ['--zia-sidebar-ink','--zsf-manual-preview-ink'],
+        ['--zia-tab-radius','--zsf-manual-preview-radius']]) {
+        const value=paint?.getPropertyValue?.(from)?.trim();
+        if (value) node.style.setProperty(to,value);
+      }
+    } catch (_) { /* Root theme variables are the safe CSS fallback. */ }
+  }
   function targetAt(event) {
     if (!drag) return null;
     const {clientX:x,clientY:y} = event;
+    const offset=scrollOffset();
     const phaseOf = (tab, here) => {
       if (!here || x < here.left || x > here.right ||
-          y < here.top || y > here.bottom) return null;
-      const ratio = (y-here.top)/here.height;
+          y < here.top-offset || y > here.bottom-offset) return null;
+      const ratio = (y-(here.top-offset))/here.height;
       const tolerance = Math.min(.12,HYSTERESIS_PX/here.height);
       const centerStart = CENTER_START-(drag.hover===tab?tolerance:0);
       const centerEnd = CENTER_END+(drag.hover===tab?tolerance:0);
@@ -264,7 +311,7 @@
       const here=drag.slots.get(tab);
       const phase=phaseOf(tab,here);
       if (!phase) continue;
-      const distance=Math.abs(y-here.top-here.height/2);
+      const distance=Math.abs(y-(here.top-offset)-here.height/2);
       if (distance<best) {closest={tab,phase};best=distance;}
     }
     return closest;
@@ -286,7 +333,6 @@
       Math.abs(s.top-t.top)<=Math.max(s.height,t.height)*1.9;
     const upper=adjacent && s.top<t.top ? source : tab;
     const lower=adjacent ? (upper===source?tab:source) : null;
-    const stack=upper.querySelector?.('.tab-stack') || upper;
     choice=document.createElementNS(NS,'div');
     choice.className='zsf-manual-merge-choice';
     choice.id='zsf-manual-merge-choice';
@@ -305,11 +351,12 @@
     choice.append(fill,icon,title,count);
     const ms=holdMs();
     choice.style.setProperty?.('--zsf-hold-ms',ms+'ms');
-    stack.appendChild(choice);
+    document.documentElement.appendChild(choice);
+    carryTabPaint(choice,upper);
     upper.setAttribute('data-zsf-manual-choice','true');
     drag.visualTabs=[upper];
+    drag.previewSlots={upper:upper===source?s:t,lower:lower===source?s:t};
     if (lower) {
-      const bottomStack=lower.querySelector?.('.tab-stack') || lower;
       pair=document.createElementNS(NS,'div');
       pair.id='zsf-manual-pair';
       pair.className='zsf-manual-pair';
@@ -322,7 +369,8 @@
       }
       const offset=(upper===tab && source===lower) ? (t.top-s.top) : 0;
       pair.style.setProperty?.('--zsf-pair-start-y',offset+'px');
-      bottomStack.appendChild(pair);
+      document.documentElement.appendChild(pair);
+      carryTabPaint(pair,lower);
       lower.setAttribute('data-zsf-manual-pair','true');
       drag.visualTabs.push(lower);
       // B upward into A: overlapped favicons start on A, glide into B's
@@ -339,6 +387,7 @@
         else drag.pairTimer=setTimeout(frame,20);
       }
     }
+    positionPortals();
     choice.setAttribute('data-running','true');
     holdTimer=setTimeout(()=>{
       holdTimer=null;
@@ -366,7 +415,8 @@
     unfreeze({committing});
     if (drag) {
       drag.hover=null;drag.ready=null;drag.guard=null;
-      drag.visualTabs=[];drag.pairFrame=0;drag.pairTimer=null;
+      drag.visualTabs=[];drag.previewSlots=null;
+      drag.pairFrame=0;drag.pairTimer=null;
     }
   }
   function clearDrag(options) {clearCandidate(options);drag=null;}
@@ -389,8 +439,9 @@
       tab!==source && eligible(tab) && workspace(tab)===workspace(source));
     const slots=new Map(targets.map(tab=>[tab,slotOf(tab)]));
     drag={source,sourceSlot:slotOf(source),workspace:workspace(source),
-      targets,slots,verified:payload===source,hover:null,ready:null,
-      guard:null,visualTabs:[],pairFrame:0,pairTimer:null};
+      targets,slots,scrolls:scrollPorts(source),verified:payload===source,
+      hover:null,ready:null,guard:null,visualTabs:[],previewSlots:null,
+      pairFrame:0,pairTimer:null};
   }
   function onDragOver(event) {
     if (!drag || !drag.source?.isConnected || !enabled() ||
@@ -402,6 +453,9 @@
       if (payload!==drag.source) {clearDrag();return;}
       drag.verified=true;
     }
+    // Keep root-level previews aligned with their original *layout* slots
+    // on sidebar scroll, never with Zia's translated source/target elements.
+    positionPortals();
     const hit=targetAt(event);
     const target=hit?.tab||null;
     if (!target || hit.phase==='sort') {
@@ -534,6 +588,7 @@
     bind(window, 'dragstart', onDragStart, true);
     // Drop interception is capture-phase, before the native reorder target.
     bind(window, 'dragover', onDragOver, true);
+    bind(window, 'scroll', positionPortals, true);
     bind(window, 'drop', onDrop, true);
     bind(window, 'dragend', onDragEnd, true);
     bind(window, 'deactivate', clearDrag, true);
@@ -562,7 +617,8 @@
   }
   const api = {start, destroy, createFromTabs, restore,
     debug: () => ({enabled: enabled(), dragging: !!drag,
-      candidate: !!drag?.ready, phase:drag?.hover?'center':drag?.guard?'guard':'none',
+      candidate: !!drag?.ready, portal:!!choice?.isConnected,
+      phase:drag?.hover?'center':drag?.guard?'guard':'none',
       holdMs:holdMs(), stableMs:HOVER_MS, lastDrop,
       storedGroups: Object.keys(registry()).length})};
   window[KEY] = api;
