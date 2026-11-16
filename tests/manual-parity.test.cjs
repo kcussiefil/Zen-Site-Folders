@@ -25,9 +25,11 @@ assert(css.includes('tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed]
   'manual group uses same collapsed-row CSS as site folders');
 assert(css.includes('opacity(0.3025)')&&css.includes('opacity(0.5625)'),
   'native Zia asleep icon composition is unchanged');
-assert(manual.includes('const HOVER_MS = 150') && manual.includes('DEFAULT_HOLD_SECONDS = 1.2') &&
+assert(manual.includes('const HOVER_MS = 250') &&
+  manual.includes('const STATIONARY_PX = 3') &&
+  manual.includes('DEFAULT_HOLD_SECONDS = 1.2') &&
   manual.includes("getStringPref(HOLD_PREF,raw)"),
-  '150ms stable overlap precedes adjustable 1.2s hold');
+  '250ms stationary centre dwell precedes adjustable 1.2s hold');
 assert(css.includes('zsf-manual-horizontal-fill') &&
   css.includes('scaleX(0)') && css.includes('scaleX(1)'),
   'horizontal progress must visibly fill with GPU transform rather than hidden important width');
@@ -36,12 +38,20 @@ assert(css.includes('data-zsf-manual-pair') &&
   'two original rows are masked by their own icon-only preview without reparenting');
 assert(!css.includes('zsf-manual-ring-fill') &&
   !css.includes('zsf-manual-merge-progress'),'old circular ring removed');
-assert(manual.includes('drag.slots.get(tab)') && manual.includes('drag.slots.get(drag.hover)') &&
-  manual.includes('const HYSTERESIS_PX = 2') &&
-  manual.includes('function crossedFarSortEdge(event)') &&
-  manual.includes('function watchRearm(event)') &&
-  manual.includes('watchRearm(event)') && manual.includes('current.sorting=false'),
-  'native sorting permits same-gesture group rearm only after 150ms stable centre dwell');
+assert(manual.includes('function watchRearm(event)') &&
+  manual.includes('Math.hypot(x-pending.x,y-pending.y)<=STATIONARY_PX') &&
+  manual.includes('current.sorting=false') &&
+  manual.includes('watchRearm(event)'),
+  'only a stationary 250ms centre dwell permits a manual preview');
+assert(!manual.includes('event.stopPropagation()') &&
+  manual.includes("lastDrop='native-sort'") &&
+  manual.includes('clearDrag();return;'),
+  'never intercept native dragover or incomplete native drop');
+assert(!css.includes('[data-zsf-manual-guard]') &&
+  !manual.includes("setAttribute('data-zsf-manual-guard'"),
+  'native neighbour-avoidance is never suppressed by the manual group mod');
+assert(manual.includes('const lower=upper===source ? tab : source'),
+  'always build both source and target favicon previews after Zia reorders tabs');
 assert(manual.includes("color: 'gray'"), 'use native Firefox gray, not invalid grey');
 assert(!manual.includes("color: 'grey'"));
 assert(!manual.includes('function setColor(') && !manual.includes('GROUP_COLORS'), 'no color feature');
@@ -61,9 +71,9 @@ assert(css.includes(':root > :is(#zsf-manual-merge-choice, #zsf-manual-pair)') &
   manual.includes('setPortalBounds(choice,drag.previewSlots.upper)') &&
   manual.includes('setPortalBounds(pair,drag.previewSlots.lower)'),
   'upper and lower rows use independent fixed viewport positions from pre-drag snapshots');
-assert(css.includes('data-zsf-manual-guard') &&
-  manual.includes("'data-zsf-manual-guard'"),
-  'native avoidance suppressed only inside approach/central band');
+assert(css.includes(':root > #zsf-manual-pair') &&
+  !css.includes('transform: none !important;\n  translate: none !important;'),
+  'root previews do not impose a transform freeze on native Zen/Zia tab rows');
 assert(manual.includes('insertBefore: before') &&
   manual.includes('const anchor=sourceTop<=targetTop ? source : target'),
   'native group title anchors to original upper row for both directions');
