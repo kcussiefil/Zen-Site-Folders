@@ -38,7 +38,7 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 
 | 項目 | 連結 |
 | --- | --- |
-| 目前版本 | **v1.0.5**，以 [`theme.json`](theme.json) 為準 |
+| 目前版本 | **v1.0.6**，以 [`theme.json`](theme.json) 為準 |
 | 版本整理 | [`CHANGELOG.md`](CHANGELOG.md) |
 | 完整各版說明 | [GitHub Releases](https://github.com/kcussiefil/Zen-Site-Folders/releases)／[`releases/`](releases/) |
 | macOS 實機驗收 | [`docs/macOS-acceptance.md`](docs/macOS-acceptance.md) |
@@ -47,6 +47,8 @@ Zen Site Folders 是適用於 Zen Browser 的 Sine MOD。使用者按下整理�
 **單純整理文件不需要升版，也不會自行觸發 Sine 更新。**
 
 選取分頁顏色、原生右鍵選項及調色視窗已交由 [HDR Guard](https://github.com/kcussiefil/Zen-Compact-Transparent-HDR-Guard) v0.4.5 獨立管理。背景分頁拖曳預設內建，不再提供 Sine 開關；必要時可透過 `about:config` 設定 `zen.sitefolders.background_drag.enabled=false` 停用。
+
+**v1.0.6** 修正上一版進入排序後無法在同一次拖曳重新成立群組：持續移動時正常交給 Zen／Zia 排序，但若在目標分頁中央穩定停留 **0.15 秒**，即可重新進入「新群組」預覽並啟動原有的可調整等待進度。預覽期間放寬微小游標偏移容許範圍，避免反覆取消。下方網站雙圖示改為真正分開 **8px**、不再重疊；原生分頁關閉／重設 X 在群組預覽期間隱藏，離開預覽即恢復。保留固定雙列顯示、拖曳來源優先及白色預設資料夾圖示；仍需 macOS 實機驗證。
 
 **v1.0.5** 修正穿越群組中央後難以觸發分頁避讓：A 往下越過 B 的 70%（再加 2px）、或 B 往上越過 A 的 30%（再減 2px）後，**該次拖曳餘下操作完整交還 Zen／Zia 一般排序**，不再被下一列重新判定為群組。下方兩個 favicon 由重疊 7px 改成只重疊 2px。群組預覽顯示時暫時隱藏原生隨動分頁，結束預覽立即恢復；不再由 MOD 額外指定隨游標走的 favicon，交回 Zia 原生處理。預設資料夾圖示套白色，網站及自訂圖示顏色不變。保留可調整的 1.2 秒成立時間與 0.15 秒穩定判定；仍需 macOS 觸控板實機驗證。
 
