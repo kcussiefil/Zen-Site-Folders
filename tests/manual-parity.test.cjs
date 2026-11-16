@@ -25,18 +25,20 @@ assert(css.includes('tab-group:is([data-zsf-site], [data-zsf-manual])[collapsed]
   'manual group uses same collapsed-row CSS as site folders');
 assert(css.includes('opacity(0.3025)')&&css.includes('opacity(0.5625)'),
   'native Zia asleep icon composition is unchanged');
-assert(manual.includes('const HOVER_MS = 180') && manual.includes('const HOLD_MS = 500'),
-  'match Yab real 0.18s choice reveal and 0.5s folder hold');
+assert(manual.includes('const HOVER_MS = 150') && manual.includes('DEFAULT_HOLD_SECONDS = 1.2') &&
+  manual.includes("getStringPref(HOLD_PREF,raw)"),
+  '150ms stable overlap precedes adjustable 1.2s hold');
 assert(css.includes('zsf-manual-horizontal-fill') &&
   css.includes('scaleX(0)') && css.includes('scaleX(1)'),
   'horizontal progress must visibly fill with GPU transform rather than hidden important width');
-assert(css.includes('.tabbrowser-tab[data-zsf-manual-choice] > .tab-stack > .tab-content') &&
+assert(css.includes('data-zsf-manual-pair') &&
   css.includes('visibility: hidden !important'),
-  'merge preview REPLACES the target row rather than layering duplicated text');
+  'two original rows are masked by their own icon-only preview without reparenting');
 assert(!css.includes('zsf-manual-ring-fill') &&
   !css.includes('zsf-manual-merge-progress'),'old circular ring removed');
-assert(manual.includes('drag.slots.get(tab)') && manual.includes('drag.slots.get(drag.hover)'),
-  'merge targets use fixed unshifted slots and stick while held');
+assert(manual.includes('drag.slots.get(tab)') && manual.includes('drag.slots.get(drag.hover)') &&
+  manual.includes('HYSTERESIS_PX'),
+  'fixed target slots use 5px central-band hysteresis');
 assert(manual.includes("color: 'gray'"), 'use native Firefox gray, not invalid grey');
 assert(!manual.includes("color: 'grey'"));
 assert(!manual.includes('function setColor(') && !manual.includes('GROUP_COLORS'), 'no color feature');
@@ -44,11 +46,16 @@ assert(!manual.includes("icon: info.icon, color:"), 'color is not persisted for 
 assert(manual.includes("delete info.color") && manual.includes("group.color = 'gray'"),
   'pre-v1.0.1 color selections migrate safely to neutral');
 assert(css.includes('#zsf-manual-merge-choice') &&
-  !css.includes('#zsf-manual-merge-preview'), 'no floating card, only integrated Yab-style row');
-assert(manual.includes('insertBefore: dragTarget || tabs[0]'),
-  'native insertion must anchor on the hovered target, never a reordered source');
-assert(manual.includes('[dragTarget, ...validated.filter(tab => tab !== dragTarget)]'),
-  'native group membership must be target-first independent of transient drag sorting');
+  css.includes('#zsf-manual-pair') && !css.includes('#zsf-manual-merge-preview'),
+  'original two rows host integrated title and overlapping favicons, not a floating card');
+assert(css.includes('data-zsf-manual-guard') &&
+  manual.includes("'data-zsf-manual-guard'"),
+  'native avoidance suppressed only inside approach/central band');
+assert(manual.includes('insertBefore: before') &&
+  manual.includes('const anchor=sourceTop<=targetTop ? source : target'),
+  'native group title anchors to original upper row for both directions');
+assert(manual.includes('[dragSource, ...validated.filter(tab => tab !== dragSource)]'),
+  'native membership is dragged-first independent of transient Zen/Zia sorting');
 assert(!/_dontAnimateTabMove\s*=/.test(manual),
   'manual grouping must NEVER mutate Zen global drag animation flag');
 assert(manual.includes("data-zsf-manual-committing"),
