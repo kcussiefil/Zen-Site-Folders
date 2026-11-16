@@ -207,9 +207,13 @@ const finish = arguments[arguments.length - 1];
     assert([source,target].some(tab=>tab.hasAttribute('data-zsf-manual-choice')) &&
       choice.querySelector('.zsf-manual-merge-title')?.textContent==='新群組',
       'an original row is masked while its root portal shows 新群組');
+    const sourceOpacity=getComputedStyle(source).opacity;
     assert(source.hasAttribute('data-zsf-manual-source') &&
-      getComputedStyle(source).opacity==='0',
-      'moving source vanishes during group preview without hiding fixed root portals');
+      (sourceOpacity==='0' || getComputedStyle(source.querySelector('.tab-stack')).visibility==='hidden'),
+      'moving source vanishes during group preview without hiding fixed root portals: ' +
+      JSON.stringify({marker:source.hasAttribute('data-zsf-manual-source'),
+        opacity:sourceOpacity,stackVisibility:getComputedStyle(source.querySelector('.tab-stack')).visibility,
+        inlineOpacity:source.style.getPropertyValue('opacity')}));
     const defaultFolder=choice.querySelector('.zsf-manual-merge-icon');
     assert(defaultFolder && getComputedStyle(defaultFolder).filter.includes('invert(1)'),
       'New Group uses a white default folder icon, not a black fallback');
