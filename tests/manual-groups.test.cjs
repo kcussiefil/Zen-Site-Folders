@@ -8,7 +8,7 @@ new vm.Script(code);
 assert(!theme.preferences && !fs.existsSync('preferences.json'),
   'Sine mod has no gear preferences or drag hold setting file');
 for (const event of ['dragstart','dragover','dragend','drop']) {
-  assert(!new RegExp("bind\\\\(window, ['\\\"]"+event+"['\\\"]").test(code),
+  assert(!code.includes("bind(window, '"+event+"'"),
     'manual groups must not attach any '+event+' listener');
 }
 assert(!code.includes('manual_group_drag') && !code.includes('HOVER_MS') &&
