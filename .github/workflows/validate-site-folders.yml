@@ -6,7 +6,6 @@ on:
       - "site-folders*.uc.js"
       - "userChrome.css"
       - "theme.json"
-      - "preferences.json"
       - "tests/**"
       - ".github/workflows/validate-site-folders.yml"
   workflow_dispatch:
@@ -37,7 +36,7 @@ jobs:
           node --check site-folders-manual.uc.js
       - name: Check Sine metadata and script declarations
         run: |
-          node -e "const m=require('./theme.json'),p=require('./preferences.json'); if(m.version !== '1.0.7' || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || m.preferences !== 'preferences.json' || !p.some(x=>x.property==='zen.sitefolders.manual_group_drag.hold_seconds' && x.defaultValue==='1.2' && x.type==='string') || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js'] || !m.scripts['site-folders-manual.uc.js']) process.exit(1)"
+          node -e "const fs=require('fs'),m=require('./theme.json'); if(m.version !== '1.0.8' || m.preferences || fs.existsSync('preferences.json') || !m.scripts['site-folders-hover.uc.js'] || !m.scripts['site-folders-menu.uc.js'] || !m.scripts['site-folders-collapse.uc.js'] || !m.scripts['site-folders-drag.uc.js'] || !m.scripts['site-folders-background-drag.uc.js'] || !m.scripts['site-folders-top-drop.uc.js'] || !m.scripts['site-folders-split-guard.uc.js'] || !m.scripts['site-folders-manual.uc.js']) process.exit(1)"
       - name: Enforce version carry-over
         run: node tests/version-policy.test.cjs
       - name: Check Sine update timestamp against previous release
@@ -131,16 +130,8 @@ jobs:
           fi
       - name: Verify icon-only manual group creation and automatic-group isolation
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "manual ordinary group creation" --output native-results/manual-group
-      - name: Verify manual center-drop gesture creates native unpinned group
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "manual ordinary group center drag" --output native-results/manual-center-drag
-      - name: Verify manual center-drop gesture with Zia 2.121.4
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.121.4 --case "manual ordinary group center drag" --output native-results/manual-center-drag-zia-21214
-      - name: Verify manual center-drop gesture with Zia 2.122.4
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.122.4 --case "manual ordinary group center drag" --output native-results/manual-center-drag-zia-21224
-      - name: Verify short and unfinished manual group drops preserve native sorting
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.122.4 --case "manual ordinary tab native reorder survives unfinished group hold" --output native-results/manual-native-sort-first
-      - name: Verify recovery from sorting into grouping without a second drag
-        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia-2.122.4 --case "manual group restores preview after sorting" --output native-results/manual-rearm-zia-21224
+      - name: Verify right-click-only manual groups expose no drag preview
+        run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "manual context menu only" --output native-results/manual-menu-only
       - name: Verify asleep site favicon equals native Zia icon compositing
         run: python3 tests/browser/run.py --binary "$ZEN_BINARY" --zia-dir .runtime/zia --case "header asleep filters match native Zia icon composition" --output native-results/header-asleep-native
       - name: Verify preview-selected related background links stay adjacent
